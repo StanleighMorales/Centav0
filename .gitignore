@@ -48,3 +48,5 @@ yarn-error.*
 .codeium/
 .github/copilot*
 CLAUDE.md
+AGENTS.md
+GEMINI.md

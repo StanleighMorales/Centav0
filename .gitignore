@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# AI agent config
+.claude/
+.cursor/
+.aider*
+.continue/
+.codeium/
+.github/copilot*
+CLAUDE.md

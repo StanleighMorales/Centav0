@@ -1,0 +1,155 @@
+import React, { useState, useEffect } from 'react';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { BottomSheet } from '../ui/BottomSheet';
+import { AppTextInput } from '../ui/AppTextInput';
+import { AmountInput } from '../ui/AmountInput';
+import { DatePicker } from '../ui/DatePicker';
+import { Button } from '../ui/Button';
+import { AppText } from '../ui/AppText';
+import { debtRepo } from '../../repositories';
+import { theme } from '../../theme';
+import { nowIso } from '../../utils/date';
+import type { Debt } from '../../domain/types';
+
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  initial?: Debt;
+};
+
+export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const isEdit = !!initial;
+  const [creditor, setCreditor] = useState('');
+  const [originalAmount, setOriginalAmount] = useState(0);
+  const [dueDateEnabled, setDueDateEnabled] = useState(false);
+  const [dueDate, setDueDate] = useState('');
+  const [interestRate, setInterestRate] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (visible) {
+      setCreditor(initial?.creditor ?? '');
+      setOriginalAmount(0);
+      const hasDue = !!initial?.dueDate;
+      setDueDateEnabled(hasDue);
+      setDueDate(initial?.dueDate ?? '');
+      setInterestRate(initial?.interestRate != null ? String(initial.interestRate) : '');
+      setNote(initial?.note ?? '');
+      setErrors({});
+    }
+  }, [visible]);
+
+  async function handleSave() {
+    const errs: Record<string, string> = {};
+    if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
+    if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    setSaving(true);
+    try {
+      const rate = interestRate.trim() ? parseFloat(interestRate) : undefined;
+      if (isEdit && initial) {
+        await debtRepo.update(initial.id, {
+          creditor: creditor.trim(),
+          dueDate: dueDateEnabled ? dueDate : undefined,
+          interestRate: rate,
+          note: note.trim() || undefined,
+        });
+      } else {
+        await debtRepo.create({
+          creditor: creditor.trim(),
+          originalAmount,
+          dueDate: dueDateEnabled ? dueDate : undefined,
+          interestRate: rate,
+          note: note.trim() || undefined,
+        });
+      }
+      onSuccess();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={isEdit ? 'Edit Debt' : 'Add Debt'}>
+      <ScrollView
+        contentContainerStyle={styles.form}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <AppTextInput
+          label="Creditor"
+          value={creditor}
+          onChangeText={setCreditor}
+          placeholder="e.g. BDO Bank"
+          error={errors.creditor}
+          autoFocus={!isEdit}
+        />
+        {!isEdit && (
+          <AmountInput
+            label="Amount Borrowed"
+            value={originalAmount}
+            onChange={setOriginalAmount}
+            error={errors.originalAmount}
+          />
+        )}
+        <View style={styles.dateWrapper}>
+          {dueDateEnabled ? (
+            <View>
+              <DatePicker label="Due Date" value={dueDate || nowIso()} onChange={setDueDate} />
+              <Pressable
+                onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
+                accessibilityRole="button"
+                accessibilityLabel="Remove due date"
+                style={styles.clearDate}
+              >
+                <AppText variant="bodySm" color="textMuted">Remove due date</AppText>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => { setDueDateEnabled(true); setDueDate(nowIso()); }}
+              accessibilityRole="button"
+              accessibilityLabel="Set due date"
+              style={styles.setDateBtn}
+            >
+              <AppText variant="labelLg" color="textSecondary">Due Date (optional)</AppText>
+              <View style={styles.setDateRow}>
+                <Feather name="calendar" size={14} color={theme.colors.accentPrimary} />
+                <AppText variant="bodySm" color="accentPrimary">Set due date</AppText>
+              </View>
+            </Pressable>
+          )}
+        </View>
+        <AppTextInput
+          label="Interest Rate % (optional)"
+          value={interestRate}
+          onChangeText={setInterestRate}
+          placeholder="e.g. 5"
+          numeric
+        />
+        <AppTextInput
+          label="Note (optional)"
+          value={note}
+          onChangeText={setNote}
+          placeholder="Additional details"
+        />
+        <Button label={isEdit ? 'Save Changes' : 'Add Debt'} onPress={handleSave} loading={saving} />
+        <View style={styles.bottomPad} />
+      </ScrollView>
+    </BottomSheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  form: { gap: theme.spacing[5] },
+  dateWrapper: {},
+  clearDate: { paddingTop: theme.spacing[2] },
+  setDateBtn: { gap: theme.spacing[1] },
+  setDateRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  bottomPad: { height: theme.spacing[5] },
+});

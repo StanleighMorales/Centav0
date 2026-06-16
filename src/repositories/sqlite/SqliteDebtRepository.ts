@@ -82,6 +82,18 @@ export class SqliteDebtRepository implements IDebtRepository {
     return updated;
   }
 
+  async markPaid(id: string): Promise<Debt> {
+    const db = await getDatabase();
+    const now = nowIso();
+    await db.runAsync(
+      `UPDATE debts SET outstandingBalance = 0, status = 'Paid', updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      [now, id, FIXED_USER_ID],
+    );
+    const updated = await this.getById(id);
+    if (!updated) throw new Error('Debt vanished after markPaid');
+    return updated;
+  }
+
   async softDelete(id: string): Promise<void> {
     const db = await getDatabase();
     const now = nowIso();

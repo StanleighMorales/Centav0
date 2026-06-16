@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View, ScrollView, FlatList, Pressable, StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
@@ -26,6 +26,7 @@ const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['na
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -85,7 +86,18 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <SectionHeader title="Accounts" />
+          <SectionHeader
+            title="Accounts"
+            action={
+              <Pressable
+                onPress={() => router.push('/accounts')}
+                accessibilityRole="button"
+                accessibilityLabel="See all accounts"
+              >
+                <AppText variant="label" color="accentPrimary">See all</AppText>
+              </Pressable>
+            }
+          />
           {accounts.length === 0 ? (
             <AppText variant="bodySm" color="textMuted" style={styles.emptyHint}>
               No accounts found

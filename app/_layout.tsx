@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Slot } from 'expo-router';
+import { Slot, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -16,13 +16,16 @@ import {
 import { DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { getDatabase } from '../src/db/database';
+import { accountRepo } from '../src/repositories';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const router = useRouter();
   const [dbReady, setDbReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [hasAccounts, setHasAccounts] = useState<boolean | null>(null);
 
   const [fontsLoaded] = useFonts({
     Cormorant_400Regular,
@@ -36,15 +39,23 @@ export default function RootLayout() {
 
   useEffect(() => {
     getDatabase()
-      .then(() => setDbReady(true))
+      .then(() => accountRepo.list())
+      .then((accounts) => {
+        setHasAccounts(accounts.length > 0);
+        setDbReady(true);
+      })
       .catch((e) => setDbError(String(e)));
   }, []);
 
+  const ready = fontsLoaded && dbReady && hasAccounts !== null;
+
   useEffect(() => {
-    if (fontsLoaded && dbReady) {
-      SplashScreen.hideAsync();
+    if (!ready) return;
+    SplashScreen.hideAsync();
+    if (!hasAccounts) {
+      router.replace('/onboarding');
     }
-  }, [fontsLoaded, dbReady]);
+  }, [ready]);
 
   if (dbError) {
     return (
@@ -54,10 +65,11 @@ export default function RootLayout() {
     );
   }
 
-  if (!fontsLoaded || !dbReady) {
+  if (!ready) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.colors.accentPrimary} />
+        <Text style={styles.logo}>Centav0</Text>
+        <ActivityIndicator color={theme.colors.accentPrimary} style={styles.spinner} />
       </View>
     );
   }
@@ -75,6 +87,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.bgPrimary,
+  },
+  logo: {
+    ...theme.typography.displayMd,
+    color: theme.colors.accentPrimary,
+  },
+  spinner: {
+    marginTop: theme.spacing['5'],
   },
   errorText: {
     ...theme.typography.bodySm,

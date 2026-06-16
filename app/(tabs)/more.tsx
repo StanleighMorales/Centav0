@@ -5,22 +5,42 @@ import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
 import { theme } from '../../src/theme';
 
+type MenuItemProps = {
+  icon: React.ComponentProps<typeof Feather>['name'];
+  label: string;
+  onPress: () => void;
+};
+
+function MenuItem({ icon, label, onPress }: MenuItemProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      <Feather name={icon} size={20} color={theme.colors.textSecondary} />
+      <AppText variant="body" style={styles.rowLabel}>{label}</AppText>
+      <Feather name="chevron-right" size={18} color={theme.colors.textMuted} />
+    </Pressable>
+  );
+}
+
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <AppText variant="h2" style={styles.title}>More</AppText>
-      <Pressable
-        onPress={() => router.push('/categories')}
-        accessibilityRole="button"
-        accessibilityLabel="Categories"
-        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-      >
-        <Feather name="tag" size={20} color={theme.colors.textSecondary} />
-        <AppText variant="body" style={styles.rowLabel}>Categories</AppText>
-        <Feather name="chevron-right" size={18} color={theme.colors.textMuted} />
-      </Pressable>
+
+      <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>ACCOUNTS & CATEGORIES</AppText>
+      <MenuItem icon="layers" label="Accounts" onPress={() => router.push('/accounts')} />
+      <MenuItem icon="tag" label="Categories" onPress={() => router.push('/categories')} />
+
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>ANALYTICS</AppText>
+      <MenuItem icon="pie-chart" label="Budgets" onPress={() => router.push('/budgets')} />
+      <MenuItem icon="bar-chart-2" label="Reports" onPress={() => router.push('/reports')} />
     </View>
   );
 }
@@ -32,6 +52,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
   },
   title: { marginTop: theme.spacing[7], marginBottom: theme.spacing[5] },
+  sectionLabel: { letterSpacing: 0.8, marginBottom: theme.spacing[2] },
+  sectionGap: { marginTop: theme.spacing[6] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

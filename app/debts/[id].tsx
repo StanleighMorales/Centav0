@@ -44,7 +44,7 @@ export default function DebtDetailScreen() {
     setLoading(false);
   }, [id]);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
 

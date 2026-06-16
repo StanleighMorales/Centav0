@@ -35,7 +35,7 @@ export default function CategoriesScreen() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const displayed = activeTab === 'Expense' ? expenses : incomes;
 

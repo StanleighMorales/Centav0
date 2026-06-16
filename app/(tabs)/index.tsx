@@ -54,7 +54,7 @@ export default function DashboardScreen() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

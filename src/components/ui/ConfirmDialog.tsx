@@ -28,7 +28,7 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm
           label={confirmLabel}
           onPress={onConfirm}
           variant={destructive ? 'secondary' : 'primary'}
-          style={[styles.btn, destructive && styles.destructiveBtn]}
+          style={destructive ? { ...styles.btn, ...styles.destructiveBtn } : styles.btn}
           accessibilityLabel={confirmLabel}
         />
       </View>

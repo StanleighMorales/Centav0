@@ -31,10 +31,8 @@ export default function ReportsScreen() {
 
   const load = useCallback(async () => {
     const { from, to } = monthRangeIso(referenceDate());
-    const [transactions, categories] = await Promise.all([
-      transactionRepo.list({ from, to }),
-      categoryRepo.list(),
-    ]);
+    const transactions = await transactionRepo.list({ from, to });
+    const categories = await categoryRepo.list();
     const catMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
 
     let inc = 0, exp = 0;

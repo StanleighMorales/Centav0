@@ -52,20 +52,17 @@ export default function BudgetsScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [allocations, categories] = await Promise.all([
-      allocationRepo.list(),
-      categoryRepo.list(),
-    ]);
+    const allocations = await allocationRepo.list();
+    const categories = await categoryRepo.list();
     const catMap = new Map(categories.map((c) => [c.id, c]));
-    const budgetRows = await Promise.all(
-      allocations
-        .filter((a) => a.categoryId !== null)
-        .map(async (a) => ({
-          allocation: a,
-          category: catMap.get(a.categoryId!) ?? null,
-          progress: await allocationRepo.getProgress(a.id),
-        })),
-    );
+    const budgetRows: BudgetRow[] = [];
+    for (const a of allocations.filter((a) => a.categoryId !== null)) {
+      budgetRows.push({
+        allocation: a,
+        category: catMap.get(a.categoryId!) ?? null,
+        progress: await allocationRepo.getProgress(a.id),
+      });
+    }
     setRows(budgetRows);
     setLoading(false);
   }, []);

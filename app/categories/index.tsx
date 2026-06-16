@@ -26,10 +26,8 @@ export default function CategoriesScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [exp, inc] = await Promise.all([
-      categoryRepo.list('Expense'),
-      categoryRepo.list('Income'),
-    ]);
+    const exp = await categoryRepo.list('Expense');
+    const inc = await categoryRepo.list('Income');
     setExpenses(exp);
     setIncomes(inc);
     setLoading(false);

@@ -36,10 +36,8 @@ export default function TransactionsScreen() {
 
   const load = useCallback(async (activeFilter: Filter) => {
     setLoading(true);
-    const [txns, cats] = await Promise.all([
-      transactionRepo.list(activeFilter !== 'All' ? { type: activeFilter } : undefined),
-      categoryRepo.list(),
-    ]);
+    const txns = await transactionRepo.list(activeFilter !== 'All' ? { type: activeFilter } : undefined);
+    const cats = await categoryRepo.list();
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setSections(groupByDate(txns));
     setLoading(false);

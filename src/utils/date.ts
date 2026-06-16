@@ -41,3 +41,13 @@ export function endOfDayManilaIso(date: Date = new Date()): string {
   manila.setHours(23, 59, 59, 999);
   return new Date(manila.getTime() - 8 * 60 * 60 * 1000).toISOString();
 }
+
+export function monthRangeIso(date: Date = new Date()): { from: string; to: string } {
+  const manila = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+  const y = manila.getFullYear();
+  const m = manila.getMonth();
+  const offset = 8 * 60 * 60 * 1000;
+  const from = new Date(new Date(y, m, 1, 0, 0, 0, 0).getTime() - offset).toISOString();
+  const to = new Date(new Date(y, m + 1, 0, 23, 59, 59, 999).getTime() - offset).toISOString();
+  return { from, to };
+}

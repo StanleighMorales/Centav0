@@ -30,24 +30,28 @@ export function displayDateTime(iso: string): string {
   });
 }
 
+// ponytail: Manila is fixed UTC+8 (no DST), so use the offset directly.
+// Round-tripping through toLocaleString breaks on Hermes (unparseable Date).
+const MANILA_OFFSET = 8 * 60 * 60 * 1000;
+
+function manilaParts(date: Date): { y: number; m: number; d: number } {
+  const shifted = new Date(date.getTime() + MANILA_OFFSET);
+  return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth(), d: shifted.getUTCDate() };
+}
+
 export function startOfDayManilaIso(date: Date = new Date()): string {
-  const manila = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-  manila.setHours(0, 0, 0, 0);
-  return new Date(manila.getTime() - 8 * 60 * 60 * 1000).toISOString();
+  const { y, m, d } = manilaParts(date);
+  return new Date(Date.UTC(y, m, d, 0, 0, 0, 0) - MANILA_OFFSET).toISOString();
 }
 
 export function endOfDayManilaIso(date: Date = new Date()): string {
-  const manila = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-  manila.setHours(23, 59, 59, 999);
-  return new Date(manila.getTime() - 8 * 60 * 60 * 1000).toISOString();
+  const { y, m, d } = manilaParts(date);
+  return new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - MANILA_OFFSET).toISOString();
 }
 
 export function monthRangeIso(date: Date = new Date()): { from: string; to: string } {
-  const manila = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-  const y = manila.getFullYear();
-  const m = manila.getMonth();
-  const offset = 8 * 60 * 60 * 1000;
-  const from = new Date(new Date(y, m, 1, 0, 0, 0, 0).getTime() - offset).toISOString();
-  const to = new Date(new Date(y, m + 1, 0, 23, 59, 59, 999).getTime() - offset).toISOString();
+  const { y, m } = manilaParts(date);
+  const from = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0) - MANILA_OFFSET).toISOString();
+  const to = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999) - MANILA_OFFSET).toISOString();
   return { from, to };
 }

@@ -38,23 +38,22 @@ export default function DashboardScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { from, to } = monthRangeIso();
-    const [accs, cats, allTxns, monthTxns] = await Promise.all([
-      accountRepo.list(),
-      categoryRepo.list(),
-      transactionRepo.list(),
-      transactionRepo.list({ from, to }),
-    ]);
+    // ponytail: sequential to avoid expo-sqlite concurrent promise queue bug
+    const accs = await accountRepo.list();
+    const cats = await categoryRepo.list();
+    const allTxns = await transactionRepo.list();
     setAccounts(accs);
     setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setRecentTxns(allTxns.slice(0, 5));
+    const { from, to } = monthRangeIso();
+    const monthTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
     setMonthIncome(monthTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
     setMonthExpense(monthTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0));
     setLoading(false);
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

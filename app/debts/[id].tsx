@@ -33,18 +33,16 @@ export default function DebtDetailScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [d, p, a] = await Promise.all([
-      debtRepo.getById(id),
-      debtPaymentRepo.listByDebt(id),
-      accountRepo.list(),
-    ]);
+    const d = await debtRepo.getById(id);
+    const p = await debtPaymentRepo.listByDebt(id);
+    const a = await accountRepo.list();
     setDebt(d);
     setPayments(p);
     setAccounts(a);
     setLoading(false);
   }, [id]);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
 

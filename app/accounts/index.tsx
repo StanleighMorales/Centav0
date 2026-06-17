@@ -37,7 +37,7 @@ export default function AccountsScreen() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function handleDeletePress(account: Account) {
     const txns = await transactionRepo.list({ accountId: account.id });

@@ -32,11 +32,13 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
 
   useEffect(() => {
     if (!visible) return;
-    Promise.all([categoryRepo.list(), accountRepo.list()]).then(([cats, accs]) => {
+    (async () => {
+      const cats = await categoryRepo.list();
+      const accs = await accountRepo.list();
       setCategories(cats);
       setAccounts(accs);
       if (accs.length > 0 && !accountId) setAccountId(accs[0].id);
-    });
+    })();
   }, [visible]);
 
   useEffect(() => {

@@ -30,7 +30,7 @@ export default function DebtsScreen() {
     setLoading(false);
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const filtered = debts.filter((d) => d.status === activeTab);
 

@@ -10,4 +10,5 @@ export const CATEGORY_ICONS = [
   'film', 'gift', 'tool', 'smartphone',
   'briefcase', 'dollar-sign', 'activity', 'sun',
   'star', 'flag', 'tag', 'package',
+  'piggy-bank',
 ] as const;

@@ -18,4 +18,6 @@ export const debtRepo: IDebtRepository = new SqliteDebtRepository();
 export const debtPaymentRepo: IDebtPaymentRepository = new SqliteDebtPaymentRepository();
 export const allocationRepo: IAllocationRepository = new SqliteAllocationRepository();
 
+export { getSetting, setSetting } from './settings';
+
 export type { IAccountRepository, ICategoryRepository, ITransactionRepository, IDebtRepository, IDebtPaymentRepository, IAllocationRepository };

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
+import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -22,6 +23,17 @@ import { accountRepo } from '../src/repositories';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+// Dark nav theme so no white frame shows behind screen transitions
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: theme.colors.bgPrimary,
+    card: theme.colors.bgSurface,
+    primary: theme.colors.accentPrimary,
+  },
+};
 
 export default function RootLayout() {
   const router = useRouter();
@@ -79,12 +91,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: theme.colors.bgPrimary },
-          }}
-        />
+        <ThemeProvider value={navTheme}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: theme.colors.bgPrimary },
+              animation: 'slide_from_right',
+            }}
+          />
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

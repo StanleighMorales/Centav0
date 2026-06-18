@@ -26,7 +26,13 @@
       "expo-sqlite",
       "expo-router",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Centav0 to attach receipt photos to your expenses."
+        }
+      ]
     ]
   }
 }

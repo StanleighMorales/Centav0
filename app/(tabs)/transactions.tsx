@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, SectionList, Pressable, ActivityIndicator, StyleSheet,
+  View, SectionList, Pressable, ActivityIndicator, StyleSheet, Modal, Image,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
 import { ListItem } from '../../src/components/ui/ListItem';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -33,6 +34,7 @@ export default function TransactionsScreen() {
   const [filter, setFilter] = useState<Filter>('All');
   const [sections, setSections] = useState<{ title: string; data: Transaction[] }[]>([]);
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
+  const [viewReceipt, setViewReceipt] = useState<string | null>(null);
 
   const load = useCallback(async (activeFilter: Filter) => {
     setLoading(true);
@@ -100,14 +102,20 @@ export default function TransactionsScreen() {
               iconColor={item.type === 'Income' ? theme.colors.positive : theme.colors.negative}
               title={categoryMap[item.categoryId] ?? 'Unknown'}
               subtitle={item.note ?? undefined}
-              accessibilityLabel={`${categoryMap[item.categoryId] ?? 'Unknown'}, ${item.type}, ${formatPHP(item.amount)}, ${displayDate(item.date)}`}
+              accessibilityLabel={`${categoryMap[item.categoryId] ?? 'Unknown'}, ${item.type}, ${formatPHP(item.amount)}, ${displayDate(item.date)}${item.receiptUri ? ', has receipt' : ''}`}
+              onPress={item.receiptUri ? () => setViewReceipt(item.receiptUri) : undefined}
               trailing={
-                <AppText
-                  variant="amountSm"
-                  color={item.type === 'Income' ? 'positive' : 'negative'}
-                >
-                  {item.type === 'Expense' ? '−' : '+'}{formatPHP(item.amount)}
-                </AppText>
+                <View style={styles.trailing}>
+                  {item.receiptUri ? (
+                    <Feather name="paperclip" size={14} color={theme.colors.textMuted} />
+                  ) : null}
+                  <AppText
+                    variant="amountSm"
+                    color={item.type === 'Income' ? 'positive' : 'negative'}
+                  >
+                    {item.type === 'Expense' ? '−' : '+'}{formatPHP(item.amount)}
+                  </AppText>
+                </View>
               }
             />
           )}
@@ -124,6 +132,24 @@ export default function TransactionsScreen() {
           }
         />
       )}
+
+      <Modal
+        visible={viewReceipt !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewReceipt(null)}
+      >
+        <Pressable
+          style={styles.viewerBackdrop}
+          onPress={() => setViewReceipt(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Close receipt"
+        >
+          {viewReceipt ? (
+            <Image source={{ uri: viewReceipt }} style={styles.viewerImage} resizeMode="contain" />
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -133,6 +159,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: theme.colors.scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing[5],
+  },
+  viewerImage: { width: '100%', height: '80%' },
   header: {
     paddingHorizontal: theme.spacing[5],
     marginTop: theme.spacing[6],

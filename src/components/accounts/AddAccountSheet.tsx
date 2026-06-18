@@ -7,7 +7,7 @@ import { AmountInput } from '../ui/AmountInput';
 import { Button } from '../ui/Button';
 import { accountRepo } from '../../repositories';
 import { theme } from '../../theme';
-import type { AccountType } from '../../domain/types';
+import type { Account, AccountType } from '../../domain/types';
 
 const TYPE_OPTIONS = [
   { label: 'Cash', value: 'Cash' },
@@ -20,9 +20,11 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initial?: Account;
 };
 
-export function AddAccountSheet({ visible, onClose, onSuccess }: Props) {
+export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const isEdit = Boolean(initial);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('Cash');
   const [balance, setBalance] = useState(0);
@@ -30,10 +32,10 @@ export function AddAccountSheet({ visible, onClose, onSuccess }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!visible) {
-      setName('');
-      setType('Cash');
-      setBalance(0);
+    if (visible) {
+      setName(initial?.name ?? '');
+      setType(initial?.type ?? 'Cash');
+      setBalance(initial?.initialBalance ?? 0);
       setErrors({});
     }
   }, [visible]);
@@ -44,7 +46,12 @@ export function AddAccountSheet({ visible, onClose, onSuccess }: Props) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
-      await accountRepo.create({ name: name.trim(), type, initialBalance: balance });
+      if (initial) {
+        // Balance is computed from transactions, so edit only name + type.
+        await accountRepo.update(initial.id, { name: name.trim(), type });
+      } else {
+        await accountRepo.create({ name: name.trim(), type, initialBalance: balance });
+      }
       onSuccess();
       onClose();
     } finally {
@@ -53,7 +60,7 @@ export function AddAccountSheet({ visible, onClose, onSuccess }: Props) {
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Add Account">
+    <BottomSheet visible={visible} onClose={onClose} title={isEdit ? 'Edit Account' : 'Add Account'}>
       <ScrollView
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
@@ -72,8 +79,10 @@ export function AddAccountSheet({ visible, onClose, onSuccess }: Props) {
           value={type}
           onChange={(v) => setType(v as AccountType)}
         />
-        <AmountInput label="Initial Balance" value={balance} onChange={setBalance} />
-        <Button label="Add Account" onPress={handleSave} loading={saving} />
+        {isEdit ? null : (
+          <AmountInput label="Initial Balance" value={balance} onChange={setBalance} />
+        )}
+        <Button label={isEdit ? 'Save Changes' : 'Add Account'} onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
       </ScrollView>
     </BottomSheet>

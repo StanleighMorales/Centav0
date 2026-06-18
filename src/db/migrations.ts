@@ -59,6 +59,12 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    name: '005_transaction_receipt',
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE transactions ADD COLUMN receiptUri TEXT;`);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

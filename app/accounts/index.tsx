@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
+import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
 import { accountRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
@@ -21,12 +23,83 @@ const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['na
   Other: 'briefcase',
 };
 
+type RowProps = {
+  account: Account;
+  onEdit: (a: Account) => void;
+  onAddMoney: (a: Account) => void;
+  onDelete: (a: Account) => void;
+};
+
+function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
+  const swipeRef = useRef<Swipeable>(null);
+  const close = () => swipeRef.current?.close();
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootRight={false}
+      renderRightActions={() => (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => { close(); onEdit(account); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${account.name}`}
+            style={[styles.action, styles.editAction]}
+          >
+            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Edit</AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => { close(); onDelete(account); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${account.name}`}
+            style={[styles.action, styles.deleteAction]}
+          >
+            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Delete</AppText>
+          </Pressable>
+        </View>
+      )}
+    >
+      <Card accent style={styles.accountCard}>
+        <View style={styles.cardRow}>
+          <View style={styles.iconCircle}>
+            <Feather name={ACCOUNT_ICON[account.type]} size={18} color={theme.colors.accentPrimary} />
+          </View>
+          <View style={styles.cardInfo}>
+            <AppText variant="h3">{account.name}</AppText>
+            <AppText variant="labelLg" color="textSecondary">{account.type}</AppText>
+          </View>
+          <Pressable
+            onPress={() => onAddMoney(account)}
+            accessibilityRole="button"
+            accessibilityLabel={`Add money to ${account.name}`}
+            hitSlop={8}
+            style={styles.addMoneyBtn}
+          >
+            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+          </Pressable>
+        </View>
+        <AppText
+          variant="amountLg"
+          color={account.currentBalance >= 0 ? 'textPrimary' : 'negative'}
+          style={styles.balance}
+        >
+          {formatPHP(account.currentBalance)}
+        </AppText>
+      </Card>
+    </Swipeable>
+  );
+}
+
 export default function AccountsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [editAccount, setEditAccount] = useState<Account | null>(null);
+  const [addMoneyAccount, setAddMoneyAccount] = useState<Account | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -93,37 +166,13 @@ export default function AccountsScreen() {
             />
           ) : (
             accounts.map((account) => (
-              <Card key={account.id} accent style={styles.accountCard}>
-                <View style={styles.cardRow}>
-                  <View style={styles.iconCircle}>
-                    <Feather
-                      name={ACCOUNT_ICON[account.type]}
-                      size={18}
-                      color={theme.colors.accentPrimary}
-                    />
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <AppText variant="h3">{account.name}</AppText>
-                    <AppText variant="labelLg" color="textSecondary">{account.type}</AppText>
-                  </View>
-                  <Pressable
-                    onPress={() => handleDeletePress(account)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${account.name}`}
-                    hitSlop={8}
-                    style={styles.deleteBtn}
-                  >
-                    <Feather name="trash-2" size={18} color={theme.colors.textMuted} />
-                  </Pressable>
-                </View>
-                <AppText
-                  variant="amountLg"
-                  color={account.currentBalance >= 0 ? 'textPrimary' : 'negative'}
-                  style={styles.balance}
-                >
-                  {formatPHP(account.currentBalance)}
-                </AppText>
-              </Card>
+              <AccountRow
+                key={account.id}
+                account={account}
+                onEdit={setEditAccount}
+                onAddMoney={setAddMoneyAccount}
+                onDelete={handleDeletePress}
+              />
             ))
           )}
         </ScrollView>
@@ -134,6 +183,20 @@ export default function AccountsScreen() {
       <AddAccountSheet
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
+        onSuccess={load}
+      />
+
+      <AddAccountSheet
+        visible={editAccount !== null}
+        initial={editAccount ?? undefined}
+        onClose={() => setEditAccount(null)}
+        onSuccess={load}
+      />
+
+      <AddMoneySheet
+        visible={addMoneyAccount !== null}
+        account={addMoneyAccount}
+        onClose={() => setAddMoneyAccount(null)}
         onSuccess={load}
       />
 
@@ -186,11 +249,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardInfo: { flex: 1, gap: theme.spacing[1] },
-  deleteBtn: {
+  addMoneyBtn: {
     width: 44,
     height: 44,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.accentSubtle,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   balance: { marginTop: theme.spacing[2] },
+  actions: { flexDirection: 'row', alignItems: 'stretch' },
+  action: {
+    width: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[2],
+  },
+  editAction: { backgroundColor: theme.colors.bgElevated },
+  deleteAction: { backgroundColor: theme.colors.negative },
 });

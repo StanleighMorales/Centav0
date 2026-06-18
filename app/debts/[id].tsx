@@ -159,6 +159,9 @@ export default function DebtDetailScreen() {
         ) : (
           payments.map((p) => (
             <View key={p.id} style={styles.paymentRow}>
+              <View style={styles.paymentIconCircle}>
+                <Feather name="dollar-sign" size={18} color={theme.colors.positive} />
+              </View>
               <View style={styles.paymentInfo}>
                 <AppText variant="body">{displayDate(p.date)}</AppText>
                 <AppText variant="bodySm" color="textMuted">
@@ -246,7 +249,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.borderDefault,
   },
-  paymentInfo: { gap: theme.spacing[1] },
+  paymentIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing[4],
+  },
+  paymentInfo: { flex: 1, gap: theme.spacing[1] },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { CategoryIcon } from '../ui/CategoryIcon';
 import { AppText } from '../ui/AppText';
 import { CATEGORY_ICONS } from '../../constants/categoryColors';
 import { theme } from '../../theme';
@@ -24,8 +24,8 @@ export function IconPicker({ value, onChange }: Props) {
             accessibilityState={{ selected: value === icon }}
             style={[styles.cell, value === icon && styles.cellSelected]}
           >
-            <Feather
-              name={icon as React.ComponentProps<typeof Feather>['name']}
+            <CategoryIcon
+              name={icon}
               size={20}
               color={value === icon ? theme.colors.accentPrimary : theme.colors.textSecondary}
             />

@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
+import { CategoryIcon } from '../../src/components/ui/CategoryIcon';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
@@ -117,8 +118,8 @@ export default function CategoriesScreen() {
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               >
                 <View style={[styles.iconCircle, cat.color ? { backgroundColor: cat.color } : undefined]}>
-                  <Feather
-                    name={(cat.icon as React.ComponentProps<typeof Feather>['name']) ?? 'tag'}
+                  <CategoryIcon
+                    name={cat.icon ?? 'tag'}
                     size={18}
                     color={theme.colors.bgPrimary}
                   />

@@ -79,6 +79,19 @@ export default function DebtsScreen() {
               accessibilityLabel={`View debt from ${item.creditor}`}
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
+              <View style={styles.iconCircle}>
+                <Feather
+                  name="credit-card"
+                  size={18}
+                  color={
+                    item.status === 'Overdue'
+                      ? theme.colors.negative
+                      : item.status === 'Paid'
+                      ? theme.colors.positive
+                      : theme.colors.accentPrimary
+                  }
+                />
+              </View>
               <View style={styles.rowMain}>
                 <AppText variant="body" style={styles.creditor}>{item.creditor}</AppText>
                 {item.dueDate ? (
@@ -142,6 +155,15 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.borderDefault,
   },
   rowPressed: { opacity: 0.6 },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: theme.spacing[4],
+  },
   rowMain: { flex: 1, gap: theme.spacing[1] },
   creditor: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },

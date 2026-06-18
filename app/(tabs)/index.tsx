@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, ScrollView, FlatList, Pressable, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -11,8 +11,9 @@ import { FAB } from '../../src/components/ui/FAB';
 import { ListItem } from '../../src/components/ui/ListItem';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
-import { accountRepo, categoryRepo, transactionRepo } from '../../src/repositories';
-import { monthRangeIso, displayDate } from '../../src/utils/date';
+import { BottomSheet } from '../../src/components/ui/BottomSheet';
+import { accountRepo, categoryRepo, transactionRepo, getSetting, setSetting } from '../../src/repositories';
+import { periodRangeIso, displayDate, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
 import type { Account, Transaction, AccountType } from '../../src/domain/types';
@@ -23,6 +24,15 @@ const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['na
   EWallet: 'smartphone',
   Other: 'briefcase',
 };
+
+const PERIOD_KEY = 'dashboardPeriod';
+const PERIOD_OPTIONS: { value: Period; label: string }[] = [
+  { value: 'day', label: 'Today' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+];
+const periodLabel = (p: Period) => PERIOD_OPTIONS.find((o) => o.value === p)?.label ?? 'This Month';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -35,6 +45,15 @@ export default function DashboardScreen() {
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [period, setPeriod] = useState<Period>('month');
+  const [periodOpen, setPeriodOpen] = useState(false);
+
+  // Restore the persisted period once on mount so it survives app restarts.
+  useEffect(() => {
+    getSetting(PERIOD_KEY).then((v) => {
+      if (v === 'day' || v === 'week' || v === 'month' || v === 'year') setPeriod(v);
+    });
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,14 +65,20 @@ export default function DashboardScreen() {
     setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setRecentTxns(allTxns.slice(0, 5));
-    const { from, to } = monthRangeIso();
-    const monthTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
-    setMonthIncome(monthTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
-    setMonthExpense(monthTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0));
+    const { from, to } = periodRangeIso(period);
+    const periodTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
+    setMonthIncome(periodTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
+    setMonthExpense(periodTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0));
     setLoading(false);
-  }, []);
+  }, [period]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  async function changePeriod(p: Period) {
+    setPeriod(p);
+    setPeriodOpen(false);
+    await setSetting(PERIOD_KEY, p);
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -132,7 +157,15 @@ export default function DashboardScreen() {
             />
           )}
 
-          <SectionHeader title="This Month" />
+          <Pressable
+            onPress={() => setPeriodOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Change period, currently ${periodLabel(period)}`}
+            style={styles.periodHeader}
+          >
+            <AppText variant="label" color="textMuted">{periodLabel(period).toUpperCase()}</AppText>
+            <Feather name="chevron-down" size={16} color={theme.colors.textMuted} />
+          </Pressable>
           <View style={styles.monthCard}>
             <View style={styles.monthCol}>
               <AppText variant="labelLg" color="positive">▲ Income</AppText>
@@ -182,6 +215,26 @@ export default function DashboardScreen() {
         onClose={() => setSheetVisible(false)}
         onSuccess={load}
       />
+
+      <BottomSheet visible={periodOpen} onClose={() => setPeriodOpen(false)} title="Period">
+        {PERIOD_OPTIONS.map((opt) => (
+          <Pressable
+            key={opt.value}
+            onPress={() => changePeriod(opt.value)}
+            accessibilityRole="button"
+            accessibilityLabel={opt.label}
+            accessibilityState={{ selected: opt.value === period }}
+            style={styles.periodOption}
+          >
+            <AppText variant="body" color={opt.value === period ? 'accentPrimary' : 'textPrimary'}>
+              {opt.label}
+            </AppText>
+            {opt.value === period ? (
+              <Feather name="check" size={18} color={theme.colors.accentPrimary} />
+            ) : null}
+          </Pressable>
+        ))}
+      </BottomSheet>
     </View>
   );
 }
@@ -240,6 +293,19 @@ const styles = StyleSheet.create({
   },
   emptyHint: {
     marginVertical: theme.spacing[4],
+  },
+  periodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[2],
+  },
+  periodOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderDefault,
   },
   monthCard: {
     backgroundColor: theme.colors.bgSurface,

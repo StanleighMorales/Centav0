@@ -55,3 +55,33 @@ export function monthRangeIso(date: Date = new Date()): { from: string; to: stri
   const to = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999) - MANILA_OFFSET).toISOString();
   return { from, to };
 }
+
+export type Period = 'day' | 'week' | 'month' | 'year';
+
+const dayStart = (y: number, m: number, d: number) =>
+  new Date(Date.UTC(y, m, d, 0, 0, 0, 0) - MANILA_OFFSET).toISOString();
+const dayEnd = (y: number, m: number, d: number) =>
+  new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - MANILA_OFFSET).toISOString();
+
+// Date.UTC normalizes out-of-range day numbers (e.g. week spilling into the
+// previous/next month), so the arithmetic below is safe without guards.
+export function periodRangeIso(period: Period, date: Date = new Date()): { from: string; to: string } {
+  const { y, m, d } = manilaParts(date);
+  switch (period) {
+    case 'day':
+      return { from: dayStart(y, m, d), to: dayEnd(y, m, d) };
+    case 'week': {
+      const dow = new Date(Date.UTC(y, m, d)).getUTCDay(); // 0=Sun..6=Sat
+      const mondayOffset = (dow + 6) % 7;
+      return {
+        from: dayStart(y, m, d - mondayOffset),
+        to: dayEnd(y, m, d - mondayOffset + 6),
+      };
+    }
+    case 'year':
+      return { from: dayStart(y, 0, 1), to: dayEnd(y, 11, 31) };
+    case 'month':
+    default:
+      return { from: dayStart(y, m, 1), to: dayEnd(y, m + 1, 0) };
+  }
+}

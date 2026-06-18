@@ -51,6 +51,14 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    name: '004_settings_table',
+    up: async (db) => {
+      await db.execAsync(
+        `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
+      );
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

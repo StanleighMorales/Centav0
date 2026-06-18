@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
@@ -34,6 +35,17 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [accountSheetVisible, setAccountSheetVisible] = useState(false);
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+
+  async function pickReceipt() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (!result.canceled) setReceiptUri(result.assets[0].uri);
+  }
 
   useEffect(() => {
     if (!visible) return;
@@ -70,6 +82,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
       setCategoryId(null);
       setDate(nowIso());
       setNote('');
+      setReceiptUri(null);
       setErrors({});
     }
   }, [visible]);
@@ -90,6 +103,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
         categoryId: categoryId!,
         accountId: accountId!,
         note: note.trim() || undefined,
+        receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
       });
       onSuccess();
       onClose();
@@ -168,6 +182,34 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
           onChangeText={setNote}
           placeholder="Add a note…"
         />
+        {type === 'Expense' ? (
+          <View style={styles.receiptSection}>
+            <AppText variant="labelLg" color="textSecondary">Receipt (optional)</AppText>
+            {receiptUri ? (
+              <View style={styles.receiptPreview}>
+                <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="cover" />
+                <Pressable
+                  onPress={() => setReceiptUri(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove receipt"
+                  style={styles.receiptRemove}
+                >
+                  <Feather name="x" size={16} color={theme.colors.textPrimary} />
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                onPress={pickReceipt}
+                accessibilityRole="button"
+                accessibilityLabel="Attach receipt image"
+                style={styles.receiptAttach}
+              >
+                <Feather name="paperclip" size={18} color={theme.colors.accentPrimary} />
+                <AppText variant="body" color="accentPrimary">Attach image</AppText>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
         <Button label="Save Transaction" onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
       </ScrollView>
@@ -195,6 +237,36 @@ const styles = StyleSheet.create({
     gap: theme.spacing[3],
   },
   pickerFlex: { flex: 1 },
+  receiptSection: { gap: theme.spacing[2] },
+  receiptAttach: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[5],
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSubtle,
+  },
+  receiptPreview: { position: 'relative' },
+  receiptImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bgElevated,
+  },
+  receiptRemove: {
+    position: 'absolute',
+    top: theme.spacing[3],
+    right: theme.spacing[3],
+    width: 28,
+    height: 28,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   plusBtn: {
     width: 52,
     height: 52,

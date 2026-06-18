@@ -48,11 +48,12 @@ export interface Transaction extends AuditFields, LocalSyncFields {
   categoryId: string;
   accountId: string;
   note: string | null;
+  receiptUri: string | null;
 }
 
 export interface CreateTransactionInput {
   date: string; amount: number; type: TransactionType;
-  categoryId: string; accountId: string; note?: string;
+  categoryId: string; accountId: string; note?: string; receiptUri?: string;
 }
 export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;

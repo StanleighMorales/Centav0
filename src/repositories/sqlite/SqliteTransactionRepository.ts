@@ -12,6 +12,7 @@ function rowToTransaction(row: any): Transaction {
     amount: row.amount, type: row.type,
     categoryId: row.categoryId, accountId: row.accountId,
     note: row.note ?? null,
+    receiptUri: row.receiptUri ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -56,9 +57,9 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const amount = roundCentavos(input.amount);
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, note, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId, input.accountId, input.note ?? null, now, now],
+        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId, input.accountId, input.note ?? null, input.receiptUri ?? null, now, now],
       );
       await db.runAsync(
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,

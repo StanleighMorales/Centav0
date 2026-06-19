@@ -16,7 +16,6 @@
       "adaptiveIcon": {
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
@@ -36,6 +35,15 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Centav0 to attach receipt photos to your expenses."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#111111"
         }
       ]
     ],

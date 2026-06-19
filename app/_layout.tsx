@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
@@ -82,7 +82,12 @@ export default function RootLayout() {
   if (!ready) {
     return (
       <View style={styles.center}>
-        <Text style={styles.logo}>Centav0</Text>
+        <Image
+          source={require('../assets/splash-icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="Centav0"
+        />
         <ActivityIndicator color={theme.colors.accentPrimary} style={styles.spinner} />
       </View>
     );
@@ -114,8 +119,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgPrimary,
   },
   logo: {
-    ...theme.typography.displayMd,
-    color: theme.colors.accentPrimary,
+    width: 120,
+    height: 180,
   },
   spinner: {
     marginTop: theme.spacing['5'],

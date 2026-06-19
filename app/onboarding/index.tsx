@@ -15,7 +15,7 @@ export default function WelcomeScreen() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.btn}
-          onPress={() => router.push('/onboarding/setup-account')}
+          onPress={() => router.push('/onboarding/tutorial')}
           accessibilityRole="button"
           accessibilityLabel="Get Started"
         >

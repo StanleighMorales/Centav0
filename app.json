@@ -11,12 +11,16 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.stanleighmorales.centav0",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -32,7 +36,22 @@
         {
           "photosPermission": "Allow Centav0 to attach receipt photos to your expenses."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#111111"
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9942fbc8-cd3e-420a-9d57-bf79de0b1cdd"
+      }
+    }
   }
 }

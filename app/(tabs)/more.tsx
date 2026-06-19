@@ -41,6 +41,9 @@ export default function MoreScreen() {
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>ANALYTICS</AppText>
       <MenuItem icon="pie-chart" label="Budgets" onPress={() => router.push('/budgets')} />
       <MenuItem icon="bar-chart-2" label="Reports" onPress={() => router.push('/reports')} />
+
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>HELP</AppText>
+      <MenuItem icon="help-circle" label="How to use Centav0" onPress={() => router.push('/onboarding/tutorial?replay=1')} />
     </View>
   );
 }

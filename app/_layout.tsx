@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
-import { ThemeProvider, DarkTheme } from '@react-navigation/native';
+import { ThemeProvider, DarkTheme } from 'expo-router/react-navigation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
@@ -83,7 +83,7 @@ export default function RootLayout() {
     return (
       <View style={styles.center}>
         <Image
-          source={require('../assets/splash-icon.png')}
+          source={require('../assets/centav0-icon-v1.png')}
           style={styles.logo}
           resizeMode="contain"
           accessibilityLabel="Centav0"
@@ -119,8 +119,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgPrimary,
   },
   logo: {
-    width: 120,
-    height: 180,
+    width: 220,
+    height: 220,
   },
   spinner: {
     marginTop: theme.spacing['5'],

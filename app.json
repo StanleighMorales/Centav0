@@ -40,12 +40,13 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 200,
+          "image": "./assets/centav0-icon-v1.png",
+          "imageWidth": 350,
           "resizeMode": "contain",
           "backgroundColor": "#111111"
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "extra": {
       "router": {},

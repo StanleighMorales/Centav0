@@ -28,7 +28,6 @@ export default function DebtDetailScreen() {
   const [editVisible, setEditVisible] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
-  const [marking, setMarking] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -45,17 +44,6 @@ export default function DebtDetailScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
-
-  async function handleMarkPaid() {
-    if (!debt) return;
-    setMarking(true);
-    try {
-      await debtRepo.markPaid(debt.id);
-      await load();
-    } finally {
-      setMarking(false);
-    }
-  }
 
   async function handleDelete() {
     if (!debt) return;
@@ -142,13 +130,6 @@ export default function DebtDetailScreen() {
               onPress={() => setPaymentVisible(true)}
               style={styles.flex}
             />
-            <Button
-              label="Mark as Paid"
-              variant="secondary"
-              onPress={handleMarkPaid}
-              loading={marking}
-              style={styles.flex}
-            />
           </View>
         )}
 
@@ -196,6 +177,8 @@ export default function DebtDetailScreen() {
         onClose={() => setPaymentVisible(false)}
         onSuccess={load}
         debtId={debt.id}
+        creditor={debt.creditor}
+        outstandingBalance={debt.outstandingBalance}
       />
 
       <ConfirmDialog

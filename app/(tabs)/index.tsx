@@ -12,7 +12,7 @@ import { ListItem } from '../../src/components/ui/ListItem';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
-import { accountRepo, categoryRepo, transactionRepo, getSetting, setSetting } from '../../src/repositories';
+import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting, setSetting } from '../../src/repositories';
 import { periodRangeIso, displayDate, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
@@ -61,14 +61,19 @@ export default function DashboardScreen() {
     const accs = await accountRepo.list();
     const cats = await categoryRepo.list();
     const allTxns = await transactionRepo.list();
+    const debtPayments = await debtPaymentRepo.list();
     setAccounts(accs);
     setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setRecentTxns(allTxns.slice(0, 5));
     const { from, to } = periodRangeIso(period);
     const periodTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
+    const periodDebtPayments = debtPayments.filter((p) => p.date >= from.slice(0, 10) && p.date <= to.slice(0, 10));
     setMonthIncome(periodTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
-    setMonthExpense(periodTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0));
+    setMonthExpense(
+      periodTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0)
+      + periodDebtPayments.reduce((s, p) => s + p.amount, 0),
+    );
     setLoading(false);
   }, [period]);
 

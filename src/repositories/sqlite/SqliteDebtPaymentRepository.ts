@@ -3,7 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IDebtPaymentRepository } from '../IDebtPaymentRepository';
+import type { DebtPaymentFilter, IDebtPaymentRepository } from '../IDebtPaymentRepository';
 import type { DebtPayment, CreateDebtPaymentInput } from '../../domain/types';
 
 function rowToPayment(row: any): DebtPayment {
@@ -17,6 +17,19 @@ function rowToPayment(row: any): DebtPayment {
 }
 
 export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
+  async list(filter?: DebtPaymentFilter): Promise<DebtPayment[]> {
+    const db = await getDatabase();
+    const conditions = ['userId = ?', 'deletedAt IS NULL'];
+    const params: any[] = [FIXED_USER_ID];
+    if (filter?.from) { conditions.push('date >= ?'); params.push(filter.from); }
+    if (filter?.to) { conditions.push('date <= ?'); params.push(filter.to); }
+    const rows = await db.getAllAsync<any>(
+      `SELECT * FROM debt_payments WHERE ${conditions.join(' AND ')} ORDER BY date DESC`,
+      params,
+    );
+    return rows.map(rowToPayment);
+  }
+
   async listByDebt(debtId: string): Promise<DebtPayment[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(
@@ -40,6 +53,18 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
     const id = newId();
     const now = nowIso();
     const amount = roundCentavos(input.amount);
+    const debt = await db.getFirstAsync<any>(
+      `SELECT outstandingBalance FROM debts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [debtId, FIXED_USER_ID],
+    );
+    if (!debt) throw new Error(`Debt ${debtId} not found`);
+    if (amount > roundCentavos(debt.outstandingBalance)) throw new Error('Payment exceeds remaining debt');
+    const account = await db.getFirstAsync<any>(
+      `SELECT currentBalance FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [input.accountId, FIXED_USER_ID],
+    );
+    if (!account) throw new Error(`Account ${input.accountId} not found`);
+    if (amount > roundCentavos(account.currentBalance)) throw new Error('Payment exceeds account balance');
     await db.withTransactionAsync(async () => {
       await db.runAsync(
         `INSERT INTO debt_payments (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)

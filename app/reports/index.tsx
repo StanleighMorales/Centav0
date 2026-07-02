@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
-import { transactionRepo, categoryRepo } from '../../src/repositories';
+import { transactionRepo, categoryRepo, debtPaymentRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { monthRangeIso } from '../../src/utils/date';
 import { theme } from '../../src/theme';
@@ -32,6 +32,7 @@ export default function ReportsScreen() {
   const load = useCallback(async () => {
     const { from, to } = monthRangeIso(referenceDate());
     const transactions = await transactionRepo.list({ from, to });
+    const debtPayments = await debtPaymentRepo.list({ from, to });
     const categories = await categoryRepo.list();
     const catMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
 
@@ -44,6 +45,8 @@ export default function ReportsScreen() {
         catTotals.set(tx.categoryId, (catTotals.get(tx.categoryId) ?? 0) + tx.amount);
       }
     }
+    const debtPaymentTotal = debtPayments.reduce((sum, p) => sum + p.amount, 0);
+    exp += debtPaymentTotal;
     setIncome(inc);
     setExpense(exp);
 
@@ -56,6 +59,14 @@ export default function ReportsScreen() {
         percent: exp > 0 ? (total / exp) * 100 : 0,
       });
     });
+    if (debtPaymentTotal > 0) {
+      rows.push({
+        categoryId: 'debt-payments',
+        name: 'Debt Payments',
+        total: debtPaymentTotal,
+        percent: exp > 0 ? (debtPaymentTotal / exp) * 100 : 0,
+      });
+    }
     rows.sort((a, b) => b.total - a.total);
     setBreakdown(rows);
   }, [referenceDate]);

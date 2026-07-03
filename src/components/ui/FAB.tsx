@@ -20,7 +20,7 @@ export function FAB({ onPress, icon = 'plus', accessibilityLabel }: Props) {
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.fab,
-        { bottom: theme.spacing[7] + insets.bottom },
+        { bottom: theme.spacing[4] + insets.bottom },
         pressed && styles.pressed,
       ]}
     >

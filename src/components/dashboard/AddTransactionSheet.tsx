@@ -14,15 +14,16 @@ import { AddAccountSheet } from '../accounts/AddAccountSheet';
 import { accountRepo, categoryRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { theme } from '../../theme';
-import type { Account, Category, TransactionType } from '../../domain/types';
+import type { Account, Category, Transaction, TransactionType } from '../../domain/types';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initial?: Transaction | null;
 };
 
-export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
+export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Props) {
   const [amount, setAmount] = useState(0);
   const [type, setType] = useState<TransactionType>('Expense');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -54,9 +55,19 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
       const accs = await accountRepo.list();
       setCategories(cats);
       setAccounts(accs);
-      if (accs.length > 0 && !accountId) setAccountId(accs[0].id);
+      if (initial) {
+        setAmount(initial.amount);
+        setType(initial.type);
+        setCategoryId(initial.categoryId);
+        setAccountId(initial.accountId);
+        setDate(initial.date);
+        setNote(initial.note ?? '');
+        setReceiptUri(initial.receiptUri);
+      } else if (accs.length > 0) {
+        setAccountId(accs[0].id);
+      }
     })();
-  }, [visible]);
+  }, [visible, initial]);
 
   // After inline-creating a category/account, reload and auto-select the new one.
   async function reloadCategoriesSelectNew() {
@@ -85,7 +96,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
       setReceiptUri(null);
       setErrors({});
     }
-  }, [visible]);
+  }, [visible, initial]);
 
   const filteredCategories = categories.filter((c) => c.type === type);
 
@@ -98,13 +109,15 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
 
     setSaving(true);
     try {
-      await transactionRepo.create({
+      const input = {
         date, amount, type,
         categoryId: categoryId!,
         accountId: accountId!,
         note: note.trim() || undefined,
         receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
-      });
+      };
+      if (initial) await transactionRepo.update(initial.id, input);
+      else await transactionRepo.create(input);
       onSuccess();
       onClose();
     } finally {
@@ -113,7 +126,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Add Transaction">
+    <BottomSheet visible={visible} onClose={onClose} title={initial ? 'Edit Transaction' : 'Add Transaction'}>
       <ScrollView
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
@@ -144,7 +157,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
               value={categoryId}
               onChange={setCategoryId}
               error={errors.categoryId}
-              placeholder={filteredCategories.length === 0 ? 'No categories yet' : 'Select…'}
+              placeholder={filteredCategories.length === 0 ? 'No categories yet' : 'Selectâ€¦'}
             />
           </View>
           <Pressable
@@ -180,7 +193,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
           label="Note (optional)"
           value={note}
           onChangeText={setNote}
-          placeholder="Add a note…"
+          placeholder="Add a noteâ€¦"
         />
         {type === 'Expense' ? (
           <View style={styles.receiptSection}>
@@ -210,7 +223,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess }: Props) {
             )}
           </View>
         ) : null}
-        <Button label="Save Transaction" onPress={handleSave} loading={saving} />
+        <Button label={initial ? 'Save Changes' : 'Save Transaction'} onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
       </ScrollView>
 

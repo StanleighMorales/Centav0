@@ -57,7 +57,7 @@ export interface CreateTransactionInput {
 }
 export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;
-  categoryId?: string; accountId?: string; note?: string;
+  categoryId?: string; accountId?: string; note?: string; receiptUri?: string;
 }
 export interface TransactionFilter {
   from?: string; to?: string; type?: TransactionType;

@@ -157,7 +157,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
               value={categoryId}
               onChange={setCategoryId}
               error={errors.categoryId}
-              placeholder={filteredCategories.length === 0 ? 'No categories yet' : 'Selectâ€¦'}
+              placeholder={filteredCategories.length === 0 ? 'No categories yet' : 'Select...'}
             />
           </View>
           <Pressable
@@ -193,7 +193,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
           label="Note (optional)"
           value={note}
           onChangeText={setNote}
-          placeholder="Add a noteâ€¦"
+          placeholder="Add a note..."
         />
         {type === 'Expense' ? (
           <View style={styles.receiptSection}>

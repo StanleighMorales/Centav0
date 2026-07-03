@@ -110,14 +110,14 @@ export default function DashboardScreen() {
             <AppText variant="h2">Dashboard</AppText>
           </View>
 
-          {/* Hero Balance Card â€” goldGlow shadow per design spec */}
+          {/* Hero Balance Card - goldGlow shadow per design spec */}
           <View style={styles.heroCard}>
             <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
               TOTAL BALANCE
             </AppText>
             <View style={styles.heroAmount}>
               <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
-                â‚±
+                {'\u20B1'}
               </AppText>
               <AppText variant="displayLg" color="textPrimary">
                 {formatAmount(totalBalance)}
@@ -183,12 +183,12 @@ export default function DashboardScreen() {
           </Pressable>
           <View style={styles.monthCard}>
             <View style={styles.monthCol}>
-              <AppText variant="labelLg" color="positive">â–² Income</AppText>
+              <AppText variant="labelLg" color="positive">{'\u25B2'} Income</AppText>
               <AppText variant="amountMd" color="positive">{formatPHP(monthIncome)}</AppText>
             </View>
             <View style={styles.monthDivider} />
             <View style={styles.monthCol}>
-              <AppText variant="labelLg" color="negative">â–¼ Expense</AppText>
+              <AppText variant="labelLg" color="negative">{'\u25BC'} Expense</AppText>
               <AppText variant="amountMd" color="negative">{formatPHP(monthExpense)}</AppText>
             </View>
           </View>

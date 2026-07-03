@@ -8,12 +8,13 @@ import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
-import { ListItem } from '../../src/components/ui/ListItem';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
+import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
+import { TransactionRow } from '../../src/components/transactions/TransactionRow';
 import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting, setSetting } from '../../src/repositories';
-import { periodRangeIso, displayDate, type Period } from '../../src/utils/date';
+import { periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
 import type { Account, Transaction, AccountType } from '../../src/domain/types';
@@ -45,6 +46,8 @@ export default function DashboardScreen() {
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<Period>('month');
   const [periodOpen, setPeriodOpen] = useState(false);
 
@@ -85,6 +88,13 @@ export default function DashboardScreen() {
     await setSetting(PERIOD_KEY, p);
   }
 
+  async function handleUndo() {
+    if (!pendingUndo) return;
+    await transactionRepo.softDelete(pendingUndo.id);
+    setPendingUndo(null);
+    load();
+  }
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {loading ? (
@@ -100,14 +110,14 @@ export default function DashboardScreen() {
             <AppText variant="h2">Dashboard</AppText>
           </View>
 
-          {/* Hero Balance Card — goldGlow shadow per design spec */}
+          {/* Hero Balance Card â€” goldGlow shadow per design spec */}
           <View style={styles.heroCard}>
             <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
               TOTAL BALANCE
             </AppText>
             <View style={styles.heroAmount}>
               <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
-                ₱
+                â‚±
               </AppText>
               <AppText variant="displayLg" color="textPrimary">
                 {formatAmount(totalBalance)}
@@ -173,12 +183,12 @@ export default function DashboardScreen() {
           </Pressable>
           <View style={styles.monthCard}>
             <View style={styles.monthCol}>
-              <AppText variant="labelLg" color="positive">▲ Income</AppText>
+              <AppText variant="labelLg" color="positive">â–² Income</AppText>
               <AppText variant="amountMd" color="positive">{formatPHP(monthIncome)}</AppText>
             </View>
             <View style={styles.monthDivider} />
             <View style={styles.monthCol}>
-              <AppText variant="labelLg" color="negative">▼ Expense</AppText>
+              <AppText variant="labelLg" color="negative">â–¼ Expense</AppText>
               <AppText variant="amountMd" color="negative">{formatPHP(monthExpense)}</AppText>
             </View>
           </View>
@@ -192,21 +202,12 @@ export default function DashboardScreen() {
             />
           ) : (
             recentTxns.map((txn) => (
-              <ListItem
+              <TransactionRow
                 key={txn.id}
-                icon={txn.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'}
-                iconColor={txn.type === 'Income' ? theme.colors.positive : theme.colors.negative}
-                title={categoryMap[txn.categoryId] ?? 'Unknown'}
-                subtitle={displayDate(txn.date)}
-                accessibilityLabel={`${categoryMap[txn.categoryId] ?? 'Unknown'}, ${txn.type}, ${formatPHP(txn.amount)}, ${displayDate(txn.date)}`}
-                trailing={
-                  <AppText
-                    variant="amountSm"
-                    color={txn.type === 'Income' ? 'positive' : 'negative'}
-                  >
-                    {txn.type === 'Expense' ? '-' : '+'}{formatPHP(txn.amount)}
-                  </AppText>
-                }
+                transaction={txn}
+                categoryName={categoryMap[txn.categoryId] ?? 'Unknown'}
+                onEdit={setEditTransaction}
+                onUndo={setPendingUndo}
               />
             ))
           )}
@@ -219,6 +220,26 @@ export default function DashboardScreen() {
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         onSuccess={load}
+      />
+
+      <AddTransactionSheet
+        visible={editTransaction !== null}
+        initial={editTransaction}
+        onClose={() => setEditTransaction(null)}
+        onSuccess={load}
+      />
+
+      <ConfirmDialog
+        visible={pendingUndo !== null}
+        title="Undo Transaction"
+        message={
+          pendingUndo?.type === 'Expense'
+            ? `Undo this expense and return ${formatPHP(pendingUndo.amount)} to the account?`
+            : `Undo this income and remove ${formatPHP(pendingUndo?.amount ?? 0)} from the account?`
+        }
+        confirmLabel="Undo"
+        onConfirm={handleUndo}
+        onCancel={() => setPendingUndo(null)}
       />
 
       <BottomSheet visible={periodOpen} onClose={() => setPeriodOpen(false)} title="Period">

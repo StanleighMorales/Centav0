@@ -91,12 +91,13 @@ export class SqliteTransactionRepository implements ITransactionRepository {
         [delta(newType, newAmount), now, newAccountId, FIXED_USER_ID],
       );
       await db.runAsync(
-        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, updatedAt = ?, isDirty = 1
+        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, receiptUri = ?, updatedAt = ?, isDirty = 1
          WHERE id = ? AND userId = ?`,
         [
           input.date ?? existing.date, newAmount, newType,
           input.categoryId ?? existing.categoryId, newAccountId,
           'note' in input ? (input.note ?? null) : existing.note,
+          'receiptUri' in input ? (input.receiptUri ?? null) : existing.receiptUri,
           now, id, FIXED_USER_ID,
         ],
       );

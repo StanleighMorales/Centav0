@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
 import { ThemeProvider, DarkTheme } from 'expo-router/react-navigation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import {
   Cormorant_400Regular,
@@ -97,6 +98,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <ThemeProvider value={navTheme}>
+          <StatusBar style="light" backgroundColor={theme.colors.bgPrimary} />
           <Stack
             screenOptions={{
               headerShown: false,
@@ -111,7 +113,7 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   center: {
     flex: 1,
     alignItems: 'center',

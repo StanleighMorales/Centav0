@@ -7,12 +7,20 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#111111",
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#111111",
+      "translucent": false
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "backgroundColor": "#111111"
     },
     "android": {
       "package": "com.stanleighmorales.centav0",
       "versionCode": 1,
+      "backgroundColor": "#111111",
       "adaptiveIcon": {
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/android-icon-foreground.png",

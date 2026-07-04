@@ -4,10 +4,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
-import { ListItem } from '../../src/components/ui/ListItem';
 import { EmptyState } from '../../src/components/ui/EmptyState';
+import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
+import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { TransactionRow } from '../../src/components/transactions/TransactionRow';
 import { transactionRepo, categoryRepo } from '../../src/repositories';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
@@ -35,6 +36,8 @@ export default function TransactionsScreen() {
   const [sections, setSections] = useState<{ title: string; data: Transaction[] }[]>([]);
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [viewReceipt, setViewReceipt] = useState<string | null>(null);
+  const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
 
   const load = useCallback(async (activeFilter: Filter) => {
     setLoading(true);
@@ -51,6 +54,13 @@ export default function TransactionsScreen() {
     setFilter(f);
     load(f);
   };
+
+  async function handleUndo() {
+    if (!pendingUndo) return;
+    await transactionRepo.softDelete(pendingUndo.id);
+    setPendingUndo(null);
+    load(filter);
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -97,26 +107,13 @@ export default function TransactionsScreen() {
             </AppText>
           )}
           renderItem={({ item }) => (
-            <ListItem
-              icon={item.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'}
-              iconColor={item.type === 'Income' ? theme.colors.positive : theme.colors.negative}
-              title={categoryMap[item.categoryId] ?? 'Unknown'}
+            <TransactionRow
+              transaction={item}
+              categoryName={categoryMap[item.categoryId] ?? 'Unknown'}
               subtitle={item.note ?? undefined}
-              accessibilityLabel={`${categoryMap[item.categoryId] ?? 'Unknown'}, ${item.type}, ${formatPHP(item.amount)}, ${displayDate(item.date)}${item.receiptUri ? ', has receipt' : ''}`}
-              onPress={item.receiptUri ? () => setViewReceipt(item.receiptUri) : undefined}
-              trailing={
-                <View style={styles.trailing}>
-                  {item.receiptUri ? (
-                    <Feather name="paperclip" size={14} color={theme.colors.textMuted} />
-                  ) : null}
-                  <AppText
-                    variant="amountSm"
-                    color={item.type === 'Income' ? 'positive' : 'negative'}
-                  >
-                    {item.type === 'Expense' ? '−' : '+'}{formatPHP(item.amount)}
-                  </AppText>
-                </View>
-              }
+              onEdit={setEditTransaction}
+              onUndo={setPendingUndo}
+              onViewReceipt={setViewReceipt}
             />
           )}
           ListEmptyComponent={
@@ -150,6 +147,26 @@ export default function TransactionsScreen() {
           ) : null}
         </Pressable>
       </Modal>
+
+      <AddTransactionSheet
+        visible={editTransaction !== null}
+        initial={editTransaction}
+        onClose={() => setEditTransaction(null)}
+        onSuccess={() => load(filter)}
+      />
+
+      <ConfirmDialog
+        visible={pendingUndo !== null}
+        title="Undo Transaction"
+        message={
+          pendingUndo?.type === 'Expense'
+            ? `Undo this expense and return ${formatPHP(pendingUndo.amount)} to the account?`
+            : `Undo this income and remove ${formatPHP(pendingUndo?.amount ?? 0)} from the account?`
+        }
+        confirmLabel="Undo"
+        onConfirm={handleUndo}
+        onCancel={() => setPendingUndo(null)}
+      />
     </View>
   );
 }
@@ -159,7 +176,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   viewerBackdrop: {
     flex: 1,
     backgroundColor: theme.colors.scrim,

@@ -8,10 +8,11 @@ import { Amount } from '../../src/components/ui/Amount';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
-import { debtRepo } from '../../src/repositories';
+import { debtRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
-import type { Debt, DebtStatus } from '../../src/domain/types';
+import { formatPHP } from '../../src/utils/currency';
+import type { Account, Debt, DebtStatus } from '../../src/domain/types';
 
 const TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
 
@@ -20,19 +21,28 @@ export default function DebtsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<DebtStatus>('Open');
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     const all = await debtRepo.list();
+    const accs = await accountRepo.list();
     setDebts(all);
+    setAccounts(accs);
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const filtered = debts.filter((d) => d.status === activeTab);
+  const activeDebts = debts.filter((d) => d.status !== 'Paid');
+  const totalDebt = activeDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
+  const availableFunds = accounts
+    .filter((a) => a.type === 'Cash' || a.type === 'EWallet')
+    .reduce((sum, a) => sum + a.currentBalance, 0);
+  const remainingAfterFunds = Math.max(0, totalDebt - availableFunds);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -65,6 +75,24 @@ export default function DebtsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { paddingBottom: 80 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.summary}>
+              <View style={styles.summaryCol}>
+                <AppText variant="labelSm" color="textMuted">TOTAL DEBT</AppText>
+                <AppText variant="amountMd">{formatPHP(totalDebt)}</AppText>
+                <AppText variant="bodySm" color="textMuted">{activeDebts.length} active debts</AppText>
+              </View>
+              <View style={styles.summaryCol}>
+                <AppText variant="labelSm" color="textMuted">CASH + E-WALLETS</AppText>
+                <AppText variant="amountMd" color={availableFunds >= totalDebt ? 'positive' : 'textPrimary'}>
+                  {formatPHP(availableFunds)}
+                </AppText>
+                <AppText variant="bodySm" color={remainingAfterFunds > 0 ? 'negative' : 'positive'}>
+                  {remainingAfterFunds > 0 ? `${formatPHP(remainingAfterFunds)} left` : 'Covered'}
+                </AppText>
+              </View>
+            </View>
+          }
           ListEmptyComponent={
             <EmptyState
               icon="credit-card"
@@ -146,6 +174,16 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: theme.colors.accentPrimary },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
+  summary: {
+    backgroundColor: theme.colors.bgSurface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[5],
+    flexDirection: 'row',
+    gap: theme.spacing[4],
+    marginBottom: theme.spacing[4],
+    ...theme.shadows.sm,
+  },
+  summaryCol: { flex: 1, gap: theme.spacing[2] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

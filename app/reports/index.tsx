@@ -4,34 +4,90 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
-import { transactionRepo, categoryRepo } from '../../src/repositories';
+import { DatePicker } from '../../src/components/ui/DatePicker';
+import { transactionRepo, categoryRepo, debtPaymentRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
-import { monthRangeIso } from '../../src/utils/date';
+import { endOfDayManilaIso, periodRangeIso, startOfDayManilaIso, type Period } from '../../src/utils/date';
 import { theme } from '../../src/theme';
 import type { Category } from '../../src/domain/types';
 
 type CategoryRow = { categoryId: string; name: string; total: number; percent: number };
+type ReportPeriod = Period | 'custom';
 
-function monthLabel(date: Date): string {
+const periods: { key: ReportPeriod; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'year', label: 'Year' },
+  { key: 'custom', label: 'Custom' },
+];
+
+function dateLabel(date: Date, options: Intl.DateTimeFormatOptions): string {
+  return date.toLocaleDateString('en-PH', { ...options, timeZone: 'Asia/Manila' });
+}
+
+function customRange(startIso: string, endIso: string): { from: string; to: string } {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const [fromDate, toDate] = start <= end ? [start, end] : [end, start];
+  return { from: startOfDayManilaIso(fromDate), to: endOfDayManilaIso(toDate) };
+}
+
+function customLabel(startIso: string, endIso: string): string {
+  const { from, to } = customRange(startIso, endIso);
+  return `${dateLabel(new Date(from), { month: 'short', day: 'numeric' })} - ${dateLabel(new Date(to), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })}`;
+}
+
+function periodLabel(period: ReportPeriod, date: Date, customStart: string, customEnd: string): string {
+  if (period === 'custom') {
+    return customLabel(customStart, customEnd);
+  }
+  if (period === 'day') {
+    return dateLabel(date, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (period === 'week') {
+    const { from, to } = periodRangeIso(period, date);
+    return `${dateLabel(new Date(from), { month: 'short', day: 'numeric' })} - ${dateLabel(new Date(to), {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })}`;
+  }
+  if (period === 'year') {
+    return dateLabel(date, { year: 'numeric' });
+  }
   return date.toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
 }
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
-  const [monthOffset, setMonthOffset] = useState(0);
+  const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [periodOffset, setPeriodOffset] = useState(0);
+  const [customStart, setCustomStart] = useState(startOfDayManilaIso());
+  const [customEnd, setCustomEnd] = useState(endOfDayManilaIso());
   const [income, setIncome] = useState(0);
   const [expense, setExpense] = useState(0);
   const [breakdown, setBreakdown] = useState<CategoryRow[]>([]);
 
   const referenceDate = useCallback(() => {
     const d = new Date();
-    d.setMonth(d.getMonth() + monthOffset);
+    if (period === 'day') d.setDate(d.getDate() + periodOffset);
+    if (period === 'week') d.setDate(d.getDate() + periodOffset * 7);
+    if (period === 'month') d.setMonth(d.getMonth() + periodOffset);
+    if (period === 'year') d.setFullYear(d.getFullYear() + periodOffset);
     return d;
-  }, [monthOffset]);
+  }, [period, periodOffset]);
 
   const load = useCallback(async () => {
-    const { from, to } = monthRangeIso(referenceDate());
+    const { from, to } = period === 'custom'
+      ? customRange(customStart, customEnd)
+      : periodRangeIso(period, referenceDate());
     const transactions = await transactionRepo.list({ from, to });
+    const debtPayments = await debtPaymentRepo.list({ from, to });
     const categories = await categoryRepo.list();
     const catMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
 
@@ -44,6 +100,8 @@ export default function ReportsScreen() {
         catTotals.set(tx.categoryId, (catTotals.get(tx.categoryId) ?? 0) + tx.amount);
       }
     }
+    const debtPaymentTotal = debtPayments.reduce((sum, p) => sum + p.amount, 0);
+    exp += debtPaymentTotal;
     setIncome(inc);
     setExpense(exp);
 
@@ -56,39 +114,91 @@ export default function ReportsScreen() {
         percent: exp > 0 ? (total / exp) * 100 : 0,
       });
     });
+    if (debtPaymentTotal > 0) {
+      rows.push({
+        categoryId: 'debt-payments',
+        name: 'Debt Payments',
+        total: debtPaymentTotal,
+        percent: exp > 0 ? (debtPaymentTotal / exp) * 100 : 0,
+      });
+    }
     rows.sort((a, b) => b.total - a.total);
     setBreakdown(rows);
-  }, [referenceDate]);
+  }, [customEnd, customStart, period, referenceDate]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const net = income - expense;
   const refDate = referenceDate();
+  const canPage = period !== 'custom';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <AppText variant="h2" style={styles.title}>Reports</AppText>
 
-      <View style={styles.monthNav}>
+      <View style={styles.periodNav}>
         <Pressable
-          onPress={() => setMonthOffset((o) => o - 1)}
+          onPress={() => setPeriodOffset((o) => o - 1)}
+          disabled={!canPage}
           accessibilityRole="button"
-          accessibilityLabel="Previous month"
+          accessibilityLabel={`Previous ${period}`}
           hitSlop={12}
+          style={{ opacity: canPage ? 1 : 0 }}
         >
           <Feather name="chevron-left" size={22} color={theme.colors.textSecondary} />
         </Pressable>
-        <AppText variant="h4">{monthLabel(refDate)}</AppText>
+        <View style={styles.periodTitle}>
+          <AppText variant="h4" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.periodTitleText}>
+            {periodLabel(period, refDate, customStart, customEnd)}
+          </AppText>
+        </View>
         <Pressable
-          onPress={() => setMonthOffset((o) => Math.min(0, o + 1))}
+          onPress={() => setPeriodOffset((o) => Math.min(0, o + 1))}
+          disabled={!canPage}
           accessibilityRole="button"
-          accessibilityLabel="Next month"
+          accessibilityLabel={`Next ${period}`}
           hitSlop={12}
-          style={{ opacity: monthOffset >= 0 ? 0.3 : 1 }}
+          style={{ opacity: canPage ? (periodOffset >= 0 ? 0.3 : 1) : 0 }}
         >
           <Feather name="chevron-right" size={22} color={theme.colors.textSecondary} />
         </Pressable>
       </View>
+
+      <View style={styles.periodTabs}>
+        {periods.map((item) => {
+          const selected = item.key === period;
+          return (
+            <Pressable
+              key={item.key}
+              onPress={() => {
+                setPeriod(item.key);
+                setPeriodOffset(0);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              style={[styles.periodTab, selected && styles.periodTabSelected]}
+            >
+              <AppText
+                variant="labelSm"
+                color={selected ? 'bgPrimary' : 'textSecondary'}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                style={styles.periodTabText}
+              >
+                {item.label}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {period === 'custom' && (
+        <View style={styles.customDates}>
+          <DatePicker label="From" value={customStart} onChange={setCustomStart} />
+          <DatePicker label="To" value={customEnd} onChange={setCustomEnd} />
+        </View>
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -137,7 +247,7 @@ export default function ReportsScreen() {
           <View style={styles.empty}>
             <Feather name="bar-chart-2" size={40} color={theme.colors.textMuted} />
             <AppText variant="bodySm" color="textMuted" style={styles.emptyText}>
-              No transactions this month
+              No transactions this {period === 'custom' ? 'range' : period}
             </AppText>
           </View>
         )}
@@ -153,10 +263,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
   },
   title: { marginTop: theme.spacing[7], marginBottom: theme.spacing[5] },
-  monthNav: {
+  periodNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: theme.spacing[3],
+  },
+  periodTitle: { flex: 1, alignItems: 'center', paddingHorizontal: theme.spacing[3] },
+  periodTitleText: { width: '100%', textAlign: 'center' },
+  periodTabs: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.bgSurface,
+    borderRadius: theme.radius.md,
+    padding: 3,
+    marginBottom: theme.spacing[5],
+  },
+  periodTab: {
+    flex: 1,
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radius.sm,
+  },
+  periodTabText: { width: '100%', textAlign: 'center' },
+  periodTabSelected: {
+    backgroundColor: theme.colors.accentPrimary,
+  },
+  customDates: {
+    gap: theme.spacing[3],
     marginBottom: theme.spacing[5],
   },
   scroll: { gap: theme.spacing[5] },

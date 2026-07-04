@@ -11,6 +11,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         animation: 'fade',
+        sceneStyle: { backgroundColor: theme.colors.bgPrimary },
         tabBarStyle: {
           backgroundColor: theme.colors.bgSurface,
           borderTopColor: theme.colors.borderDefault,

@@ -10,6 +10,7 @@ import { debtPaymentRepo, accountRepo } from '../../repositories';
 import { theme } from '../../theme';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
+import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
 import type { Account } from '../../domain/types';
 
 type Props = {
@@ -39,17 +40,33 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
     }
   }, [visible]);
 
+  const isAccumulated = accountId === ACCUMULATED_ID;
+  const selectedAccount = accounts.find((a) => a.id === accountId);
+  const totalAvailable = accumulatedTotal(accounts);
+  const portions = isAccumulated && amount > 0 ? splitAcrossAccounts(accounts, amount) : null;
+
   async function handleSave() {
     const errs: Record<string, string> = {};
     if (amount <= 0) errs.amount = 'Enter a payment amount';
     if (!accountId) errs.accountId = 'Select an account';
-    const selected = accounts.find((a) => a.id === accountId);
     if (amount > outstandingBalance) errs.amount = 'Payment is more than the remaining debt';
-    if (selected && amount > selected.currentBalance) errs.amount = 'Payment is more than this account has';
+    if (isAccumulated && amount > totalAvailable) errs.amount = 'Payment is more than your accumulated balance';
+    // Credit cards may overdraw — paying debt with credit.
+    if (selectedAccount && selectedAccount.type !== 'CreditCard' && amount > selectedAccount.currentBalance) {
+      errs.amount = 'Payment is more than this account has';
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
-      await debtPaymentRepo.create(debtId, { amount, date, accountId });
+      if (isAccumulated) {
+        const split = splitAcrossAccounts(accounts, amount);
+        if (!split) throw new Error('Accumulated balance cannot cover this payment');
+        for (const portion of split) {
+          await debtPaymentRepo.create(debtId, { amount: portion.amount, date, accountId: portion.account.id });
+        }
+      } else {
+        await debtPaymentRepo.create(debtId, { amount, date, accountId });
+      }
       onSuccess();
       onClose();
     } catch (e) {
@@ -59,13 +76,15 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
     }
   }
 
-  const selectedAccount = accounts.find((a) => a.id === accountId);
   const remainingDebt = Math.max(0, outstandingBalance - amount);
   const remainingSource = selectedAccount ? selectedAccount.currentBalance - amount : 0;
-  const accountOptions = accounts.map((a) => ({
-    label: `${a.name} (${formatPHP(a.currentBalance)})`,
-    value: a.id,
-  }));
+  const accountOptions = [
+    { label: `Accumulated Balance (${formatPHP(totalAvailable)})`, value: ACCUMULATED_ID },
+    ...accounts.map((a) => ({
+      label: `${a.name} (${a.type === 'CreditCard' ? 'Credit' : formatPHP(a.currentBalance)})`,
+      value: a.id,
+    })),
+  ];
 
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Add Payment">
@@ -90,13 +109,37 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
           placeholder="Select account…"
           error={errors.accountId}
         />
-        {selectedAccount ? (
+        {isAccumulated ? (
+          <View style={styles.preview}>
+            <AppText variant="bodySm" color="textMuted">
+              {formatPHP(amount)} split across your accounts to {creditor}
+            </AppText>
+            {portions ? (
+              portions.map((p) => (
+                <AppText key={p.account.id} variant="bodySm" color="textSecondary">
+                  {p.account.name}: {formatPHP(p.amount)}
+                </AppText>
+              ))
+            ) : amount > 0 ? (
+              <AppText variant="bodySm" color="negative">
+                Not enough accumulated balance ({formatPHP(totalAvailable)} available)
+              </AppText>
+            ) : null}
+            <AppText variant="bodySm" color={remainingDebt > 0 ? 'textSecondary' : 'positive'}>
+              Debt left after payment: {formatPHP(remainingDebt)}
+            </AppText>
+          </View>
+        ) : selectedAccount ? (
           <View style={styles.preview}>
             <AppText variant="bodySm" color="textMuted">
               {formatPHP(amount)} from {selectedAccount.name} to {creditor}
             </AppText>
-            <AppText variant="bodySm" color={remainingSource < 0 ? 'negative' : 'textSecondary'}>
+            <AppText
+              variant="bodySm"
+              color={remainingSource < 0 && selectedAccount.type !== 'CreditCard' ? 'negative' : 'textSecondary'}
+            >
               {selectedAccount.name} after payment: {formatPHP(remainingSource)}
+              {selectedAccount.type === 'CreditCard' && remainingSource < 0 ? ' (credit used)' : ''}
             </AppText>
             <AppText variant="bodySm" color={remainingDebt > 0 ? 'textSecondary' : 'positive'}>
               Debt left after payment: {formatPHP(remainingDebt)}

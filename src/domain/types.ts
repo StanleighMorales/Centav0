@@ -9,7 +9,7 @@ export interface LocalSyncFields {
   syncedAt: string | null;
 }
 
-export type AccountType = 'Cash' | 'Bank' | 'EWallet' | 'Other';
+export type AccountType = 'Cash' | 'Bank' | 'EWallet' | 'CreditCard' | 'Other';
 
 export interface Account extends AuditFields, LocalSyncFields {
   id: string;
@@ -18,10 +18,17 @@ export interface Account extends AuditFields, LocalSyncFields {
   type: AccountType;
   initialBalance: number;
   currentBalance: number;
+  /** Day of month (1–31) the credit card statement is generated. CreditCard only. */
+  billDay: number | null;
+  /** Day of month (1–31) the credit card payment is due. CreditCard only. */
+  dueDay: number | null;
 }
 
-export interface CreateAccountInput { name: string; type: AccountType; initialBalance: number; }
-export interface UpdateAccountInput { name?: string; type?: AccountType; }
+export interface CreateAccountInput {
+  name: string; type: AccountType; initialBalance: number;
+  billDay?: number; dueDay?: number;
+}
+export interface UpdateAccountInput { name?: string; type?: AccountType; billDay?: number; dueDay?: number; }
 
 export type CategoryType = 'Expense' | 'Income';
 
@@ -76,13 +83,20 @@ export interface Debt extends AuditFields, LocalSyncFields {
   status: DebtStatus;
   interestRate: number | null;
   note: string | null;
+  isInstallment: boolean;
+  monthlyPayment: number | null;
+  installmentFee: number | null;
 }
 
 export interface CreateDebtInput {
   creditor: string; originalAmount: number;
   dueDate?: string; interestRate?: number; note?: string;
+  isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
 }
-export interface UpdateDebtInput { creditor?: string; dueDate?: string; interestRate?: number; note?: string; }
+export interface UpdateDebtInput {
+  creditor?: string; dueDate?: string; interestRate?: number; note?: string;
+  isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+}
 
 export interface DebtPayment extends AuditFields, LocalSyncFields {
   id: string; userId: string; debtId: string;

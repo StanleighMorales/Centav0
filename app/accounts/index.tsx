@@ -18,8 +18,9 @@ import type { Account, AccountType } from '../../src/domain/types';
 
 const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
   Cash: 'dollar-sign',
-  Bank: 'credit-card',
+  Bank: 'home',
   EWallet: 'smartphone',
+  CreditCard: 'credit-card',
   Other: 'briefcase',
 };
 
@@ -68,7 +69,17 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
           </View>
           <View style={styles.cardInfo}>
             <AppText variant="h3">{account.name}</AppText>
-            <AppText variant="labelLg" color="textSecondary">{account.type}</AppText>
+            <AppText variant="labelLg" color="textSecondary">
+              {account.type === 'CreditCard' ? 'Credit Card' : account.type}
+            </AppText>
+            {account.type === 'CreditCard' && (account.billDay != null || account.dueDay != null) ? (
+              <AppText variant="bodySm" color="textMuted">
+                {[
+                  account.billDay != null ? `Bill day ${account.billDay}` : null,
+                  account.dueDay != null ? `Due day ${account.dueDay}` : null,
+                ].filter(Boolean).join(' · ')}
+              </AppText>
+            ) : null}
           </View>
           <Pressable
             onPress={() => onAddMoney(account)}

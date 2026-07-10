@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -27,6 +27,9 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
   const [dueDate, setDueDate] = useState('');
   const [interestRate, setInterestRate] = useState('');
   const [note, setNote] = useState('');
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [monthlyPayment, setMonthlyPayment] = useState(0);
+  const [installmentFee, setInstallmentFee] = useState(0);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -39,6 +42,9 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
       setDueDate(initial?.dueDate ?? '');
       setInterestRate(initial?.interestRate != null ? String(initial.interestRate) : '');
       setNote(initial?.note ?? '');
+      setIsInstallment(initial?.isInstallment ?? false);
+      setMonthlyPayment(initial?.monthlyPayment ?? 0);
+      setInstallmentFee(initial?.installmentFee ?? 0);
       setErrors({});
     }
   }, [visible]);
@@ -47,16 +53,23 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
     const errs: Record<string, string> = {};
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
+    if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
       const rate = interestRate.trim() ? parseFloat(interestRate) : undefined;
+      const installmentFields = {
+        isInstallment,
+        monthlyPayment: isInstallment ? monthlyPayment : undefined,
+        installmentFee: isInstallment && installmentFee > 0 ? installmentFee : undefined,
+      };
       if (isEdit && initial) {
         await debtRepo.update(initial.id, {
           creditor: creditor.trim(),
           dueDate: dueDateEnabled ? dueDate : undefined,
           interestRate: rate,
           note: note.trim() || undefined,
+          ...installmentFields,
         });
       } else {
         await debtRepo.create({
@@ -65,6 +78,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
           dueDate: dueDateEnabled ? dueDate : undefined,
           interestRate: rate,
           note: note.trim() || undefined,
+          ...installmentFields,
         });
       }
       onSuccess();
@@ -125,6 +139,34 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
             </Pressable>
           )}
         </View>
+        <View style={styles.installmentRow}>
+          <View style={styles.flex}>
+            <AppText variant="labelLg" color="textSecondary">Installment plan</AppText>
+            <AppText variant="bodySm" color="textMuted">Pay this debt monthly</AppText>
+          </View>
+          <Switch
+            value={isInstallment}
+            onValueChange={setIsInstallment}
+            accessibilityLabel="Installment plan"
+            trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
+            thumbColor={isInstallment ? theme.colors.accentPrimary : theme.colors.textMuted}
+          />
+        </View>
+        {isInstallment && (
+          <>
+            <AmountInput
+              label="Monthly Payment"
+              value={monthlyPayment}
+              onChange={setMonthlyPayment}
+              error={errors.monthlyPayment}
+            />
+            <AmountInput
+              label="Other Fees (optional)"
+              value={installmentFee}
+              onChange={setInstallmentFee}
+            />
+          </>
+        )}
         <AppTextInput
           label="Interest Rate % (optional)"
           value={interestRate}
@@ -151,5 +193,7 @@ const styles = StyleSheet.create({
   clearDate: { paddingTop: theme.spacing[2] },
   setDateBtn: { gap: theme.spacing[1] },
   setDateRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  installmentRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] },
+  flex: { flex: 1, gap: theme.spacing[1] },
   bottomPad: { height: theme.spacing[5] },
 });

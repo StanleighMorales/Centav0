@@ -65,6 +65,40 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`ALTER TABLE transactions ADD COLUMN receiptUri TEXT;`);
     },
   },
+  {
+    name: '006_installments_and_credit_cards',
+    up: async (db) => {
+      await db.execAsync(`
+        ALTER TABLE debts ADD COLUMN isInstallment INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE debts ADD COLUMN monthlyPayment REAL;
+        ALTER TABLE debts ADD COLUMN installmentFee REAL;
+      `);
+      // Rebuild accounts to widen the type CHECK for 'CreditCard' and add
+      // credit card bill/due days. Runs with foreign_keys OFF (see database.ts):
+      // references to `accounts` resolve by name after the rename.
+      await db.execAsync(`
+        CREATE TABLE accounts_new (
+          id              TEXT PRIMARY KEY NOT NULL,
+          userId          TEXT NOT NULL,
+          name            TEXT NOT NULL,
+          type            TEXT NOT NULL CHECK (type IN ('Cash','Bank','EWallet','CreditCard','Other')),
+          initialBalance  REAL NOT NULL DEFAULT 0,
+          currentBalance  REAL NOT NULL DEFAULT 0,
+          billDay         INTEGER,
+          dueDay          INTEGER,
+          createdAt       TEXT NOT NULL,
+          updatedAt       TEXT NOT NULL,
+          deletedAt       TEXT,
+          isDirty         INTEGER NOT NULL DEFAULT 1,
+          syncedAt        TEXT
+        );
+        INSERT INTO accounts_new (id, userId, name, type, initialBalance, currentBalance, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+          SELECT id, userId, name, type, initialBalance, currentBalance, createdAt, updatedAt, deletedAt, isDirty, syncedAt FROM accounts;
+        DROP TABLE accounts;
+        ALTER TABLE accounts_new RENAME TO accounts;
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

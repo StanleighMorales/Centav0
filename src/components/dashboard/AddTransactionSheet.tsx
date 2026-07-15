@@ -13,6 +13,8 @@ import { CategorySheet } from '../categories/CategorySheet';
 import { AddAccountSheet } from '../accounts/AddAccountSheet';
 import { accountRepo, categoryRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
+import { formatPHP } from '../../utils/currency';
+import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
 import { theme } from '../../theme';
 import type { Account, Category, Transaction, TransactionType } from '../../domain/types';
 
@@ -99,25 +101,39 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
   }, [visible, initial]);
 
   const filteredCategories = categories.filter((c) => c.type === type);
+  const isAccumulated = accountId === ACCUMULATED_ID;
+  // Accumulated Balance is a virtual source: new expenses only, split across real accounts.
+  const allowAccumulated = type === 'Expense' && !initial;
 
   async function handleSave() {
     const errs: Record<string, string> = {};
     if (amount <= 0) errs.amount = 'Enter an amount';
     if (!categoryId) errs.categoryId = 'Select a category';
     if (!accountId) errs.accountId = 'Select an account';
+    if (isAccumulated && amount > accumulatedTotal(accounts)) {
+      errs.accountId = `Only ${formatPHP(accumulatedTotal(accounts))} available across accounts`;
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setSaving(true);
     try {
-      const input = {
-        date, amount, type,
+      const base = {
+        date, type,
         categoryId: categoryId!,
-        accountId: accountId!,
         note: note.trim() || undefined,
         receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
       };
-      if (initial) await transactionRepo.update(initial.id, input);
-      else await transactionRepo.create(input);
+      if (isAccumulated) {
+        const portions = splitAcrossAccounts(accounts, amount);
+        if (!portions) { setErrors({ accountId: 'Not enough accumulated balance' }); return; }
+        for (const p of portions) {
+          await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
+        }
+      } else if (initial) {
+        await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! });
+      } else {
+        await transactionRepo.create({ ...base, amount, accountId: accountId! });
+      }
       onSuccess();
       onClose();
     } finally {
@@ -136,7 +152,11 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
           {(['Expense', 'Income'] as TransactionType[]).map((t) => (
             <Pressable
               key={t}
-              onPress={() => { setType(t); setCategoryId(null); }}
+              onPress={() => {
+                setType(t);
+                setCategoryId(null);
+                if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+              }}
               accessibilityRole="button"
               accessibilityLabel={t}
               style={[styles.typeBtn, type === t && styles.typeBtnActive]}
@@ -173,7 +193,12 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
           <View style={styles.pickerFlex}>
             <Select
               label="Account"
-              options={accounts.map((a) => ({ label: a.name, value: a.id }))}
+              options={[
+                ...(allowAccumulated
+                  ? [{ label: `Accumulated Balance (${formatPHP(accumulatedTotal(accounts))})`, value: ACCUMULATED_ID }]
+                  : []),
+                ...accounts.map((a) => ({ label: a.name, value: a.id })),
+              ]}
               value={accountId}
               onChange={setAccountId}
               error={errors.accountId}

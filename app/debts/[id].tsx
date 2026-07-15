@@ -112,6 +112,15 @@ export default function DebtDetailScreen() {
               </AppText>
             </View>
           ) : null}
+          {debt.isInstallment && debt.monthlyPayment != null ? (
+            <View style={styles.metaRow}>
+              <Feather name="repeat" size={14} color={theme.colors.textMuted} />
+              <AppText variant="bodySm" color="textMuted">
+                {formatPHP(debt.monthlyPayment)}/month installment
+                {debt.installmentFee != null ? ` + ${formatPHP(debt.installmentFee)} fees` : ''}
+              </AppText>
+            </View>
+          ) : null}
           {debt.interestRate != null ? (
             <View style={styles.metaRow}>
               <Feather name="percent" size={14} color={theme.colors.textMuted} />
@@ -179,6 +188,7 @@ export default function DebtDetailScreen() {
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
+        monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
       />
 
       <ConfirmDialog

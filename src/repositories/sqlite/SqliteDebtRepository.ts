@@ -12,6 +12,9 @@ function rowToDebt(row: any): Debt {
     originalAmount: row.originalAmount, outstandingBalance: row.outstandingBalance,
     dueDate: row.dueDate ?? null, status: row.status,
     interestRate: row.interestRate ?? null, note: row.note ?? null,
+    isInstallment: row.isInstallment === 1,
+    monthlyPayment: row.monthlyPayment ?? null,
+    installmentFee: row.installmentFee ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -51,9 +54,14 @@ export class SqliteDebtRepository implements IDebtRepository {
     const dueDate = input.dueDate ?? null;
     const status = computeStatus(amount, dueDate);
     await db.runAsync(
-      `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, interestRate, note, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status, input.interestRate ?? null, input.note ?? null, now, now],
+      `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+      [
+        id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
+        input.interestRate ?? null, input.note ?? null,
+        input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
+        now, now,
+      ],
     );
     const created = await this.getById(id);
     if (!created) throw new Error('Debt creation failed silently');
@@ -68,12 +76,15 @@ export class SqliteDebtRepository implements IDebtRepository {
     const dueDate = 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate;
     const status = computeStatus(existing.outstandingBalance, dueDate);
     await db.runAsync(
-      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, updatedAt = ?, isDirty = 1
+      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, updatedAt = ?, isDirty = 1
        WHERE id = ? AND userId = ?`,
       [
         input.creditor ?? existing.creditor, dueDate, status,
         'interestRate' in input ? (input.interestRate ?? null) : existing.interestRate,
         'note' in input ? (input.note ?? null) : existing.note,
+        ('isInstallment' in input ? !!input.isInstallment : existing.isInstallment) ? 1 : 0,
+        'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
+        'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
         now, id, FIXED_USER_ID,
       ],
     );

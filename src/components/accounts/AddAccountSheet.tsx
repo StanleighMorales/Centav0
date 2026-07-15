@@ -13,8 +13,14 @@ const TYPE_OPTIONS = [
   { label: 'Cash', value: 'Cash' },
   { label: 'Bank', value: 'Bank' },
   { label: 'E-Wallet', value: 'EWallet' },
+  { label: 'Credit Card', value: 'CreditCard' },
   { label: 'Other', value: 'Other' },
 ];
+
+function parseDay(value: string): number | undefined {
+  const day = parseInt(value, 10);
+  return Number.isInteger(day) && day >= 1 && day <= 31 ? day : undefined;
+}
 
 type Props = {
   visible: boolean;
@@ -28,6 +34,8 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('Cash');
   const [balance, setBalance] = useState(0);
+  const [billDay, setBillDay] = useState('');
+  const [dueDay, setDueDay] = useState('');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -36,21 +44,31 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
       setName(initial?.name ?? '');
       setType(initial?.type ?? 'Cash');
       setBalance(initial?.initialBalance ?? 0);
+      setBillDay(initial?.billDay != null ? String(initial.billDay) : '');
+      setDueDay(initial?.dueDay != null ? String(initial.dueDay) : '');
       setErrors({});
     }
   }, [visible]);
 
+  const isCreditCard = type === 'CreditCard';
+
   async function handleSave() {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = 'Enter an account name';
+    if (isCreditCard && billDay.trim() && !parseDay(billDay)) errs.billDay = 'Enter a day between 1 and 31';
+    if (isCreditCard && dueDay.trim() && !parseDay(dueDay)) errs.dueDay = 'Enter a day between 1 and 31';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
+      const cardFields = {
+        billDay: isCreditCard ? parseDay(billDay) : undefined,
+        dueDay: isCreditCard ? parseDay(dueDay) : undefined,
+      };
       if (initial) {
         // Balance is computed from transactions, so edit only name + type.
-        await accountRepo.update(initial.id, { name: name.trim(), type });
+        await accountRepo.update(initial.id, { name: name.trim(), type, ...cardFields });
       } else {
-        await accountRepo.create({ name: name.trim(), type, initialBalance: balance });
+        await accountRepo.create({ name: name.trim(), type, initialBalance: balance, ...cardFields });
       }
       onSuccess();
       onClose();
@@ -79,6 +97,26 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
           value={type}
           onChange={(v) => setType(v as AccountType)}
         />
+        {isCreditCard && (
+          <>
+            <AppTextInput
+              label="Bill Date (day of month, optional)"
+              value={billDay}
+              onChangeText={setBillDay}
+              placeholder="e.g. 15"
+              numeric
+              error={errors.billDay}
+            />
+            <AppTextInput
+              label="Due Date (day of month, optional)"
+              value={dueDay}
+              onChangeText={setDueDay}
+              placeholder="e.g. 3"
+              numeric
+              error={errors.dueDay}
+            />
+          </>
+        )}
         {isEdit ? null : (
           <AmountInput label="Initial Balance" value={balance} onChange={setBalance} />
         )}

@@ -10,6 +10,7 @@ function rowToAccount(row: any): Account {
   return {
     id: row.id, userId: row.userId, name: row.name, type: row.type,
     initialBalance: row.initialBalance, currentBalance: row.currentBalance,
+    billDay: row.billDay ?? null, dueDay: row.dueDay ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null, isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
   };
@@ -40,9 +41,9 @@ export class SqliteAccountRepository implements IAccountRepository {
     const now = nowIso();
     const initial = roundCentavos(input.initialBalance);
     await db.runAsync(
-      `INSERT INTO accounts (id, userId, name, type, initialBalance, currentBalance, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [id, FIXED_USER_ID, input.name, input.type, initial, initial, now, now],
+      `INSERT INTO accounts (id, userId, name, type, initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+      [id, FIXED_USER_ID, input.name, input.type, initial, initial, input.billDay ?? null, input.dueDay ?? null, now, now],
     );
     const created = await this.getById(id);
     if (!created) throw new Error('Account creation failed silently');
@@ -55,8 +56,13 @@ export class SqliteAccountRepository implements IAccountRepository {
     const db = await getDatabase();
     const updatedAt = nowIso();
     await db.runAsync(
-      `UPDATE accounts SET name = ?, type = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-      [input.name ?? existing.name, input.type ?? existing.type, updatedAt, id, FIXED_USER_ID],
+      `UPDATE accounts SET name = ?, type = ?, billDay = ?, dueDay = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      [
+        input.name ?? existing.name, input.type ?? existing.type,
+        'billDay' in input ? (input.billDay ?? null) : existing.billDay,
+        'dueDay' in input ? (input.dueDay ?? null) : existing.dueDay,
+        updatedAt, id, FIXED_USER_ID,
+      ],
     );
     const updated = await this.getById(id);
     if (!updated) throw new Error('Account vanished after update');

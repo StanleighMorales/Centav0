@@ -21,8 +21,9 @@ import type { Account, Transaction, AccountType } from '../../src/domain/types';
 
 const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
   Cash: 'dollar-sign',
-  Bank: 'credit-card',
+  Bank: 'home',
   EWallet: 'smartphone',
+  CreditCard: 'credit-card',
   Other: 'briefcase',
 };
 

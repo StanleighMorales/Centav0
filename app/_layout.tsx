@@ -84,7 +84,7 @@ export default function RootLayout() {
     return (
       <View style={styles.center}>
         <Image
-          source={require('../assets/splash-icon.png')}
+          source={require('../assets/centav0-icon-v1.png')}
           style={styles.logo}
           resizeMode="contain"
           accessibilityLabel="Centav0"
@@ -98,7 +98,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <ThemeProvider value={navTheme}>
-          <StatusBar style="light" backgroundColor={theme.colors.bgPrimary} />
+          <StatusBar style="light" />
           <Stack
             screenOptions={{
               headerShown: false,
@@ -121,8 +121,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgPrimary,
   },
   logo: {
-    width: 120,
-    height: 180,
+    width: 220,
+    height: 220,
   },
   spinner: {
     marginTop: theme.spacing['5'],

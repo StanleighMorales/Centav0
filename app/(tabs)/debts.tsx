@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -16,6 +17,75 @@ import type { Account, Debt, DebtStatus } from '../../src/domain/types';
 
 const TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
 
+type DebtRowProps = {
+  debt: Debt;
+  onPress: (d: Debt) => void;
+  onEdit: (d: Debt) => void;
+};
+
+function DebtRow({ debt, onPress, onEdit }: DebtRowProps) {
+  const swipeRef = useRef<Swipeable>(null);
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootRight={false}
+      renderRightActions={() => (
+        <Pressable
+          onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit debt from ${debt.creditor}`}
+          style={styles.editAction}
+        >
+          <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+          <AppText variant="labelSm" color="textPrimary">Edit</AppText>
+        </Pressable>
+      )}
+    >
+      <Pressable
+        onPress={() => onPress(debt)}
+        accessibilityRole="button"
+        accessibilityLabel={`View debt from ${debt.creditor}`}
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      >
+        <View style={styles.iconCircle}>
+          <Feather
+            name="credit-card"
+            size={18}
+            color={
+              debt.status === 'Overdue'
+                ? theme.colors.negative
+                : debt.status === 'Paid'
+                ? theme.colors.positive
+                : theme.colors.accentPrimary
+            }
+          />
+        </View>
+        <View style={styles.rowMain}>
+          <AppText variant="body" style={styles.creditor}>{debt.creditor}</AppText>
+          {debt.dueDate ? (
+            <AppText
+              variant="bodySm"
+              color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}
+            >
+              Due {displayDate(debt.dueDate)}
+            </AppText>
+          ) : null}
+          {debt.isInstallment && debt.monthlyPayment != null ? (
+            <AppText variant="bodySm" color="textMuted">
+              {formatPHP(debt.monthlyPayment)}/mo installment
+            </AppText>
+          ) : null}
+        </View>
+        <View style={styles.rowTrail}>
+          <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
+          <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+        </View>
+      </Pressable>
+    </Swipeable>
+  );
+}
+
 export default function DebtsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -24,6 +94,7 @@ export default function DebtsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [editDebt, setEditDebt] = useState<Debt | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,41 +172,11 @@ export default function DebtsScreen() {
             />
           }
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/debts/${item.id}`)}
-              accessibilityRole="button"
-              accessibilityLabel={`View debt from ${item.creditor}`}
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            >
-              <View style={styles.iconCircle}>
-                <Feather
-                  name="credit-card"
-                  size={18}
-                  color={
-                    item.status === 'Overdue'
-                      ? theme.colors.negative
-                      : item.status === 'Paid'
-                      ? theme.colors.positive
-                      : theme.colors.accentPrimary
-                  }
-                />
-              </View>
-              <View style={styles.rowMain}>
-                <AppText variant="body" style={styles.creditor}>{item.creditor}</AppText>
-                {item.dueDate ? (
-                  <AppText
-                    variant="bodySm"
-                    color={item.status === 'Overdue' ? 'negative' : 'textMuted'}
-                  >
-                    Due {displayDate(item.dueDate)}
-                  </AppText>
-                ) : null}
-              </View>
-              <View style={styles.rowTrail}>
-                <Amount value={item.outstandingBalance} variant="amountSm" semanticColor={false} />
-                <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
-              </View>
-            </Pressable>
+            <DebtRow
+              debt={item}
+              onPress={(d) => router.push(`/debts/${d.id}`)}
+              onEdit={setEditDebt}
+            />
           )}
         />
       )}
@@ -145,6 +186,13 @@ export default function DebtsScreen() {
       <AddDebtSheet
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
+        onSuccess={load}
+      />
+
+      <AddDebtSheet
+        visible={editDebt !== null}
+        initial={editDebt ?? undefined}
+        onClose={() => setEditDebt(null)}
         onSuccess={load}
       />
     </View>
@@ -191,6 +239,14 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.borderDefault,
+    backgroundColor: theme.colors.bgPrimary,
+  },
+  editAction: {
+    width: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.bgElevated,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {

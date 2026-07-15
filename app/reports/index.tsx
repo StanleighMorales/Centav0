@@ -207,19 +207,31 @@ export default function ReportsScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: 32 + insets.bottom }]}
       >
         <View style={styles.summaryCard}>
-          <View style={styles.summaryCol}>
+          <View style={styles.summaryRow}>
             <AppText variant="labelSm" color="textMuted" style={styles.summaryLabel}>INCOME</AppText>
-            <AppText variant="amountMd" color="positive">{formatPHP(income)}</AppText>
+            <AppText variant="amountMd" color="positive" numberOfLines={1} ellipsizeMode="tail" style={styles.summaryValue}>
+              {formatPHP(income)}
+            </AppText>
           </View>
           <View style={styles.summaryDivider} />
-          <View style={styles.summaryCol}>
+          <View style={styles.summaryRow}>
             <AppText variant="labelSm" color="textMuted" style={styles.summaryLabel}>EXPENSE</AppText>
-            <AppText variant="amountMd" color="negative">{formatPHP(expense)}</AppText>
+            <AppText variant="amountMd" color="negative" numberOfLines={1} ellipsizeMode="tail" style={styles.summaryValue}>
+              {formatPHP(expense)}
+            </AppText>
           </View>
           <View style={styles.summaryDivider} />
-          <View style={styles.summaryCol}>
+          <View style={styles.summaryRow}>
             <AppText variant="labelSm" color="textMuted" style={styles.summaryLabel}>NET</AppText>
-            <AppText variant="amountMd" color={net >= 0 ? 'positive' : 'negative'}>{formatPHP(net)}</AppText>
+            <AppText
+              variant="amountMd"
+              color={net >= 0 ? 'positive' : 'negative'}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={styles.summaryValue}
+            >
+              {formatPHP(net)}
+            </AppText>
           </View>
         </View>
 
@@ -300,13 +312,18 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: theme.spacing[3],
     ...theme.shadows.sm,
   },
-  summaryCol: { flex: 1, alignItems: 'center', gap: theme.spacing[2] },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing[4],
+  },
   summaryLabel: { letterSpacing: 0.8 },
-  summaryDivider: { width: 1, height: 40, backgroundColor: theme.colors.borderDefault },
+  summaryValue: { flexShrink: 1, textAlign: 'right' },
+  summaryDivider: { height: 1, backgroundColor: theme.colors.borderDefault },
   section: { gap: theme.spacing[4] },
   sectionLabel: { letterSpacing: 0.8 },
   catRow: { gap: theme.spacing[2] },

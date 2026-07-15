@@ -43,7 +43,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
+  const [allTxns, setAllTxns] = useState<Transaction[]>([]);
+  const [recentFilter, setRecentFilter] = useState<'day' | 'week' | 'all'>('all');
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
@@ -66,14 +67,14 @@ export default function DashboardScreen() {
     // ponytail: sequential to avoid expo-sqlite concurrent promise queue bug
     const accs = await accountRepo.list();
     const cats = await categoryRepo.list();
-    const allTxns = await transactionRepo.list();
+    const txns = await transactionRepo.list();
     const debtPayments = await debtPaymentRepo.list();
     setAccounts(accs);
     setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
-    setRecentTxns(allTxns.slice(0, 5));
+    setAllTxns(txns);
     const { from, to } = periodRangeIso(period);
-    const periodTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
+    const periodTxns = txns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
     const periodDebtPayments = debtPayments.filter((p) => p.date >= from.slice(0, 10) && p.date <= to.slice(0, 10));
     setMonthIncome(periodTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
     setMonthExpense(
@@ -84,6 +85,13 @@ export default function DashboardScreen() {
   }, [period]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const recentTxns = (
+    recentFilter === 'all' ? allTxns : allTxns.filter((t) => {
+      const { from, to } = periodRangeIso(recentFilter);
+      return t.date >= from && t.date <= to;
+    })
+  ).slice(0, 5);
 
   async function changePeriod(p: Period) {
     setPeriod(p);
@@ -196,7 +204,25 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <SectionHeader title="Recent" />
+          <View style={styles.recentHeader}>
+            <AppText variant="h3">Recent</AppText>
+            <View style={styles.recentChips}>
+              {(['day', 'week', 'all'] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  onPress={() => setRecentFilter(f)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter recent transactions by ${f}`}
+                  accessibilityState={{ selected: recentFilter === f }}
+                  style={[styles.recentChip, recentFilter === f && styles.recentChipActive]}
+                >
+                  <AppText variant="labelSm" color={recentFilter === f ? 'accentPrimary' : 'textSecondary'}>
+                    {f === 'day' ? 'Today' : f === 'week' ? 'This Week' : 'All'}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           {recentTxns.length === 0 ? (
             <EmptyState
               icon="inbox"
@@ -208,7 +234,7 @@ export default function DashboardScreen() {
               <TransactionRow
                 key={txn.id}
                 transaction={txn}
-                categoryName={categoryMap[txn.categoryId] ?? 'Unknown'}
+                categoryName={txn.type === 'Transfer' ? 'Transfer' : (categoryMap[txn.categoryId ?? ''] ?? 'Unknown')}
                 onEdit={setEditTransaction}
                 onUndo={setPendingUndo}
               />
@@ -379,5 +405,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 44,
     height: 44,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing[2],
+  },
+  recentChips: { flexDirection: 'row', gap: theme.spacing[2] },
+  recentChip: {
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderDefault,
+  },
+  recentChipActive: {
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSubtle,
   },
 });

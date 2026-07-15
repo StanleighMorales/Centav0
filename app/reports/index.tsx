@@ -94,10 +94,12 @@ export default function ReportsScreen() {
     let inc = 0, exp = 0;
     const catTotals = new Map<string, number>();
     for (const tx of transactions) {
+      if (tx.type === 'Transfer') continue;
       if (tx.type === 'Income') { inc += tx.amount; }
       else {
         exp += tx.amount;
-        catTotals.set(tx.categoryId, (catTotals.get(tx.categoryId) ?? 0) + tx.amount);
+        const catId = tx.categoryId ?? 'uncategorized';
+        catTotals.set(catId, (catTotals.get(catId) ?? 0) + tx.amount);
       }
     }
     const debtPaymentTotal = debtPayments.reduce((sum, p) => sum + p.amount, 0);

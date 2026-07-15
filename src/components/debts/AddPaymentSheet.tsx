@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePicker } from '../ui/DatePicker';
@@ -20,10 +20,16 @@ type Props = {
   debtId: string;
   creditor: string;
   outstandingBalance: number;
+  /** Monthly installment amount — pass only for installment debts. */
+  monthlyPayment?: number;
 };
 
-export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor, outstandingBalance }: Props) {
-  const [amount, setAmount] = useState(0);
+type PayMode = 'full' | 'monthly' | 'custom';
+
+export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor, outstandingBalance, monthlyPayment }: Props) {
+  const hasMonthly = monthlyPayment != null && monthlyPayment > 0;
+  const [mode, setMode] = useState<PayMode>(hasMonthly ? 'monthly' : 'full');
+  const [customAmount, setCustomAmount] = useState(0);
   const [date, setDate] = useState(nowIso());
   const [accountId, setAccountId] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -32,13 +38,24 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
 
   useEffect(() => {
     if (visible) {
-      setAmount(0);
+      setMode(hasMonthly ? 'monthly' : 'full');
+      setCustomAmount(0);
       setDate(nowIso());
       setAccountId('');
       setErrors({});
       accountRepo.list().then(setAccounts);
     }
   }, [visible]);
+
+  // Last installment can be smaller than the monthly amount.
+  const monthlyDue = hasMonthly ? Math.min(monthlyPayment, outstandingBalance) : 0;
+  const amount = mode === 'full' ? outstandingBalance : mode === 'monthly' ? monthlyDue : customAmount;
+
+  const modeOptions: { mode: PayMode; label: string; sub: string }[] = [
+    { mode: 'full', label: 'Full', sub: formatPHP(outstandingBalance) },
+    ...(hasMonthly ? [{ mode: 'monthly' as PayMode, label: 'Monthly', sub: formatPHP(monthlyDue) }] : []),
+    { mode: 'custom', label: 'Custom', sub: 'Enter amount' },
+  ];
 
   const isAccumulated = accountId === ACCUMULATED_ID;
   const selectedAccount = accounts.find((a) => a.id === accountId);
@@ -93,13 +110,45 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <AmountInput
-          label="Payment Amount"
-          value={amount}
-          onChange={setAmount}
-          error={errors.amount}
-          autoFocus
-        />
+        <View style={styles.modeBlock}>
+          <AppText variant="labelLg" color="textSecondary">Payment</AppText>
+          <View style={styles.modeRow}>
+            {modeOptions.map((opt) => {
+              const active = mode === opt.mode;
+              return (
+                <Pressable
+                  key={opt.mode}
+                  onPress={() => { setMode(opt.mode); setErrors({}); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pay ${opt.label.toLowerCase()}, ${opt.sub}`}
+                  accessibilityState={{ selected: active }}
+                  style={[styles.modeChip, active && styles.modeChipActive]}
+                >
+                  <AppText variant="labelLg" color={active ? 'accentPrimary' : 'textSecondary'}>
+                    {opt.label}
+                  </AppText>
+                  {opt.mode === 'custom' ? (
+                    <AppText variant="labelSm" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
+                  ) : (
+                    <AppText variant="amountXs" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+          {mode !== 'custom' && errors.amount ? (
+            <AppText variant="bodySm" color="negative">{errors.amount}</AppText>
+          ) : null}
+        </View>
+        {mode === 'custom' && (
+          <AmountInput
+            label="Payment Amount"
+            value={customAmount}
+            onChange={setCustomAmount}
+            error={errors.amount}
+            autoFocus
+          />
+        )}
         <DatePicker label="Payment Date" value={date} onChange={setDate} />
         <Select
           label="From Account"
@@ -146,7 +195,11 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
             </AppText>
           </View>
         ) : null}
-        <Button label="Record Payment" onPress={handleSave} loading={saving} />
+        <Button
+          label={amount > 0 ? `Record ${formatPHP(amount)}` : 'Record Payment'}
+          onPress={handleSave}
+          loading={saving}
+        />
         <View style={styles.bottomPad} />
       </ScrollView>
     </BottomSheet>
@@ -155,6 +208,22 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
 
 const styles = StyleSheet.create({
   form: { gap: theme.spacing[5] },
+  modeBlock: { gap: theme.spacing[3] },
+  modeRow: { flexDirection: 'row', gap: theme.spacing[3] },
+  modeChip: {
+    flex: 1,
+    alignItems: 'center',
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[4],
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderDefault,
+    backgroundColor: theme.colors.bgInput,
+  },
+  modeChipActive: {
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSubtle,
+  },
   preview: {
     backgroundColor: theme.colors.bgSurface,
     borderRadius: theme.radius.md,

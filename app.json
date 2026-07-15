@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.stanleighmorales.centav0",
-      "versionCode": 1,
+      "versionCode": 2,
       "backgroundColor": "#111111",
       "adaptiveIcon": {
         "backgroundColor": "#111111",
@@ -53,8 +53,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#111111"
         }
-      ],
-      "expo-status-bar"
+      ]
     ],
     "extra": {
       "router": {},

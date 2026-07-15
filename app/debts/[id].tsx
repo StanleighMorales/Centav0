@@ -188,6 +188,7 @@ export default function DebtDetailScreen() {
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
+        monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
       />
 
       <ConfirmDialog

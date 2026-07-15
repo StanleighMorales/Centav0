@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
-import { ThemeProvider, DarkTheme } from 'expo-router/react-navigation';
+import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -98,7 +98,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <ThemeProvider value={navTheme}>
-          <StatusBar style="light" backgroundColor={theme.colors.bgPrimary} />
+          <StatusBar style="light" />
           <Stack
             screenOptions={{
               headerShown: false,

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { ListItem } from '../ui/ListItem';
@@ -18,6 +18,9 @@ type Props = {
   onViewReceipt?: (uri: string) => void;
 };
 
+const ACTION_WIDTH = 76;
+const ACTIONS_WIDTH = ACTION_WIDTH * 2;
+
 export function TransactionRow({ transaction, categoryName, subtitle, onEdit, onUndo, onViewReceipt }: Props) {
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
@@ -26,8 +29,20 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
-      renderRightActions={() => (
-        <View style={styles.actions}>
+      renderRightActions={(progress) => (
+        <Animated.View
+          style={[
+            styles.actions,
+            {
+              transform: [{
+                translateX: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [ACTIONS_WIDTH, 0],
+                }),
+              }],
+            },
+          ]}
+        >
           <Pressable
             onPress={() => { close(); onEdit(transaction); }}
             accessibilityRole="button"
@@ -46,7 +61,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
             <Feather name="rotate-ccw" size={18} color={theme.colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Undo</AppText>
           </Pressable>
-        </View>
+        </Animated.View>
       )}
     >
       <ListItem
@@ -78,7 +93,7 @@ const styles = StyleSheet.create({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   actions: { flexDirection: 'row', alignItems: 'stretch' },
   action: {
-    width: 76,
+    width: ACTION_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],

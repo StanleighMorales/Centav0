@@ -9,9 +9,9 @@ import { Amount } from '../../src/components/ui/Amount';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
-import { debtRepo, accountRepo } from '../../src/repositories';
+import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
-import { displayDate } from '../../src/utils/date';
+import { displayDate, monthRangeIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
 import type { Account, Debt, DebtStatus } from '../../src/domain/types';
 
@@ -19,11 +19,12 @@ const TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
 
 type DebtRowProps = {
   debt: Debt;
+  paidTotal: number;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
 };
 
-function DebtRow({ debt, onPress, onEdit }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
   const swipeRef = useRef<Swipeable>(null);
 
   return (
@@ -78,7 +79,14 @@ function DebtRow({ debt, onPress, onEdit }: DebtRowProps) {
           ) : null}
         </View>
         <View style={styles.rowTrail}>
-          <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
+          {debt.status === 'Paid' ? (
+            <View style={styles.paidTrail}>
+              <AppText variant="labelSm" color="positive">PAID</AppText>
+              <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
+            </View>
+          ) : (
+            <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
+          )}
           <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
         </View>
       </Pressable>
@@ -95,13 +103,24 @@ export default function DebtsScreen() {
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editDebt, setEditDebt] = useState<Debt | null>(null);
+  const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
+  const [paidThisMonth, setPaidThisMonth] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     const all = await debtRepo.list();
     const accs = await accountRepo.list();
+    const allPayments = await debtPaymentRepo.list();
+    const totals: Record<string, number> = {};
+    for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
+    const { from, to } = monthRangeIso();
+    const monthTotal = allPayments
+      .filter((p) => p.date >= from && p.date <= to)
+      .reduce((sum, p) => sum + p.amount, 0);
     setDebts(all);
     setAccounts(accs);
+    setPaidTotals(totals);
+    setPaidThisMonth(monthTotal);
     setLoading(false);
   }, []);
 
@@ -162,6 +181,10 @@ export default function DebtsScreen() {
                   {remainingAfterFunds > 0 ? `${formatPHP(remainingAfterFunds)} left` : 'Covered'}
                 </AppText>
               </View>
+              <View style={styles.summaryCol}>
+                <AppText variant="labelSm" color="textMuted">PAID THIS MONTH</AppText>
+                <AppText variant="amountMd" color="positive">{formatPHP(paidThisMonth)}</AppText>
+              </View>
             </View>
           }
           ListEmptyComponent={
@@ -174,6 +197,7 @@ export default function DebtsScreen() {
           renderItem={({ item }) => (
             <DebtRow
               debt={item}
+              paidTotal={paidTotals[item.id] ?? 0}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
             />
@@ -261,4 +285,5 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, gap: theme.spacing[1] },
   creditor: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
 });

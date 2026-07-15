@@ -44,6 +44,7 @@ export default function DebtDetailScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   async function handleDelete() {
     if (!debt) return;
@@ -100,10 +101,21 @@ export default function DebtDetailScreen() {
             <AppText variant="h3" style={styles.flex}>{debt.creditor}</AppText>
             <AppText variant="labelLg" color={statusColor}>{debt.status}</AppText>
           </View>
-          <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
-          <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
-            of {formatPHP(debt.originalAmount)} borrowed
-          </AppText>
+          {debt.status === 'Paid' ? (
+            <>
+              <Amount value={totalPaid} variant="amountLg" semanticColor={false} color="positive" />
+              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+                Fully paid • {formatPHP(debt.originalAmount)} borrowed
+              </AppText>
+            </>
+          ) : (
+            <>
+              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
+              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+                of {formatPHP(debt.originalAmount)} borrowed
+              </AppText>
+            </>
+          )}
           {debt.dueDate ? (
             <View style={styles.metaRow}>
               <Feather name="calendar" size={14} color={theme.colors.textMuted} />

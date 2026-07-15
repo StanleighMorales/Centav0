@@ -16,13 +16,13 @@ type Props = {
   toAccountName?: string;
   onEdit: (transaction: Transaction) => void;
   onUndo: (transaction: Transaction) => void;
-  onViewReceipt?: (uri: string) => void;
+  onOpenDetail?: (transaction: Transaction) => void;
 };
 
 const ACTION_WIDTH = 76;
 const ACTIONS_WIDTH = ACTION_WIDTH * 2;
 
-export function TransactionRow({ transaction, categoryName, subtitle, toAccountName, onEdit, onUndo, onViewReceipt }: Props) {
+export function TransactionRow({ transaction, categoryName, subtitle, toAccountName, onEdit, onUndo, onOpenDetail }: Props) {
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -79,7 +79,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
         title={transaction.type === 'Transfer' ? `${categoryName} → ${toAccountName ?? 'Unknown'}` : categoryName}
         subtitle={subtitle ?? displayDate(transaction.date)}
         accessibilityLabel={`${categoryName}, ${transaction.type}, ${formatPHP(transaction.amount)}, ${displayDate(transaction.date)}${transaction.receiptUri ? ', has receipt' : ''}`}
-        onPress={transaction.receiptUri && onViewReceipt ? () => onViewReceipt(transaction.receiptUri!) : undefined}
+        onPress={onOpenDetail ? () => onOpenDetail(transaction) : undefined}
         trailing={
           <View style={styles.trailing}>
             {transaction.receiptUri ? (

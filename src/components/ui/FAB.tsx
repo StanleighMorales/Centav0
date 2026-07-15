@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../theme';
@@ -8,9 +8,10 @@ type Props = {
   onPress: () => void;
   icon?: React.ComponentProps<typeof Feather>['name'];
   accessibilityLabel: string;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function FAB({ onPress, icon = 'plus', accessibilityLabel }: Props) {
+export function FAB({ onPress, icon = 'plus', accessibilityLabel, style }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -22,6 +23,7 @@ export function FAB({ onPress, icon = 'plus', accessibilityLabel }: Props) {
         styles.fab,
         { bottom: theme.spacing[4] + insets.bottom },
         pressed && styles.pressed,
+        style,
       ]}
     >
       <Feather name={icon} size={24} color={theme.colors.bgPrimary} />

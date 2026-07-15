@@ -13,6 +13,7 @@ import { AddTransactionSheet } from '../../src/components/dashboard/AddTransacti
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { TransactionRow } from '../../src/components/transactions/TransactionRow';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting, setSetting } from '../../src/repositories';
 import { periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount } from '../../src/utils/currency';
@@ -47,6 +48,7 @@ export default function DashboardScreen() {
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<Period>('month');
@@ -215,11 +217,25 @@ export default function DashboardScreen() {
         </ScrollView>
       )}
 
-      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add transaction" />
+      <View style={styles.fabRow}>
+        <FAB
+          onPress={() => setTransferSheetVisible(true)}
+          accessibilityLabel="Transfer between accounts"
+          icon="repeat"
+          style={styles.fabSecondary}
+        />
+        <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add transaction" />
+      </View>
 
       <AddTransactionSheet
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
+        onSuccess={load}
+      />
+
+      <TransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
         onSuccess={load}
       />
 
@@ -349,5 +365,19 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: theme.colors.borderDefault,
     marginHorizontal: theme.spacing[4],
+  },
+  fabRow: {
+    position: 'absolute',
+    right: theme.spacing[5],
+    bottom: theme.spacing[5],
+    alignItems: 'flex-end',
+    gap: theme.spacing[3],
+  },
+  fabSecondary: {
+    position: 'relative',
+    right: 0,
+    bottom: 0,
+    width: 44,
+    height: 44,
   },
 });

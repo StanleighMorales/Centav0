@@ -43,7 +43,7 @@ export default function TabLayout() {
           title: 'Transactions',
           tabBarAccessibilityLabel: 'Transactions tab',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="receipt" size={size ?? 20} color={color} />
+            <MaterialCommunityIcons name="receipt-outline" size={size ?? 20} color={color} />
           ),
         }}
       />

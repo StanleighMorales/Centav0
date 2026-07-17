@@ -120,7 +120,7 @@ export function AddLendingPaymentSheet({ visible, onClose, onSuccess, lendingId,
               {formatPHP(amount)} from {personName} to your account
             </AppText>
             {outstandingBalance - amount > 0 ? (
-              <AppText variant="bodySm" color="textSecondary">
+              <AppText variant="bodySm" color="negative">
                 Remaining owed: {formatPHP(outstandingBalance - amount)}
               </AppText>
             ) : (

@@ -126,3 +126,35 @@ export interface AllocationProgress { allocated: number; spent: number; remainin
 
 export interface SpentSummary { from: string; to: string; total: number; count: number; }
 export interface CategoryBreakdown { categoryId: string; categoryName: string; total: number; count: number; }
+
+export type LendingStatus = 'Active' | 'Paid';
+
+export interface LendingPerson extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  name: string;
+}
+export interface CreateLendingPersonInput { name: string; }
+export interface UpdateLendingPersonInput { name?: string; }
+
+export interface Lending extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  personId: string;
+  amount: number;
+  outstandingBalance: number;
+  accountId: string;
+  date: string;
+  note: string | null;
+  status: LendingStatus;
+}
+export interface CreateLendingInput {
+  personId: string; amount: number; accountId: string; date: string; note?: string;
+}
+export interface UpdateLendingInput { note?: string; }
+
+export interface LendingPayment extends AuditFields, LocalSyncFields {
+  id: string; userId: string; lendingId: string;
+  date: string; amount: number; accountId: string;
+}
+export interface CreateLendingPaymentInput { date: string; amount: number; accountId: string; }

@@ -119,9 +119,13 @@ export function AddLendingPaymentSheet({ visible, onClose, onSuccess, lendingId,
             <AppText variant="bodySm" color="textMuted">
               {formatPHP(amount)} from {personName} to your account
             </AppText>
-            <AppText variant="bodySm" color={outstandingBalance - amount > 0 ? 'textSecondary' : 'positive'}>
-              Remaining owed: {formatPHP(Math.max(0, outstandingBalance - amount))}
-            </AppText>
+            {outstandingBalance - amount > 0 ? (
+              <AppText variant="bodySm" color="textSecondary">
+                Remaining owed: {formatPHP(outstandingBalance - amount)}
+              </AppText>
+            ) : (
+              <AppText variant="bodySm" color="positive">Fully paid off</AppText>
+            )}
           </View>
         ) : null}
         <Button

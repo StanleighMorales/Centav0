@@ -58,12 +58,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="lent"
         options={{
-          title: 'More',
-          tabBarAccessibilityLabel: 'More tab',
+          title: 'Lent',
+          tabBarAccessibilityLabel: 'Lent tab',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="menu" size={size ?? 20} color={color} />
+            <Feather name="users" size={size ?? 20} color={color} />
           ),
         }}
       />

@@ -5,6 +5,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
@@ -87,9 +88,7 @@ export default function TransactionsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <AppText variant="h2">Transactions</AppText>
-      </View>
+      <ScreenHeader title="Transactions" />
 
       <View style={styles.chips}>
         {FILTERS.map((f) => (

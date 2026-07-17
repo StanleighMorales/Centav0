@@ -6,10 +6,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { TransactionRow } from '../../src/components/transactions/TransactionRow';
@@ -42,12 +45,15 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
   const [recentFilter, setRecentFilter] = useState<'day' | 'week' | 'all'>('all');
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [addAccountVisible, setAddAccountVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<Period>('month');
@@ -115,9 +121,7 @@ export default function DashboardScreen() {
           contentContainerStyle={[styles.scroll, { paddingBottom: 80 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <AppText variant="h2">Dashboard</AppText>
-          </View>
+          <ScreenHeader title="Dashboard" />
 
           {/* Hero Balance Card - goldGlow shadow per design spec */}
           <View style={styles.heroCard}>
@@ -125,10 +129,10 @@ export default function DashboardScreen() {
               TOTAL BALANCE
             </AppText>
             <View style={styles.heroAmount}>
-              <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
+              <AppText variant="amountMd" color="accentPrimary" style={styles.currencySymbol}>
                 {'\u20B1'}
               </AppText>
-              <AppText variant="displayLg" color="textPrimary">
+              <AppText variant="displayLg" color="accentPrimary">
                 {formatAmount(totalBalance)}
               </AppText>
             </View>
@@ -137,13 +141,24 @@ export default function DashboardScreen() {
           <SectionHeader
             title="Accounts"
             action={
-              <Pressable
-                onPress={() => router.push('/accounts')}
-                accessibilityRole="button"
-                accessibilityLabel="See all accounts"
-              >
-                <AppText variant="label" color="accentPrimary">See all</AppText>
-              </Pressable>
+              <View style={styles.accountsActions}>
+                <Pressable
+                  onPress={() => setTransferSheetVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Transfer between accounts"
+                  style={styles.transferBtn}
+                >
+                  <Feather name="repeat" size={14} color={theme.colors.accentPrimary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setAddAccountVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add account"
+                  style={styles.addAccountBtn}
+                >
+                  <Feather name="plus" size={14} color={theme.colors.bgPrimary} />
+                </Pressable>
+              </View>
             }
           />
           {accounts.length === 0 ? (
@@ -158,8 +173,10 @@ export default function DashboardScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.accountsList}
               renderItem={({ item }) => (
-                <View
+                <Pressable
+                  onPress={() => router.push('/accounts')}
                   style={styles.accountCard}
+                  accessibilityRole="button"
                   accessibilityLabel={`${item.name}, ${item.type}, ${formatPHP(item.currentBalance)}`}
                 >
                   <Feather
@@ -176,7 +193,7 @@ export default function DashboardScreen() {
                   >
                     {formatPHP(item.currentBalance)}
                   </AppText>
-                </View>
+                </Pressable>
               )}
             />
           )}
@@ -232,7 +249,8 @@ export default function DashboardScreen() {
               <TransactionRow
                 key={txn.id}
                 transaction={txn}
-                categoryName={txn.type === 'Transfer' ? 'Transfer' : (categoryMap[txn.categoryId ?? ''] ?? 'Unknown')}
+                categoryName={txn.type === 'Transfer' ? (accountMap[txn.accountId] ?? 'Unknown') : (categoryMap[txn.categoryId ?? ''] ?? 'Unknown')}
+                toAccountName={txn.toAccountId ? accountMap[txn.toAccountId] : undefined}
                 onEdit={setEditTransaction}
                 onUndo={setPendingUndo}
               />
@@ -253,6 +271,18 @@ export default function DashboardScreen() {
         visible={editTransaction !== null}
         initial={editTransaction}
         onClose={() => setEditTransaction(null)}
+        onSuccess={load}
+      />
+
+      <AddAccountSheet
+        visible={addAccountVisible}
+        onClose={() => setAddAccountVisible(false)}
+        onSuccess={load}
+      />
+
+      <TransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
         onSuccess={load}
       />
 
@@ -309,6 +339,31 @@ const styles = StyleSheet.create({
   header: {
     marginTop: theme.spacing[6],
     marginBottom: theme.spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  accountsActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+  },
+  transferBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addAccountBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroCard: {
     backgroundColor: theme.colors.bgElevated,

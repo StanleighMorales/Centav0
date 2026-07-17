@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Amount } from '../../src/components/ui/Amount';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
@@ -136,7 +137,9 @@ export default function DebtsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <AppText variant="h2" style={styles.title}>Debts</AppText>
+      <View style={styles.title}>
+        <ScreenHeader title="Debts" />
+      </View>
 
       <View style={styles.tabRow}>
         {TABS.map((tab) => (
@@ -169,21 +172,33 @@ export default function DebtsScreen() {
             <View style={styles.summary}>
               <View style={styles.summaryCol}>
                 <AppText variant="labelSm" color="textMuted">TOTAL DEBT</AppText>
-                <AppText variant="amountMd">{formatPHP(totalDebt)}</AppText>
+                <AppText variant="amountMd" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatPHP(totalDebt)}
+                </AppText>
                 <AppText variant="bodySm" color="textMuted">{activeDebts.length} active debts</AppText>
               </View>
+              <View style={styles.summaryDivider} />
               <View style={styles.summaryCol}>
                 <AppText variant="labelSm" color="textMuted">CASH + E-WALLETS</AppText>
-                <AppText variant="amountMd" color={availableFunds >= totalDebt ? 'positive' : 'textPrimary'}>
+                <AppText
+                  variant="amountMd"
+                  color={availableFunds >= totalDebt ? 'positive' : 'textPrimary'}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
                   {formatPHP(availableFunds)}
                 </AppText>
                 <AppText variant="bodySm" color={remainingAfterFunds > 0 ? 'negative' : 'positive'}>
                   {remainingAfterFunds > 0 ? `${formatPHP(remainingAfterFunds)} left` : 'Covered'}
                 </AppText>
               </View>
+              <View style={styles.summaryDivider} />
               <View style={styles.summaryCol}>
                 <AppText variant="labelSm" color="textMuted">PAID THIS MONTH</AppText>
-                <AppText variant="amountMd" color="positive">{formatPHP(paidThisMonth)}</AppText>
+                <AppText variant="amountMd" color="positive" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatPHP(paidThisMonth)}
+                </AppText>
               </View>
             </View>
           }
@@ -256,6 +271,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   summaryCol: { flex: 1, gap: theme.spacing[2] },
+  summaryDivider: { width: 1, backgroundColor: theme.colors.borderDefault, marginHorizontal: theme.spacing[1] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -11,6 +11,7 @@ import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
 import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
@@ -109,6 +110,7 @@ export default function AccountsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [addMoneyAccount, setAddMoneyAccount] = useState<Account | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
@@ -157,7 +159,15 @@ export default function AccountsScreen() {
         >
           <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
-        <AppText variant="h2">Accounts</AppText>
+        <AppText variant="h2" style={styles.flex}>Accounts</AppText>
+        <Pressable
+          onPress={() => setTransferSheetVisible(true)}
+          style={styles.iconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Transfer between accounts"
+        >
+          <Feather name="repeat" size={20} color={theme.colors.accentPrimary} />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -211,6 +221,12 @@ export default function AccountsScreen() {
         onSuccess={load}
       />
 
+      <TransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
+        onSuccess={load}
+      />
+
       <ConfirmDialog
         visible={pendingDelete !== null}
         title={deleteBlocked ? 'Cannot Delete' : 'Delete Account'}
@@ -243,6 +259,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -theme.spacing[3],
+  },
+  flex: { flex: 1 },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -theme.spacing[2],
   },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: {

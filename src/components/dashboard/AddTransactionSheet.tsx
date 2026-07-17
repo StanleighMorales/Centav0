@@ -27,7 +27,8 @@ type Props = {
 
 export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Props) {
   const [amount, setAmount] = useState(0);
-  const [type, setType] = useState<TransactionType>('Expense');
+  // AddTransactionSheet only ever toggles Expense/Income — Transfer has its own TransferSheet.
+  const [type, setType] = useState<'Expense' | 'Income'>('Expense');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [date, setDate] = useState(nowIso());
@@ -59,7 +60,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
       setAccounts(accs);
       if (initial) {
         setAmount(initial.amount);
-        setType(initial.type);
+        setType(initial.type as 'Expense' | 'Income');
         setCategoryId(initial.categoryId);
         setAccountId(initial.accountId);
         setDate(initial.date);
@@ -149,7 +150,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.typeRow}>
-          {(['Expense', 'Income'] as TransactionType[]).map((t) => (
+          {(['Expense', 'Income'] as const).map((t) => (
             <Pressable
               key={t}
               onPress={() => {

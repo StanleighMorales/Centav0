@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { Receipt } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../src/theme';
 
@@ -43,7 +44,7 @@ export default function TabLayout() {
           title: 'Transactions',
           tabBarAccessibilityLabel: 'Transactions tab',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={size ?? 20} color={color} />
+            <Receipt size={size ?? 20} color={color} />
           ),
         }}
       />
@@ -58,12 +59,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="lent"
         options={{
-          title: 'More',
-          tabBarAccessibilityLabel: 'More tab',
+          title: 'Lent',
+          tabBarAccessibilityLabel: 'Lent tab',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="menu" size={size ?? 20} color={color} />
+            <Feather name="users" size={size ?? 20} color={color} />
           ),
         }}
       />

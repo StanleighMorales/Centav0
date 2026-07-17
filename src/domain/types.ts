@@ -44,7 +44,7 @@ export interface Category extends AuditFields, LocalSyncFields {
 export interface CreateCategoryInput { name: string; type: CategoryType; icon?: string; color?: string; }
 export interface UpdateCategoryInput { name?: string; icon?: string; color?: string; }
 
-export type TransactionType = 'Expense' | 'Income';
+export type TransactionType = 'Expense' | 'Income' | 'Transfer';
 
 export interface Transaction extends AuditFields, LocalSyncFields {
   id: string;
@@ -52,15 +52,17 @@ export interface Transaction extends AuditFields, LocalSyncFields {
   date: string;
   amount: number;
   type: TransactionType;
-  categoryId: string;
+  categoryId: string | null;
   accountId: string;
+  /** Destination account. Set only when type === 'Transfer'. */
+  toAccountId: string | null;
   note: string | null;
   receiptUri: string | null;
 }
 
 export interface CreateTransactionInput {
   date: string; amount: number; type: TransactionType;
-  categoryId: string; accountId: string; note?: string; receiptUri?: string;
+  categoryId?: string; accountId: string; note?: string; receiptUri?: string;
 }
 export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;
@@ -69,6 +71,11 @@ export interface UpdateTransactionInput {
 export interface TransactionFilter {
   from?: string; to?: string; type?: TransactionType;
   categoryId?: string; accountId?: string;
+}
+
+export interface CreateTransferInput {
+  date: string; amount: number;
+  accountId: string; toAccountId: string; note?: string;
 }
 
 export type DebtStatus = 'Open' | 'Paid' | 'Overdue';
@@ -119,3 +126,35 @@ export interface AllocationProgress { allocated: number; spent: number; remainin
 
 export interface SpentSummary { from: string; to: string; total: number; count: number; }
 export interface CategoryBreakdown { categoryId: string; categoryName: string; total: number; count: number; }
+
+export type LendingStatus = 'Active' | 'Paid';
+
+export interface LendingPerson extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  name: string;
+}
+export interface CreateLendingPersonInput { name: string; }
+export interface UpdateLendingPersonInput { name?: string; }
+
+export interface Lending extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  personId: string;
+  amount: number;
+  outstandingBalance: number;
+  accountId: string;
+  date: string;
+  note: string | null;
+  status: LendingStatus;
+}
+export interface CreateLendingInput {
+  personId: string; amount: number; accountId: string; date: string; note?: string;
+}
+export interface UpdateLendingInput { note?: string; }
+
+export interface LendingPayment extends AuditFields, LocalSyncFields {
+  id: string; userId: string; lendingId: string;
+  date: string; amount: number; accountId: string;
+}
+export interface CreateLendingPaymentInput { date: string; amount: number; accountId: string; }

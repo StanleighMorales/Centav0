@@ -13,15 +13,16 @@ type Props = {
   transaction: Transaction;
   categoryName: string;
   subtitle?: string;
+  toAccountName?: string;
   onEdit: (transaction: Transaction) => void;
   onUndo: (transaction: Transaction) => void;
-  onViewReceipt?: (uri: string) => void;
+  onOpenDetail?: (transaction: Transaction) => void;
 };
 
 const ACTION_WIDTH = 76;
 const ACTIONS_WIDTH = ACTION_WIDTH * 2;
 
-export function TransactionRow({ transaction, categoryName, subtitle, onEdit, onUndo, onViewReceipt }: Props) {
+export function TransactionRow({ transaction, categoryName, subtitle, toAccountName, onEdit, onUndo, onOpenDetail }: Props) {
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -65,12 +66,20 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
       )}
     >
       <ListItem
-        icon={transaction.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'}
-        iconColor={transaction.type === 'Income' ? theme.colors.positive : theme.colors.negative}
-        title={categoryName}
+        icon={
+          transaction.type === 'Transfer'
+            ? 'repeat'
+            : transaction.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'
+        }
+        iconColor={
+          transaction.type === 'Transfer'
+            ? theme.colors.info
+            : transaction.type === 'Income' ? theme.colors.positive : theme.colors.negative
+        }
+        title={transaction.type === 'Transfer' ? `${categoryName} → ${toAccountName ?? 'Unknown'}` : categoryName}
         subtitle={subtitle ?? displayDate(transaction.date)}
         accessibilityLabel={`${categoryName}, ${transaction.type}, ${formatPHP(transaction.amount)}, ${displayDate(transaction.date)}${transaction.receiptUri ? ', has receipt' : ''}`}
-        onPress={transaction.receiptUri && onViewReceipt ? () => onViewReceipt(transaction.receiptUri!) : undefined}
+        onPress={onOpenDetail ? () => onOpenDetail(transaction) : undefined}
         trailing={
           <View style={styles.trailing}>
             {transaction.receiptUri ? (
@@ -78,9 +87,13 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
             ) : null}
             <AppText
               variant="amountSm"
-              color={transaction.type === 'Income' ? 'positive' : 'negative'}
+              color={
+                transaction.type === 'Transfer'
+                  ? 'textPrimary'
+                  : transaction.type === 'Income' ? 'positive' : 'negative'
+              }
             >
-              {transaction.type === 'Expense' ? '-' : '+'}{formatPHP(transaction.amount)}
+              {transaction.type === 'Transfer' ? '' : transaction.type === 'Expense' ? '-' : '+'}{formatPHP(transaction.amount)}
             </AppText>
           </View>
         }

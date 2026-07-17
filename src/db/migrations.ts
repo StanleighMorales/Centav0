@@ -99,6 +99,102 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '007_transfers',
+    up: async (db) => {
+      // Rebuild transactions to: widen type CHECK to include 'Transfer',
+      // make categoryId nullable (transfers have no category), and add
+      // toAccountId (destination account, Transfer rows only).
+      // Runs with foreign_keys OFF, same as migration 006.
+      await db.execAsync(`
+        CREATE TABLE transactions_new (
+          id           TEXT PRIMARY KEY NOT NULL,
+          userId       TEXT NOT NULL,
+          date         TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          type         TEXT NOT NULL CHECK (type IN ('Expense','Income','Transfer')),
+          categoryId   TEXT,
+          accountId    TEXT NOT NULL,
+          toAccountId  TEXT,
+          note         TEXT,
+          receiptUri   TEXT,
+          createdAt    TEXT NOT NULL,
+          updatedAt    TEXT NOT NULL,
+          deletedAt    TEXT,
+          isDirty      INTEGER NOT NULL DEFAULT 1,
+          syncedAt     TEXT,
+          FOREIGN KEY (categoryId)  REFERENCES categories(id),
+          FOREIGN KEY (accountId)   REFERENCES accounts(id),
+          FOREIGN KEY (toAccountId) REFERENCES accounts(id)
+        );
+        INSERT INTO transactions_new (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+          SELECT id, userId, date, amount, type, categoryId, accountId, NULL, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt FROM transactions;
+        DROP TABLE transactions;
+        ALTER TABLE transactions_new RENAME TO transactions;
+
+        CREATE INDEX IF NOT EXISTS idx_tx_date        ON transactions(date);
+        CREATE INDEX IF NOT EXISTS idx_tx_category    ON transactions(categoryId);
+        CREATE INDEX IF NOT EXISTS idx_tx_account     ON transactions(accountId);
+        CREATE INDEX IF NOT EXISTS idx_tx_to_account  ON transactions(toAccountId);
+        CREATE INDEX IF NOT EXISTS idx_tx_not_deleted ON transactions(deletedAt) WHERE deletedAt IS NULL;
+      `);
+    },
+  },
+  {
+    name: '008_lending',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS lending_people (
+          id          TEXT PRIMARY KEY NOT NULL,
+          userId      TEXT NOT NULL,
+          name        TEXT NOT NULL,
+          createdAt   TEXT NOT NULL,
+          updatedAt   TEXT NOT NULL,
+          deletedAt   TEXT,
+          isDirty     INTEGER NOT NULL DEFAULT 1,
+          syncedAt    TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS lendings (
+          id                  TEXT PRIMARY KEY NOT NULL,
+          userId              TEXT NOT NULL,
+          personId            TEXT NOT NULL,
+          amount              REAL NOT NULL,
+          outstandingBalance  REAL NOT NULL,
+          accountId           TEXT NOT NULL,
+          date                TEXT NOT NULL,
+          note                TEXT,
+          status              TEXT NOT NULL CHECK (status IN ('Active','Paid')),
+          createdAt           TEXT NOT NULL,
+          updatedAt           TEXT NOT NULL,
+          deletedAt           TEXT,
+          isDirty             INTEGER NOT NULL DEFAULT 1,
+          syncedAt            TEXT,
+          FOREIGN KEY (personId)  REFERENCES lending_people(id),
+          FOREIGN KEY (accountId) REFERENCES accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lending_person ON lendings(personId);
+
+        CREATE TABLE IF NOT EXISTS lending_payments (
+          id           TEXT PRIMARY KEY NOT NULL,
+          userId       TEXT NOT NULL,
+          lendingId    TEXT NOT NULL,
+          date         TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          accountId    TEXT NOT NULL,
+          createdAt    TEXT NOT NULL,
+          updatedAt    TEXT NOT NULL,
+          deletedAt    TEXT,
+          isDirty      INTEGER NOT NULL DEFAULT 1,
+          syncedAt     TEXT,
+          FOREIGN KEY (lendingId) REFERENCES lendings(id),
+          FOREIGN KEY (accountId) REFERENCES accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp_lending ON lending_payments(lendingId);
+        CREATE INDEX IF NOT EXISTS idx_lp_date    ON lending_payments(date);
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

@@ -9,20 +9,21 @@ import { Card } from '../../src/components/ui/Card';
 import { Button } from '../../src/components/ui/Button';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
-import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
-import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
-import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
+import { AddLendingSheet } from '../../src/components/lending/AddLendingSheet';
+import { AddLendingPaymentSheet } from '../../src/components/lending/AddLendingPaymentSheet';
+import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import type { Debt, DebtPayment, Account } from '../../src/domain/types';
+import type { Lending, LendingPayment, Account } from '../../src/domain/types';
 
-export default function DebtDetailScreen() {
+export default function LendingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [debt, setDebt] = useState<Debt | null>(null);
-  const [payments, setPayments] = useState<DebtPayment[]>([]);
+  const [lending, setLending] = useState<Lending | null>(null);
+  const [personName, setPersonName] = useState('');
+  const [payments, setPayments] = useState<LendingPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
@@ -32,10 +33,14 @@ export default function DebtDetailScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const d = await debtRepo.getById(id);
-    const p = await debtPaymentRepo.listByDebt(id);
+    const l = await lendingRepo.getById(id);
+    const p = await lendingPaymentRepo.listByLending(id);
     const a = await accountRepo.list();
-    setDebt(d);
+    if (l) {
+      const person = await lendingPersonRepo.getById(l.personId);
+      setPersonName(person?.name ?? 'Unknown');
+    }
+    setLending(l);
     setPayments(p);
     setAccounts(a);
     setLoading(false);
@@ -47,8 +52,8 @@ export default function DebtDetailScreen() {
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   async function handleDelete() {
-    if (!debt) return;
-    await debtRepo.softDelete(debt.id);
+    if (!lending) return;
+    await lendingRepo.softDelete(lending.id);
     router.back();
   }
 
@@ -60,15 +65,15 @@ export default function DebtDetailScreen() {
     );
   }
 
-  if (!debt) {
+  if (!lending) {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
-        <AppText variant="body" color="textMuted">Debt not found.</AppText>
+        <AppText variant="body" color="textMuted">Lending not found.</AppText>
       </View>
     );
   }
 
-  const statusColor = debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
+  const statusColor = lending.status === 'Paid' ? 'positive' : 'accentPrimary';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -81,12 +86,12 @@ export default function DebtDetailScreen() {
         >
           <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
-        <AppText variant="h2" style={styles.flex}>Debt Detail</AppText>
+        <AppText variant="h2" style={styles.flex}>Lending Detail</AppText>
         <Pressable
           onPress={() => setEditVisible(true)}
           style={styles.iconBtn}
           accessibilityRole="button"
-          accessibilityLabel="Edit debt"
+          accessibilityLabel="Edit lending"
         >
           <Feather name="edit-2" size={18} color={theme.colors.accentPrimary} />
         </Pressable>
@@ -98,53 +103,34 @@ export default function DebtDetailScreen() {
       >
         <Card style={styles.summaryCard}>
           <View style={styles.summaryTop}>
-            <AppText variant="h3" style={styles.flex}>{debt.creditor}</AppText>
-            <AppText variant="labelLg" color={statusColor}>{debt.status}</AppText>
+            <AppText variant="h3" style={styles.flex}>{personName}</AppText>
+            <AppText variant="labelLg" color={statusColor}>{lending.status}</AppText>
           </View>
-          {debt.status === 'Paid' ? (
+          {lending.status === 'Paid' ? (
             <>
               <Amount value={totalPaid} variant="amountLg" semanticColor={false} color="positive" />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
-                Fully paid • {formatPHP(debt.originalAmount)} borrowed
+                Fully paid back • {formatPHP(lending.amount)} lent
               </AppText>
             </>
           ) : (
             <>
-              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
+              <Amount value={lending.outstandingBalance} variant="amountLg" semanticColor={false} />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
-                of {formatPHP(debt.originalAmount)} borrowed
+                of {formatPHP(lending.amount)} lent
               </AppText>
             </>
           )}
-          {debt.dueDate ? (
-            <View style={styles.metaRow}>
-              <Feather name="calendar" size={14} color={theme.colors.textMuted} />
-              <AppText variant="bodySm" color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}>
-                Due {displayDate(debt.dueDate)}
-              </AppText>
-            </View>
-          ) : null}
-          {debt.isInstallment && debt.monthlyPayment != null ? (
-            <View style={styles.metaRow}>
-              <Feather name="repeat" size={14} color={theme.colors.textMuted} />
-              <AppText variant="bodySm" color="textMuted">
-                {formatPHP(debt.monthlyPayment)}/month installment
-                {debt.installmentFee != null ? ` + ${formatPHP(debt.installmentFee)} fees` : ''}
-              </AppText>
-            </View>
-          ) : null}
-          {debt.interestRate != null ? (
-            <View style={styles.metaRow}>
-              <Feather name="percent" size={14} color={theme.colors.textMuted} />
-              <AppText variant="bodySm" color="textMuted">{debt.interestRate}% interest</AppText>
-            </View>
-          ) : null}
-          {debt.note ? (
-            <AppText variant="bodySm" color="textMuted" style={styles.note}>{debt.note}</AppText>
+          <View style={styles.metaRow}>
+            <Feather name="calendar" size={14} color={theme.colors.textMuted} />
+            <AppText variant="bodySm" color="textMuted">Lent {displayDate(lending.date)}</AppText>
+          </View>
+          {lending.note ? (
+            <AppText variant="bodySm" color="textMuted" style={styles.note}>{lending.note}</AppText>
           ) : null}
         </Card>
 
-        {debt.status !== 'Paid' && (
+        {lending.status !== 'Paid' && (
           <View style={styles.actions}>
             <Button
               label="Add Payment"
@@ -157,7 +143,7 @@ export default function DebtDetailScreen() {
         <AppText variant="h3" style={styles.sectionTitle}>Payment History</AppText>
 
         {payments.length === 0 ? (
-          <EmptyState icon="dollar-sign" title="No payments yet" subtitle="Record a payment above" />
+          <EmptyState icon="dollar-sign" title="No payments yet" subtitle="Record a payback above" />
         ) : (
           payments.map((p) => (
             <View key={p.id} style={styles.paymentRow}>
@@ -167,7 +153,7 @@ export default function DebtDetailScreen() {
               <View style={styles.paymentInfo}>
                 <AppText variant="body">{displayDate(p.date)}</AppText>
                 <AppText variant="bodySm" color="textMuted">
-                  via {accountMap[p.accountId] ?? 'Unknown account'}
+                  to {accountMap[p.accountId] ?? 'Unknown account'}
                 </AppText>
               </View>
               <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
@@ -178,35 +164,34 @@ export default function DebtDetailScreen() {
         <Pressable
           onPress={() => setDeleteVisible(true)}
           accessibilityRole="button"
-          accessibilityLabel="Delete debt"
+          accessibilityLabel="Delete lending"
           style={styles.deleteBtn}
         >
           <Feather name="trash-2" size={16} color={theme.colors.negative} />
-          <AppText variant="body" color="negative">Delete Debt</AppText>
+          <AppText variant="body" color="negative">Delete Lending</AppText>
         </Pressable>
       </ScrollView>
 
-      <AddDebtSheet
+      <AddLendingSheet
         visible={editVisible}
         onClose={() => setEditVisible(false)}
         onSuccess={load}
-        initial={debt}
+        initial={lending}
       />
 
-      <AddPaymentSheet
+      <AddLendingPaymentSheet
         visible={paymentVisible}
         onClose={() => setPaymentVisible(false)}
         onSuccess={load}
-        debtId={debt.id}
-        creditor={debt.creditor}
-        outstandingBalance={debt.outstandingBalance}
-        monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
+        lendingId={lending.id}
+        personName={personName}
+        outstandingBalance={lending.outstandingBalance}
       />
 
       <ConfirmDialog
         visible={deleteVisible}
-        title="Delete Debt"
-        message={`Delete debt from "${debt.creditor}"? This cannot be undone.`}
+        title="Delete Lending"
+        message={`Delete lending to "${personName}"? This cannot be undone.`}
         confirmLabel="Delete"
         onConfirm={handleDelete}
         onCancel={() => setDeleteVisible(false)}

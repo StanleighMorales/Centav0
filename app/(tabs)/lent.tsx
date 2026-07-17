@@ -1,31 +1,33 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, FlatList, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
-import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Amount } from '../../src/components/ui/Amount';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
-import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
-import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
+import { AddLendingSheet } from '../../src/components/lending/AddLendingSheet';
+import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate, monthRangeIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import type { Account, Debt, DebtStatus } from '../../src/domain/types';
+import type { Account, Lending, LendingPerson, LendingStatus } from '../../src/domain/types';
 
-const TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
+const TABS: LendingStatus[] = ['Active', 'Paid'];
+const ALL_PEOPLE = '__all__';
 
-type DebtRowProps = {
-  debt: Debt;
+type LendingRowProps = {
+  lending: Lending;
+  personName: string;
   paidTotal: number;
-  onPress: (d: Debt) => void;
-  onEdit: (d: Debt) => void;
+  onPress: (l: Lending) => void;
+  onEdit: (l: Lending) => void;
 };
 
-function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
+function LendingRow({ lending, personName, paidTotal, onPress, onEdit }: LendingRowProps) {
   const swipeRef = useRef<Swipeable>(null);
 
   return (
@@ -34,9 +36,9 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
       overshootRight={false}
       renderRightActions={() => (
         <Pressable
-          onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
+          onPress={() => { swipeRef.current?.close(); onEdit(lending); }}
           accessibilityRole="button"
-          accessibilityLabel={`Edit debt from ${debt.creditor}`}
+          accessibilityLabel={`Edit lending to ${personName}`}
           style={styles.editAction}
         >
           <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
@@ -45,48 +47,30 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
       )}
     >
       <Pressable
-        onPress={() => onPress(debt)}
+        onPress={() => onPress(lending)}
         accessibilityRole="button"
-        accessibilityLabel={`View debt from ${debt.creditor}`}
+        accessibilityLabel={`View lending to ${personName}`}
         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       >
         <View style={styles.iconCircle}>
           <Feather
-            name="credit-card"
+            name="user"
             size={18}
-            color={
-              debt.status === 'Overdue'
-                ? theme.colors.negative
-                : debt.status === 'Paid'
-                ? theme.colors.positive
-                : theme.colors.accentPrimary
-            }
+            color={lending.status === 'Paid' ? theme.colors.positive : theme.colors.accentPrimary}
           />
         </View>
         <View style={styles.rowMain}>
-          <AppText variant="body" style={styles.creditor}>{debt.creditor}</AppText>
-          {debt.dueDate ? (
-            <AppText
-              variant="bodySm"
-              color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}
-            >
-              Due {displayDate(debt.dueDate)}
-            </AppText>
-          ) : null}
-          {debt.isInstallment && debt.monthlyPayment != null ? (
-            <AppText variant="bodySm" color="textMuted">
-              {formatPHP(debt.monthlyPayment)}/mo installment
-            </AppText>
-          ) : null}
+          <AppText variant="body" style={styles.person}>{personName}</AppText>
+          <AppText variant="bodySm" color="textMuted">{displayDate(lending.date)}</AppText>
         </View>
         <View style={styles.rowTrail}>
-          {debt.status === 'Paid' ? (
+          {lending.status === 'Paid' ? (
             <View style={styles.paidTrail}>
               <AppText variant="labelSm" color="positive">PAID</AppText>
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
             </View>
           ) : (
-            <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
+            <Amount value={lending.outstandingBalance} variant="amountSm" semanticColor={false} />
           )}
           <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
         </View>
@@ -95,50 +79,55 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
   );
 }
 
-export default function DebtsScreen() {
+export default function LentScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<DebtStatus>('Open');
-  const [debts, setDebts] = useState<Debt[]>([]);
+  const [activeTab, setActiveTab] = useState<LendingStatus>('Active');
+  const [personFilter, setPersonFilter] = useState(ALL_PEOPLE);
+  const [lendings, setLendings] = useState<Lending[]>([]);
+  const [people, setPeople] = useState<LendingPerson[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
-  const [editDebt, setEditDebt] = useState<Debt | null>(null);
+  const [editLending, setEditLending] = useState<Lending | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
-  const [paidThisMonth, setPaidThisMonth] = useState(0);
+  const [paidBackThisMonth, setPaidBackThisMonth] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const all = await debtRepo.list();
+    const all = await lendingRepo.list();
+    const ppl = await lendingPersonRepo.list();
     const accs = await accountRepo.list();
-    const allPayments = await debtPaymentRepo.list();
+    const allPayments = await lendingPaymentRepo.list();
     const totals: Record<string, number> = {};
-    for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
+    for (const p of allPayments) totals[p.lendingId] = (totals[p.lendingId] ?? 0) + p.amount;
     const { from, to } = monthRangeIso();
     const monthTotal = allPayments
       .filter((p) => p.date >= from && p.date <= to)
       .reduce((sum, p) => sum + p.amount, 0);
-    setDebts(all);
+    setLendings(all);
+    setPeople(ppl);
     setAccounts(accs);
     setPaidTotals(totals);
-    setPaidThisMonth(monthTotal);
+    setPaidBackThisMonth(monthTotal);
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const filtered = debts.filter((d) => d.status === activeTab);
-  const activeDebts = debts.filter((d) => d.status !== 'Paid');
-  const totalDebt = activeDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
+  const personMap = Object.fromEntries(people.map((p) => [p.id, p.name]));
+  const byStatus = lendings.filter((l) => l.status === activeTab);
+  const filtered = personFilter === ALL_PEOPLE ? byStatus : byStatus.filter((l) => l.personId === personFilter);
+  const activeLendings = lendings.filter((l) => l.status !== 'Paid');
+  const totalLentOut = activeLendings.reduce((sum, l) => sum + l.outstandingBalance, 0);
   const availableFunds = accounts
     .filter((a) => a.type === 'Cash' || a.type === 'EWallet')
     .reduce((sum, a) => sum + a.currentBalance, 0);
-  const remainingAfterFunds = Math.max(0, totalDebt - availableFunds);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.title}>
-        <ScreenHeader title="Debts" />
+      <View style={styles.headerWrap}>
+        <ScreenHeader title="Lent" />
       </View>
 
       <View style={styles.tabRow}>
@@ -158,6 +147,31 @@ export default function DebtsScreen() {
         ))}
       </View>
 
+      {people.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chips}
+        >
+          {[{ id: ALL_PEOPLE, name: 'All' }, ...people].map((p) => {
+            const active = personFilter === p.id;
+            return (
+              <Pressable
+                key={p.id}
+                onPress={() => setPersonFilter(p.id)}
+                accessibilityRole="button"
+                accessibilityLabel={p.name}
+                accessibilityState={{ selected: active }}
+                style={[styles.chip, active && styles.chipActive]}
+              >
+                <AppText variant="labelSm" color={active ? 'accentPrimary' : 'textSecondary'}>{p.name}</AppText>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {loading ? (
         <View style={styles.loader}>
           <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
@@ -171,67 +185,59 @@ export default function DebtsScreen() {
           ListHeaderComponent={
             <View style={styles.summary}>
               <View style={styles.summaryCol}>
-                <AppText variant="labelSm" color="textMuted">TOTAL DEBT</AppText>
+                <AppText variant="labelSm" color="textMuted">LENT OUT</AppText>
                 <AppText variant="amountMd" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                  {formatPHP(totalDebt)}
+                  {formatPHP(totalLentOut)}
                 </AppText>
-                <AppText variant="bodySm" color="textMuted">{activeDebts.length} active debts</AppText>
+                <AppText variant="bodySm" color="textMuted">{activeLendings.length} active</AppText>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryCol}>
                 <AppText variant="labelSm" color="textMuted">CASH + E-WALLETS</AppText>
-                <AppText
-                  variant="amountMd"
-                  color={availableFunds >= totalDebt ? 'positive' : 'textPrimary'}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                >
+                <AppText variant="amountMd" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                   {formatPHP(availableFunds)}
-                </AppText>
-                <AppText variant="bodySm" color={remainingAfterFunds > 0 ? 'negative' : 'positive'}>
-                  {remainingAfterFunds > 0 ? `${formatPHP(remainingAfterFunds)} left` : 'Covered'}
                 </AppText>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryCol}>
-                <AppText variant="labelSm" color="textMuted">PAID THIS MONTH</AppText>
+                <AppText variant="labelSm" color="textMuted">PAID BACK THIS MONTH</AppText>
                 <AppText variant="amountMd" color="positive" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                  {formatPHP(paidThisMonth)}
+                  {formatPHP(paidBackThisMonth)}
                 </AppText>
               </View>
             </View>
           }
           ListEmptyComponent={
             <EmptyState
-              icon="credit-card"
-              title={`No ${activeTab.toLowerCase()} debts`}
-              subtitle={activeTab === 'Paid' ? 'Paid debts will appear here' : 'Tap + to add a debt'}
+              icon="users"
+              title={`No ${activeTab.toLowerCase()} lendings`}
+              subtitle={activeTab === 'Paid' ? 'Paid-back lendings will appear here' : 'Tap + to record money you lent out'}
             />
           }
           renderItem={({ item }) => (
-            <DebtRow
-              debt={item}
+            <LendingRow
+              lending={item}
+              personName={personMap[item.personId] ?? 'Unknown'}
               paidTotal={paidTotals[item.id] ?? 0}
-              onPress={(d) => router.push(`/debts/${d.id}`)}
-              onEdit={setEditDebt}
+              onPress={(l) => router.push(`/lent/${l.id}`)}
+              onEdit={setEditLending}
             />
           )}
         />
       )}
 
-      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add debt" />
+      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add lending" />
 
-      <AddDebtSheet
+      <AddLendingSheet
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         onSuccess={load}
       />
 
-      <AddDebtSheet
-        visible={editDebt !== null}
-        initial={editDebt ?? undefined}
-        onClose={() => setEditDebt(null)}
+      <AddLendingSheet
+        visible={editLending !== null}
+        initial={editLending ?? undefined}
+        onClose={() => setEditLending(null)}
         onSuccess={load}
       />
     </View>
@@ -240,7 +246,7 @@ export default function DebtsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
-  title: {
+  headerWrap: {
     paddingHorizontal: theme.spacing[5],
     marginTop: theme.spacing[5],
     marginBottom: theme.spacing[4],
@@ -259,6 +265,17 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: { borderBottomColor: theme.colors.accentPrimary },
+  chipsScroll: { flexGrow: 0, marginBottom: theme.spacing[4] },
+  chips: { paddingHorizontal: theme.spacing[5], gap: theme.spacing[2] },
+  chip: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderDefault,
+    backgroundColor: theme.colors.bgInput,
+  },
+  chipActive: { borderColor: theme.colors.accentBorder, backgroundColor: theme.colors.accentSubtle },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
   summary: {
@@ -299,7 +316,7 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[4],
   },
   rowMain: { flex: 1, gap: theme.spacing[1] },
-  creditor: { fontWeight: '600' },
+  person: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
 });

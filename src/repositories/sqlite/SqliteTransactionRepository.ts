@@ -4,13 +4,15 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import type { ITransactionRepository } from '../ITransactionRepository';
-import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter } from '../../domain/types';
+import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter, CreateTransferInput } from '../../domain/types';
 
 function rowToTransaction(row: any): Transaction {
   return {
     id: row.id, userId: row.userId, date: row.date,
     amount: row.amount, type: row.type,
-    categoryId: row.categoryId, accountId: row.accountId,
+    categoryId: row.categoryId ?? null,
+    accountId: row.accountId,
+    toAccountId: row.toAccountId ?? null,
     note: row.note ?? null,
     receiptUri: row.receiptUri ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
@@ -19,7 +21,8 @@ function rowToTransaction(row: any): Transaction {
   };
 }
 
-// Income adds to balance, Expense subtracts
+// Income adds to balance, Expense subtracts. Transfer legs are applied
+// explicitly by createTransfer/update/softDelete — delta() is not used for them.
 function delta(type: string, amount: number): number {
   return type === 'Income' ? amount : -amount;
 }
@@ -57,9 +60,9 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const amount = roundCentavos(input.amount);
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId, input.accountId, input.note ?? null, input.receiptUri ?? null, now, now],
+        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId ?? null, input.accountId, input.note ?? null, input.receiptUri ?? null, now, now],
       );
       await db.runAsync(
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
@@ -71,9 +74,55 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     return created;
   }
 
+  async createTransfer(input: CreateTransferInput): Promise<Transaction> {
+    if (input.accountId === input.toAccountId) {
+      throw new Error('Source and destination accounts must be different');
+    }
+    const db = await getDatabase();
+    const id = newId();
+    const now = nowIso();
+    const amount = roundCentavos(input.amount);
+    const source = await db.getFirstAsync<any>(
+      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [input.accountId, FIXED_USER_ID],
+    );
+    if (!source) throw new Error(`Account ${input.accountId} not found`);
+    const dest = await db.getFirstAsync<any>(
+      `SELECT id FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [input.toAccountId, FIXED_USER_ID],
+    );
+    if (!dest) throw new Error(`Account ${input.toAccountId} not found`);
+    // CreditCard sources may go negative (spending credit); other account
+    // types cannot be overdrawn by a transfer, same rule as debt payments.
+    if (source.type !== 'CreditCard' && amount > roundCentavos(source.currentBalance)) {
+      throw new Error('Transfer exceeds source account balance');
+    }
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, 'Transfer', NULL, ?, ?, ?, NULL, ?, ?, NULL, 1, NULL)`,
+        [id, FIXED_USER_ID, input.date, amount, input.accountId, input.toAccountId, input.note ?? null, now, now],
+      );
+      await db.runAsync(
+        `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [amount, now, input.accountId, FIXED_USER_ID],
+      );
+      await db.runAsync(
+        `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [amount, now, input.toAccountId, FIXED_USER_ID],
+      );
+    });
+    const created = await this.getById(id);
+    if (!created) throw new Error('Transfer creation failed silently');
+    return created;
+  }
+
   async update(id: string, input: UpdateTransactionInput): Promise<Transaction> {
     const existing = await this.getById(id);
     if (!existing) throw new Error(`Transaction ${id} not found`);
+    if (existing.type === 'Transfer' || input.type === 'Transfer') {
+      throw new Error('Transfers cannot be edited — delete and recreate instead');
+    }
     const db = await getDatabase();
     const now = nowIso();
     const newAmount = roundCentavos(input.amount ?? existing.amount);
@@ -117,11 +166,22 @@ export class SqliteTransactionRepository implements ITransactionRepository {
         `UPDATE transactions SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [now, now, id, FIXED_USER_ID],
       );
-      // Reverse the balance effect
-      await db.runAsync(
-        `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-        [-delta(existing.type, existing.amount), now, existing.accountId, FIXED_USER_ID],
-      );
+      if (existing.type === 'Transfer' && existing.toAccountId) {
+        // Reverse both legs: give back to source, take back from destination.
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [existing.amount, now, existing.accountId, FIXED_USER_ID],
+        );
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [existing.amount, now, existing.toAccountId, FIXED_USER_ID],
+        );
+      } else {
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [-delta(existing.type, existing.amount), now, existing.accountId, FIXED_USER_ID],
+        );
+      }
     });
   }
 }

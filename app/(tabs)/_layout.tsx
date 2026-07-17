@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../src/theme';
 
@@ -43,7 +43,7 @@ export default function TabLayout() {
           title: 'Transactions',
           tabBarAccessibilityLabel: 'Transactions tab',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={size ?? 20} color={color} />
+            <MaterialCommunityIcons name="receipt" size={size ?? 20} color={color} />
           ),
         }}
       />

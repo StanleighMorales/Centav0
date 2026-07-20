@@ -11,6 +11,7 @@ import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
 import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
@@ -18,8 +19,9 @@ import type { Account, AccountType } from '../../src/domain/types';
 
 const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
   Cash: 'dollar-sign',
-  Bank: 'credit-card',
+  Bank: 'home',
   EWallet: 'smartphone',
+  CreditCard: 'credit-card',
   Other: 'briefcase',
 };
 
@@ -68,7 +70,17 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
           </View>
           <View style={styles.cardInfo}>
             <AppText variant="h3">{account.name}</AppText>
-            <AppText variant="labelLg" color="textSecondary">{account.type}</AppText>
+            <AppText variant="labelLg" color="textSecondary">
+              {account.type === 'CreditCard' ? 'Credit Card' : account.type}
+            </AppText>
+            {account.type === 'CreditCard' && (account.billDay != null || account.dueDay != null) ? (
+              <AppText variant="bodySm" color="textMuted">
+                {[
+                  account.billDay != null ? `Bill day ${account.billDay}` : null,
+                  account.dueDay != null ? `Due day ${account.dueDay}` : null,
+                ].filter(Boolean).join(' · ')}
+              </AppText>
+            ) : null}
           </View>
           <Pressable
             onPress={() => onAddMoney(account)}
@@ -98,6 +110,7 @@ export default function AccountsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [addMoneyAccount, setAddMoneyAccount] = useState<Account | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
@@ -146,7 +159,15 @@ export default function AccountsScreen() {
         >
           <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
-        <AppText variant="h2">Accounts</AppText>
+        <AppText variant="h2" style={styles.flex}>Accounts</AppText>
+        <Pressable
+          onPress={() => setTransferSheetVisible(true)}
+          style={styles.iconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Transfer between accounts"
+        >
+          <Feather name="repeat" size={20} color={theme.colors.accentPrimary} />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -200,6 +221,12 @@ export default function AccountsScreen() {
         onSuccess={load}
       />
 
+      <TransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
+        onSuccess={load}
+      />
+
       <ConfirmDialog
         visible={pendingDelete !== null}
         title={deleteBlocked ? 'Cannot Delete' : 'Delete Account'}
@@ -232,6 +259,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -theme.spacing[3],
+  },
+  flex: { flex: 1 },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -theme.spacing[2],
   },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: {

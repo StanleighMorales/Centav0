@@ -6,10 +6,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { TransactionRow } from '../../src/components/transactions/TransactionRow';
@@ -21,8 +24,9 @@ import type { Account, Transaction, AccountType } from '../../src/domain/types';
 
 const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
   Cash: 'dollar-sign',
-  Bank: 'credit-card',
+  Bank: 'home',
   EWallet: 'smartphone',
+  CreditCard: 'credit-card',
   Other: 'briefcase',
 };
 
@@ -41,11 +45,15 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
+  const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const [allTxns, setAllTxns] = useState<Transaction[]>([]);
+  const [recentFilter, setRecentFilter] = useState<'day' | 'week' | 'all'>('all');
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [addAccountVisible, setAddAccountVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<Period>('month');
@@ -63,14 +71,14 @@ export default function DashboardScreen() {
     // ponytail: sequential to avoid expo-sqlite concurrent promise queue bug
     const accs = await accountRepo.list();
     const cats = await categoryRepo.list();
-    const allTxns = await transactionRepo.list();
+    const txns = await transactionRepo.list();
     const debtPayments = await debtPaymentRepo.list();
     setAccounts(accs);
     setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
-    setRecentTxns(allTxns.slice(0, 5));
+    setAllTxns(txns);
     const { from, to } = periodRangeIso(period);
-    const periodTxns = allTxns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
+    const periodTxns = txns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
     const periodDebtPayments = debtPayments.filter((p) => p.date >= from.slice(0, 10) && p.date <= to.slice(0, 10));
     setMonthIncome(periodTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
     setMonthExpense(
@@ -81,6 +89,13 @@ export default function DashboardScreen() {
   }, [period]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const recentTxns = (
+    recentFilter === 'all' ? allTxns : allTxns.filter((t) => {
+      const { from, to } = periodRangeIso(recentFilter);
+      return t.date >= from && t.date <= to;
+    })
+  ).slice(0, 5);
 
   async function changePeriod(p: Period) {
     setPeriod(p);
@@ -106,9 +121,7 @@ export default function DashboardScreen() {
           contentContainerStyle={[styles.scroll, { paddingBottom: 80 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <AppText variant="h2">Dashboard</AppText>
-          </View>
+          <ScreenHeader title="Dashboard" />
 
           {/* Hero Balance Card - goldGlow shadow per design spec */}
           <View style={styles.heroCard}>
@@ -116,10 +129,10 @@ export default function DashboardScreen() {
               TOTAL BALANCE
             </AppText>
             <View style={styles.heroAmount}>
-              <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
+              <AppText variant="amountMd" color="accentPrimary" style={styles.currencySymbol}>
                 {'\u20B1'}
               </AppText>
-              <AppText variant="displayLg" color="textPrimary">
+              <AppText variant="displayLg" color="accentPrimary">
                 {formatAmount(totalBalance)}
               </AppText>
             </View>
@@ -128,13 +141,24 @@ export default function DashboardScreen() {
           <SectionHeader
             title="Accounts"
             action={
-              <Pressable
-                onPress={() => router.push('/accounts')}
-                accessibilityRole="button"
-                accessibilityLabel="See all accounts"
-              >
-                <AppText variant="label" color="accentPrimary">See all</AppText>
-              </Pressable>
+              <View style={styles.accountsActions}>
+                <Pressable
+                  onPress={() => setTransferSheetVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Transfer between accounts"
+                  style={styles.transferBtn}
+                >
+                  <Feather name="repeat" size={14} color={theme.colors.accentPrimary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setAddAccountVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add account"
+                  style={styles.addAccountBtn}
+                >
+                  <Feather name="plus" size={14} color={theme.colors.bgPrimary} />
+                </Pressable>
+              </View>
             }
           />
           {accounts.length === 0 ? (
@@ -149,8 +173,10 @@ export default function DashboardScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.accountsList}
               renderItem={({ item }) => (
-                <View
+                <Pressable
+                  onPress={() => router.push('/accounts')}
                   style={styles.accountCard}
+                  accessibilityRole="button"
                   accessibilityLabel={`${item.name}, ${item.type}, ${formatPHP(item.currentBalance)}`}
                 >
                   <Feather
@@ -167,7 +193,7 @@ export default function DashboardScreen() {
                   >
                     {formatPHP(item.currentBalance)}
                   </AppText>
-                </View>
+                </Pressable>
               )}
             />
           )}
@@ -193,7 +219,25 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <SectionHeader title="Recent" />
+          <View style={styles.recentHeader}>
+            <AppText variant="h3">Recent</AppText>
+            <View style={styles.recentChips}>
+              {(['day', 'week', 'all'] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  onPress={() => setRecentFilter(f)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter recent transactions by ${f}`}
+                  accessibilityState={{ selected: recentFilter === f }}
+                  style={[styles.recentChip, recentFilter === f && styles.recentChipActive]}
+                >
+                  <AppText variant="labelSm" color={recentFilter === f ? 'accentPrimary' : 'textSecondary'}>
+                    {f === 'day' ? 'Today' : f === 'week' ? 'This Week' : 'All'}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           {recentTxns.length === 0 ? (
             <EmptyState
               icon="inbox"
@@ -205,7 +249,8 @@ export default function DashboardScreen() {
               <TransactionRow
                 key={txn.id}
                 transaction={txn}
-                categoryName={categoryMap[txn.categoryId] ?? 'Unknown'}
+                categoryName={txn.type === 'Transfer' ? (accountMap[txn.accountId] ?? 'Unknown') : (categoryMap[txn.categoryId ?? ''] ?? 'Unknown')}
+                toAccountName={txn.toAccountId ? accountMap[txn.toAccountId] : undefined}
                 onEdit={setEditTransaction}
                 onUndo={setPendingUndo}
               />
@@ -226,6 +271,18 @@ export default function DashboardScreen() {
         visible={editTransaction !== null}
         initial={editTransaction}
         onClose={() => setEditTransaction(null)}
+        onSuccess={load}
+      />
+
+      <AddAccountSheet
+        visible={addAccountVisible}
+        onClose={() => setAddAccountVisible(false)}
+        onSuccess={load}
+      />
+
+      <TransferSheet
+        visible={transferSheetVisible}
+        onClose={() => setTransferSheetVisible(false)}
         onSuccess={load}
       />
 
@@ -282,6 +339,31 @@ const styles = StyleSheet.create({
   header: {
     marginTop: theme.spacing[6],
     marginBottom: theme.spacing[2],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  accountsActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+  },
+  transferBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addAccountBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroCard: {
     backgroundColor: theme.colors.bgElevated,
@@ -348,5 +430,23 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: theme.colors.borderDefault,
     marginHorizontal: theme.spacing[4],
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: theme.spacing[2],
+  },
+  recentChips: { flexDirection: 'row', gap: theme.spacing[2] },
+  recentChip: {
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.borderDefault,
+  },
+  recentChipActive: {
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSubtle,
   },
 });

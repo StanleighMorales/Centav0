@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { ListItem } from '../ui/ListItem';
@@ -13,12 +13,16 @@ type Props = {
   transaction: Transaction;
   categoryName: string;
   subtitle?: string;
+  toAccountName?: string;
   onEdit: (transaction: Transaction) => void;
   onUndo: (transaction: Transaction) => void;
-  onViewReceipt?: (uri: string) => void;
+  onOpenDetail?: (transaction: Transaction) => void;
 };
 
-export function TransactionRow({ transaction, categoryName, subtitle, onEdit, onUndo, onViewReceipt }: Props) {
+const ACTION_WIDTH = 76;
+const ACTIONS_WIDTH = ACTION_WIDTH * 2;
+
+export function TransactionRow({ transaction, categoryName, subtitle, toAccountName, onEdit, onUndo, onOpenDetail }: Props) {
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -26,8 +30,20 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
-      renderRightActions={() => (
-        <View style={styles.actions}>
+      renderRightActions={(progress) => (
+        <Animated.View
+          style={[
+            styles.actions,
+            {
+              transform: [{
+                translateX: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [ACTIONS_WIDTH, 0],
+                }),
+              }],
+            },
+          ]}
+        >
           <Pressable
             onPress={() => { close(); onEdit(transaction); }}
             accessibilityRole="button"
@@ -46,16 +62,24 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
             <Feather name="rotate-ccw" size={18} color={theme.colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Undo</AppText>
           </Pressable>
-        </View>
+        </Animated.View>
       )}
     >
       <ListItem
-        icon={transaction.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'}
-        iconColor={transaction.type === 'Income' ? theme.colors.positive : theme.colors.negative}
-        title={categoryName}
+        icon={
+          transaction.type === 'Transfer'
+            ? 'repeat'
+            : transaction.type === 'Income' ? 'arrow-down-left' : 'arrow-up-right'
+        }
+        iconColor={
+          transaction.type === 'Transfer'
+            ? theme.colors.info
+            : transaction.type === 'Income' ? theme.colors.positive : theme.colors.negative
+        }
+        title={transaction.type === 'Transfer' ? `${categoryName} → ${toAccountName ?? 'Unknown'}` : categoryName}
         subtitle={subtitle ?? displayDate(transaction.date)}
         accessibilityLabel={`${categoryName}, ${transaction.type}, ${formatPHP(transaction.amount)}, ${displayDate(transaction.date)}${transaction.receiptUri ? ', has receipt' : ''}`}
-        onPress={transaction.receiptUri && onViewReceipt ? () => onViewReceipt(transaction.receiptUri!) : undefined}
+        onPress={onOpenDetail ? () => onOpenDetail(transaction) : undefined}
         trailing={
           <View style={styles.trailing}>
             {transaction.receiptUri ? (
@@ -63,9 +87,13 @@ export function TransactionRow({ transaction, categoryName, subtitle, onEdit, on
             ) : null}
             <AppText
               variant="amountSm"
-              color={transaction.type === 'Income' ? 'positive' : 'negative'}
+              color={
+                transaction.type === 'Transfer'
+                  ? 'textPrimary'
+                  : transaction.type === 'Income' ? 'positive' : 'negative'
+              }
             >
-              {transaction.type === 'Expense' ? '-' : '+'}{formatPHP(transaction.amount)}
+              {transaction.type === 'Transfer' ? '' : transaction.type === 'Expense' ? '-' : '+'}{formatPHP(transaction.amount)}
             </AppText>
           </View>
         }
@@ -78,7 +106,7 @@ const styles = StyleSheet.create({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   actions: { flexDirection: 'row', alignItems: 'stretch' },
   action: {
-    width: 76,
+    width: ACTION_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],

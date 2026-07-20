@@ -1,22 +1,33 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, SectionList, Pressable, ActivityIndicator, StyleSheet, Modal, Image,
+  View, SectionList, Pressable, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { TransactionRow } from '../../src/components/transactions/TransactionRow';
-import { transactionRepo, categoryRepo } from '../../src/repositories';
-import { displayDate } from '../../src/utils/date';
+import { TransactionDetailSheet } from '../../src/components/transactions/TransactionDetailSheet';
+import { transactionRepo, categoryRepo, accountRepo } from '../../src/repositories';
+import { displayDate, periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
 import type { Transaction, TransactionType } from '../../src/domain/types';
 
 type Filter = 'All' | TransactionType;
 const FILTERS: Filter[] = ['All', 'Expense', 'Income'];
+
+type DateFilter = Period | 'all';
+const DATE_FILTERS: { key: DateFilter; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'year', label: 'Year' },
+  { key: 'all', label: 'All' },
+];
 
 function groupByDate(txns: Transaction[]): { title: string; data: Transaction[] }[] {
   const map = new Map<string, Transaction[]>();
@@ -33,40 +44,51 @@ export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('All');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [sections, setSections] = useState<{ title: string; data: Transaction[] }[]>([]);
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
-  const [viewReceipt, setViewReceipt] = useState<string | null>(null);
+  const [accountMap, setAccountMap] = useState<Record<string, string>>({});
+  const [detailTransaction, setDetailTransaction] = useState<Transaction | null>(null);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
 
-  const load = useCallback(async (activeFilter: Filter) => {
+  const load = useCallback(async (activeFilter: Filter, activeDateFilter: DateFilter) => {
     setLoading(true);
-    const txns = await transactionRepo.list(activeFilter !== 'All' ? { type: activeFilter } : undefined);
+    const range = activeDateFilter === 'all' ? undefined : periodRangeIso(activeDateFilter);
+    const txns = await transactionRepo.list({
+      ...(activeFilter !== 'All' ? { type: activeFilter } : {}),
+      ...(range ?? {}),
+    });
     const cats = await categoryRepo.list();
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
+    const accs = await accountRepo.list();
+    setAccountMap(Object.fromEntries(accs.map((a) => [a.id, a.name])));
     setSections(groupByDate(txns));
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(filter); }, [filter, load]));
+  useFocusEffect(useCallback(() => { load(filter, dateFilter); }, [filter, dateFilter, load]));
 
   const handleFilter = (f: Filter) => {
     setFilter(f);
-    load(f);
+    load(f, dateFilter);
+  };
+
+  const handleDateFilter = (f: DateFilter) => {
+    setDateFilter(f);
+    load(filter, f);
   };
 
   async function handleUndo() {
     if (!pendingUndo) return;
     await transactionRepo.softDelete(pendingUndo.id);
     setPendingUndo(null);
-    load(filter);
+    load(filter, dateFilter);
   }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <AppText variant="h2">Transactions</AppText>
-      </View>
+      <ScreenHeader title="Transactions" />
 
       <View style={styles.chips}>
         {FILTERS.map((f) => (
@@ -83,6 +105,26 @@ export default function TransactionsScreen() {
               color={filter === f ? 'accentPrimary' : 'textSecondary'}
             >
               {f}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.chips}>
+        {DATE_FILTERS.map((f) => (
+          <Pressable
+            key={f.key}
+            onPress={() => handleDateFilter(f.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by ${f.label}`}
+            accessibilityState={{ selected: dateFilter === f.key }}
+            style={[styles.chip, dateFilter === f.key && styles.chipActive]}
+          >
+            <AppText
+              variant="labelLg"
+              color={dateFilter === f.key ? 'accentPrimary' : 'textSecondary'}
+            >
+              {f.label}
             </AppText>
           </Pressable>
         ))}
@@ -109,11 +151,12 @@ export default function TransactionsScreen() {
           renderItem={({ item }) => (
             <TransactionRow
               transaction={item}
-              categoryName={categoryMap[item.categoryId] ?? 'Unknown'}
+              categoryName={item.type === 'Transfer' ? (accountMap[item.accountId] ?? 'Unknown') : (categoryMap[item.categoryId ?? ''] ?? 'Unknown')}
+              toAccountName={item.toAccountId ? accountMap[item.toAccountId] : undefined}
               subtitle={item.note ?? undefined}
               onEdit={setEditTransaction}
               onUndo={setPendingUndo}
-              onViewReceipt={setViewReceipt}
+              onOpenDetail={setDetailTransaction}
             />
           )}
           ListEmptyComponent={
@@ -130,29 +173,19 @@ export default function TransactionsScreen() {
         />
       )}
 
-      <Modal
-        visible={viewReceipt !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewReceipt(null)}
-      >
-        <Pressable
-          style={styles.viewerBackdrop}
-          onPress={() => setViewReceipt(null)}
-          accessibilityRole="button"
-          accessibilityLabel="Close receipt"
-        >
-          {viewReceipt ? (
-            <Image source={{ uri: viewReceipt }} style={styles.viewerImage} resizeMode="contain" />
-          ) : null}
-        </Pressable>
-      </Modal>
+      <TransactionDetailSheet
+        transaction={detailTransaction}
+        categoryName={detailTransaction && detailTransaction.type !== 'Transfer' ? (categoryMap[detailTransaction.categoryId ?? ''] ?? 'Unknown') : ''}
+        accountName={detailTransaction ? (accountMap[detailTransaction.accountId] ?? 'Unknown') : ''}
+        toAccountName={detailTransaction?.toAccountId ? accountMap[detailTransaction.toAccountId] : undefined}
+        onClose={() => setDetailTransaction(null)}
+      />
 
       <AddTransactionSheet
         visible={editTransaction !== null}
         initial={editTransaction}
         onClose={() => setEditTransaction(null)}
-        onSuccess={() => load(filter)}
+        onSuccess={() => load(filter, dateFilter)}
       />
 
       <ConfirmDialog
@@ -176,14 +209,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
-  viewerBackdrop: {
-    flex: 1,
-    backgroundColor: theme.colors.scrim,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing[5],
-  },
-  viewerImage: { width: '100%', height: '80%' },
   header: {
     paddingHorizontal: theme.spacing[5],
     marginTop: theme.spacing[6],

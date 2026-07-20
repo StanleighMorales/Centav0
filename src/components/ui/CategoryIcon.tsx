@@ -5,6 +5,18 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 // Feather lacks to MaterialCommunityIcons; everything else stays Feather.
 const MCI_ICONS: Record<string, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   'piggy-bank': 'piggy-bank',
+  'food-drumstick': 'food-drumstick',
+  'pizza': 'pizza',
+  'hamburger': 'hamburger',
+  'silverware-fork-knife': 'silverware-fork-knife',
+  'car': 'car',
+  'bus': 'bus',
+  'airplane': 'airplane',
+  'medical-bag': 'medical-bag',
+  'gamepad-variant': 'gamepad-variant',
+  'paw': 'paw',
+  'school': 'school',
+  'gas-station': 'gas-station',
 };
 
 type Props = {

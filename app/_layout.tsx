@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
-import { ThemeProvider, DarkTheme } from '@react-navigation/native';
+import { ThemeProvider, DarkTheme } from 'expo-router/react-navigation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';

@@ -20,15 +20,11 @@ import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting
 import { periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
-import type { Account, Transaction, AccountType } from '../../src/domain/types';
+import type { Account, Transaction } from '../../src/domain/types';
 
-const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
-  Cash: 'dollar-sign',
-  Bank: 'home',
-  EWallet: 'smartphone',
-  CreditCard: 'credit-card',
-  Other: 'briefcase',
-};
+function accountIcon(account: Account): React.ComponentProps<typeof Feather>['name'] {
+  return account.allowsOverdraft ? 'credit-card' : 'briefcase';
+}
 
 const PERIOD_KEY = 'dashboardPeriod';
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
@@ -177,10 +173,10 @@ export default function DashboardScreen() {
                   onPress={() => router.push('/accounts')}
                   style={styles.accountCard}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.name}, ${item.type}, ${formatPHP(item.currentBalance)}`}
+                  accessibilityLabel={`${item.name}, ${item.typeName}, ${formatPHP(item.currentBalance)}`}
                 >
                   <Feather
-                    name={ACCOUNT_ICON[item.type]}
+                    name={accountIcon(item)}
                     size={16}
                     color={theme.colors.accentPrimary}
                   />

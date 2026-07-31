@@ -55,7 +55,7 @@ export function TransferSheet({ visible, onClose, onSuccess }: Props) {
     if (!accountId) errs.accountId = 'Select a source account';
     if (!toAccountId) errs.toAccountId = 'Select a destination account';
     if (accountId && toAccountId && accountId === toAccountId) errs.toAccountId = 'Pick a different account';
-    if (source && source.type !== 'CreditCard' && amount > source.currentBalance) {
+    if (source && !source.allowsOverdraft && amount > source.currentBalance) {
       errs.amount = 'Transfer is more than this account has';
     }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
@@ -114,10 +114,10 @@ export function TransferSheet({ visible, onClose, onSuccess }: Props) {
           <View style={styles.preview}>
             <AppText
               variant="bodySm"
-              color={remainingSource < 0 && source.type !== 'CreditCard' ? 'negative' : 'textSecondary'}
+              color={remainingSource < 0 && !source.allowsOverdraft ? 'negative' : 'textSecondary'}
             >
               {source.name} after transfer: {formatPHP(remainingSource)}
-              {source.type === 'CreditCard' && remainingSource < 0 ? ' (credit used)' : ''}
+              {source.allowsOverdraft && remainingSource < 0 ? ' (credit used)' : ''}
             </AppText>
           </View>
         ) : null}

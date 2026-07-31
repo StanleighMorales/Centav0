@@ -83,7 +83,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const now = nowIso();
     const amount = roundCentavos(input.amount);
     const source = await db.getFirstAsync<any>(
-      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!source) throw new Error(`Account ${input.accountId} not found`);
@@ -92,9 +92,9 @@ export class SqliteTransactionRepository implements ITransactionRepository {
       [input.toAccountId, FIXED_USER_ID],
     );
     if (!dest) throw new Error(`Account ${input.toAccountId} not found`);
-    // CreditCard sources may go negative (spending credit); other account
-    // types cannot be overdrawn by a transfer, same rule as debt payments.
-    if (source.type !== 'CreditCard' && amount > roundCentavos(source.currentBalance)) {
+    // Overdraft-capable sources may go negative (spending credit); other
+    // account types cannot be overdrawn by a transfer, same rule as debt payments.
+    if (!source.allowsOverdraft && amount > roundCentavos(source.currentBalance)) {
       throw new Error('Transfer exceeds source account balance');
     }
     await db.withTransactionAsync(async () => {

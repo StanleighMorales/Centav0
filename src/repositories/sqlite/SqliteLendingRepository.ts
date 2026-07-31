@@ -43,11 +43,11 @@ export class SqliteLendingRepository implements ILendingRepository {
     const now = nowIso();
     const amount = roundCentavos(input.amount);
     const account = await db.getFirstAsync<any>(
-      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!account) throw new Error(`Account ${input.accountId} not found`);
-    if (account.type !== 'CreditCard' && amount > roundCentavos(account.currentBalance)) {
+    if (!account.allowsOverdraft && amount > roundCentavos(account.currentBalance)) {
       throw new Error('Lending amount is more than this account has');
     }
     await db.withTransactionAsync(async () => {

@@ -15,15 +15,11 @@ import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
-import type { Account, AccountType } from '../../src/domain/types';
+import type { Account } from '../../src/domain/types';
 
-const ACCOUNT_ICON: Record<AccountType, React.ComponentProps<typeof Feather>['name']> = {
-  Cash: 'dollar-sign',
-  Bank: 'home',
-  EWallet: 'smartphone',
-  CreditCard: 'credit-card',
-  Other: 'briefcase',
-};
+function accountIcon(account: Account): React.ComponentProps<typeof Feather>['name'] {
+  return account.allowsOverdraft ? 'credit-card' : 'briefcase';
+}
 
 type RowProps = {
   account: Account;
@@ -66,14 +62,14 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
       <Card accent style={styles.accountCard}>
         <View style={styles.cardRow}>
           <View style={styles.iconCircle}>
-            <Feather name={ACCOUNT_ICON[account.type]} size={18} color={theme.colors.accentPrimary} />
+            <Feather name={accountIcon(account)} size={18} color={theme.colors.accentPrimary} />
           </View>
           <View style={styles.cardInfo}>
             <AppText variant="h3">{account.name}</AppText>
             <AppText variant="labelLg" color="textSecondary">
-              {account.type === 'CreditCard' ? 'Credit Card' : account.type}
+              {account.typeName}
             </AppText>
-            {account.type === 'CreditCard' && (account.billDay != null || account.dueDay != null) ? (
+            {account.allowsOverdraft && (account.billDay != null || account.dueDay != null) ? (
               <AppText variant="bodySm" color="textMuted">
                 {[
                   account.billDay != null ? `Bill day ${account.billDay}` : null,

@@ -195,6 +195,90 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '009_debt_type',
+    up: async (db) => {
+      await db.execAsync(`
+        ALTER TABLE debts ADD COLUMN debtType TEXT NOT NULL DEFAULT 'Custom';
+        ALTER TABLE debts ADD COLUMN disbursementAccountId TEXT;
+      `);
+    },
+  },
+  {
+    name: '010_account_types',
+    up: async (db) => {
+      const now = nowIso();
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS account_types (
+          id              TEXT PRIMARY KEY NOT NULL,
+          userId          TEXT NOT NULL,
+          name            TEXT NOT NULL,
+          allowsOverdraft INTEGER NOT NULL DEFAULT 0,
+          createdAt       TEXT NOT NULL,
+          updatedAt       TEXT NOT NULL,
+          deletedAt       TEXT,
+          isDirty         INTEGER NOT NULL DEFAULT 1,
+          syncedAt        TEXT
+        );
+      `);
+      const seeds: Array<{ legacyType: string; name: string; allowsOverdraft: boolean }> = [
+        { legacyType: 'Cash', name: 'Cash', allowsOverdraft: false },
+        { legacyType: 'Bank', name: 'Bank', allowsOverdraft: false },
+        { legacyType: 'EWallet', name: 'E-Wallet', allowsOverdraft: false },
+        { legacyType: 'CreditCard', name: 'Credit Card', allowsOverdraft: true },
+        { legacyType: 'Other', name: 'Other', allowsOverdraft: false },
+      ];
+      const idByLegacyType: Record<string, string> = {};
+      for (const s of seeds) {
+        const id = newId();
+        idByLegacyType[s.legacyType] = id;
+        await db.runAsync(
+          `INSERT INTO account_types (id, userId, name, allowsOverdraft, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+          [id, FIXED_USER_ID, s.name, s.allowsOverdraft ? 1 : 0, now, now],
+        );
+      }
+      // Rebuild accounts to replace the fixed `type` CHECK with a FK to
+      // account_types, denormalizing allowsOverdraft for the many raw-SQL
+      // call sites that branch on it without joining.
+      await db.execAsync(`
+        CREATE TABLE accounts_new (
+          id              TEXT PRIMARY KEY NOT NULL,
+          userId          TEXT NOT NULL,
+          name            TEXT NOT NULL,
+          accountTypeId   TEXT NOT NULL REFERENCES account_types(id),
+          allowsOverdraft INTEGER NOT NULL DEFAULT 0,
+          initialBalance  REAL NOT NULL DEFAULT 0,
+          currentBalance  REAL NOT NULL DEFAULT 0,
+          billDay         INTEGER,
+          dueDay          INTEGER,
+          createdAt       TEXT NOT NULL,
+          updatedAt       TEXT NOT NULL,
+          deletedAt       TEXT,
+          isDirty         INTEGER NOT NULL DEFAULT 1,
+          syncedAt        TEXT
+        );
+      `);
+      await db.runAsync(
+        `INSERT INTO accounts_new (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         SELECT id, userId, name,
+           CASE type
+             WHEN 'Cash' THEN ? WHEN 'Bank' THEN ? WHEN 'EWallet' THEN ? WHEN 'CreditCard' THEN ? ELSE ?
+           END,
+           CASE WHEN type = 'CreditCard' THEN 1 ELSE 0 END,
+           initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt
+         FROM accounts`,
+        [
+          idByLegacyType.Cash, idByLegacyType.Bank, idByLegacyType.EWallet,
+          idByLegacyType.CreditCard, idByLegacyType.Other,
+        ],
+      );
+      await db.execAsync(`
+        DROP TABLE accounts;
+        ALTER TABLE accounts_new RENAME TO accounts;
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

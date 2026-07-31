@@ -14,6 +14,7 @@ import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from 
 import { theme } from '../../src/theme';
 import { displayDate, monthRangeIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
+import { spendableAccounts } from '../../src/utils/accumulated';
 import type { Account, Lending, LendingPerson, LendingStatus } from '../../src/domain/types';
 
 const TABS: LendingStatus[] = ['Active', 'Paid'];
@@ -120,8 +121,7 @@ export default function LentScreen() {
   const filtered = personFilter === ALL_PEOPLE ? byStatus : byStatus.filter((l) => l.personId === personFilter);
   const activeLendings = lendings.filter((l) => l.status !== 'Paid');
   const totalLentOut = activeLendings.reduce((sum, l) => sum + l.outstandingBalance, 0);
-  const availableFunds = accounts
-    .filter((a) => a.type === 'Cash' || a.type === 'EWallet')
+  const availableFunds = spendableAccounts(accounts)
     .reduce((sum, a) => sum + a.currentBalance, 0);
 
   return (

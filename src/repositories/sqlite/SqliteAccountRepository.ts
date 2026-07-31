@@ -8,7 +8,9 @@ import type { Account, CreateAccountInput, UpdateAccountInput } from '../../doma
 
 function rowToAccount(row: any): Account {
   return {
-    id: row.id, userId: row.userId, name: row.name, type: row.type,
+    id: row.id, userId: row.userId, name: row.name,
+    accountTypeId: row.accountTypeId, allowsOverdraft: row.allowsOverdraft === 1,
+    typeName: row.typeName,
     initialBalance: row.initialBalance, currentBalance: row.currentBalance,
     billDay: row.billDay ?? null, dueDay: row.dueDay ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
@@ -16,11 +18,17 @@ function rowToAccount(row: any): Account {
   };
 }
 
+const SELECT_ACCOUNT = `
+  SELECT a.*, t.name AS typeName
+  FROM accounts a
+  JOIN account_types t ON t.id = a.accountTypeId
+`;
+
 export class SqliteAccountRepository implements IAccountRepository {
   async list(): Promise<Account[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(
-      `SELECT * FROM accounts WHERE userId = ? AND deletedAt IS NULL ORDER BY createdAt ASC`,
+      `${SELECT_ACCOUNT} WHERE a.userId = ? AND a.deletedAt IS NULL ORDER BY a.createdAt ASC`,
       [FIXED_USER_ID],
     );
     return rows.map(rowToAccount);
@@ -29,7 +37,7 @@ export class SqliteAccountRepository implements IAccountRepository {
   async getById(id: string): Promise<Account | null> {
     const db = await getDatabase();
     const row = await db.getFirstAsync<any>(
-      `SELECT * FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `${SELECT_ACCOUNT} WHERE a.id = ? AND a.userId = ? AND a.deletedAt IS NULL`,
       [id, FIXED_USER_ID],
     );
     return row ? rowToAccount(row) : null;
@@ -40,10 +48,18 @@ export class SqliteAccountRepository implements IAccountRepository {
     const id = newId();
     const now = nowIso();
     const initial = roundCentavos(input.initialBalance);
+    const accountType = await db.getFirstAsync<any>(
+      `SELECT allowsOverdraft FROM account_types WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [input.accountTypeId, FIXED_USER_ID],
+    );
+    if (!accountType) throw new Error(`Account type ${input.accountTypeId} not found`);
     await db.runAsync(
-      `INSERT INTO accounts (id, userId, name, type, initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [id, FIXED_USER_ID, input.name, input.type, initial, initial, input.billDay ?? null, input.dueDay ?? null, now, now],
+      `INSERT INTO accounts (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+      [
+        id, FIXED_USER_ID, input.name, input.accountTypeId, accountType.allowsOverdraft,
+        initial, initial, input.billDay ?? null, input.dueDay ?? null, now, now,
+      ],
     );
     const created = await this.getById(id);
     if (!created) throw new Error('Account creation failed silently');
@@ -55,10 +71,19 @@ export class SqliteAccountRepository implements IAccountRepository {
     if (!existing) throw new Error(`Account ${id} not found`);
     const db = await getDatabase();
     const updatedAt = nowIso();
+    let allowsOverdraft = existing.allowsOverdraft;
+    if (input.accountTypeId && input.accountTypeId !== existing.accountTypeId) {
+      const accountType = await db.getFirstAsync<any>(
+        `SELECT allowsOverdraft FROM account_types WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        [input.accountTypeId, FIXED_USER_ID],
+      );
+      if (!accountType) throw new Error(`Account type ${input.accountTypeId} not found`);
+      allowsOverdraft = accountType.allowsOverdraft === 1;
+    }
     await db.runAsync(
-      `UPDATE accounts SET name = ?, type = ?, billDay = ?, dueDay = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      `UPDATE accounts SET name = ?, accountTypeId = ?, allowsOverdraft = ?, billDay = ?, dueDay = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
       [
-        input.name ?? existing.name, input.type ?? existing.type,
+        input.name ?? existing.name, input.accountTypeId ?? existing.accountTypeId, allowsOverdraft ? 1 : 0,
         'billDay' in input ? (input.billDay ?? null) : existing.billDay,
         'dueDay' in input ? (input.dueDay ?? null) : existing.dueDay,
         updatedAt, id, FIXED_USER_ID,

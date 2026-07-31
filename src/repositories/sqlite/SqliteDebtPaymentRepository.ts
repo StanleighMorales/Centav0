@@ -60,12 +60,12 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
     if (!debt) throw new Error(`Debt ${debtId} not found`);
     if (amount > roundCentavos(debt.outstandingBalance)) throw new Error('Payment exceeds remaining debt');
     const account = await db.getFirstAsync<any>(
-      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!account) throw new Error(`Account ${input.accountId} not found`);
-    // Credit cards may go negative — that's spending credit to pay the debt.
-    if (account.type !== 'CreditCard' && amount > roundCentavos(account.currentBalance)) {
+    // Overdraft-capable accounts may go negative — that's spending credit to pay the debt.
+    if (!account.allowsOverdraft && amount > roundCentavos(account.currentBalance)) {
       throw new Error('Payment exceeds account balance');
     }
     await db.withTransactionAsync(async () => {

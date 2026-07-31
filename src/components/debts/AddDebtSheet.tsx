@@ -5,21 +5,23 @@ import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePicker } from '../ui/DatePicker';
+import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
-import { debtRepo } from '../../repositories';
+import { debtRepo, accountRepo } from '../../repositories';
 import { theme } from '../../theme';
 import { nowIso } from '../../utils/date';
-import type { Debt } from '../../domain/types';
+import type { Account, Debt, DebtType } from '../../domain/types';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  debtType: DebtType;
   initial?: Debt;
 };
 
-export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
+export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }: Props) {
   const isEdit = !!initial;
   const [creditor, setCreditor] = useState('');
   const [originalAmount, setOriginalAmount] = useState(0);
@@ -30,8 +32,13 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
   const [isInstallment, setIsInstallment] = useState(false);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [installmentFee, setInstallmentFee] = useState(0);
+  const [accountId, setAccountId] = useState('');
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const isLoan = (initial?.debtType ?? debtType) === 'Loan';
+  const disbursementAccount = accounts.find((a) => a.id === initial?.disbursementAccountId);
 
   useEffect(() => {
     if (visible) {
@@ -45,7 +52,9 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
       setIsInstallment(initial?.isInstallment ?? false);
       setMonthlyPayment(initial?.monthlyPayment ?? 0);
       setInstallmentFee(initial?.installmentFee ?? 0);
+      setAccountId('');
       setErrors({});
+      if (isLoan) accountRepo.list().then(setAccounts);
     }
   }, [visible]);
 
@@ -54,6 +63,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
     if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
+    if (!isEdit && isLoan && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
@@ -75,6 +85,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
         await debtRepo.create({
           creditor: creditor.trim(),
           originalAmount,
+          debtType,
+          accountId: isLoan ? accountId : undefined,
           dueDate: dueDateEnabled ? dueDate : undefined,
           interestRate: rate,
           note: note.trim() || undefined,
@@ -110,6 +122,21 @@ export function AddDebtSheet({ visible, onClose, onSuccess, initial }: Props) {
             onChange={setOriginalAmount}
             error={errors.originalAmount}
           />
+        )}
+        {!isEdit && isLoan && (
+          <Select
+            label="Disburse to Account"
+            options={accounts.map((a) => ({ label: a.name, value: a.id }))}
+            value={accountId || null}
+            onChange={setAccountId}
+            placeholder="Select account…"
+            error={errors.accountId}
+          />
+        )}
+        {isEdit && isLoan && disbursementAccount && (
+          <AppText variant="bodySm" color="textMuted">
+            Disbursed to {disbursementAccount.name}
+          </AppText>
         )}
         <View style={styles.dateWrapper}>
           {dueDateEnabled ? (

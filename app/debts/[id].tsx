@@ -188,6 +188,7 @@ export default function DebtDetailScreen() {
 
       <AddDebtSheet
         visible={editVisible}
+        debtType={debt.debtType}
         onClose={() => setEditVisible(false)}
         onSuccess={load}
         initial={debt}

@@ -11,6 +11,7 @@ function rowToDebt(row: any): Debt {
     id: row.id, userId: row.userId, creditor: row.creditor,
     originalAmount: row.originalAmount, outstandingBalance: row.outstandingBalance,
     dueDate: row.dueDate ?? null, status: row.status,
+    debtType: row.debtType, disbursementAccountId: row.disbursementAccountId ?? null,
     interestRate: row.interestRate ?? null, note: row.note ?? null,
     isInstallment: row.isInstallment === 1,
     monthlyPayment: row.monthlyPayment ?? null,
@@ -53,16 +54,28 @@ export class SqliteDebtRepository implements IDebtRepository {
     const amount = roundCentavos(input.originalAmount);
     const dueDate = input.dueDate ?? null;
     const status = computeStatus(amount, dueDate);
-    await db.runAsync(
-      `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [
-        id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
-        input.interestRate ?? null, input.note ?? null,
-        input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
-        now, now,
-      ],
-    );
+    const isLoan = input.debtType === 'Loan';
+    if (isLoan && !input.accountId) throw new Error('Select an account to receive the loan');
+    const disbursementAccountId = isLoan ? input.accountId! : null;
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [
+          id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
+          input.debtType, disbursementAccountId,
+          input.interestRate ?? null, input.note ?? null,
+          input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
+          now, now,
+        ],
+      );
+      if (isLoan) {
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [amount, now, disbursementAccountId, FIXED_USER_ID],
+        );
+      }
+    });
     const created = await this.getById(id);
     if (!created) throw new Error('Debt creation failed silently');
     return created;
@@ -106,11 +119,21 @@ export class SqliteDebtRepository implements IDebtRepository {
   }
 
   async softDelete(id: string): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) return;
     const db = await getDatabase();
     const now = nowIso();
-    await db.runAsync(
-      `UPDATE debts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-      [now, now, id, FIXED_USER_ID],
-    );
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `UPDATE debts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [now, now, id, FIXED_USER_ID],
+      );
+      if (existing.disbursementAccountId) {
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [existing.originalAmount, now, existing.disbursementAccountId, FIXED_USER_ID],
+        );
+      }
+    });
   }
 }

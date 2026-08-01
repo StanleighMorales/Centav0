@@ -41,6 +41,7 @@ export function MoreMenuSheet({ visible, onClose }: Props) {
     <BottomSheet visible={visible} onClose={onClose} title="More">
       <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>ACCOUNTS & CATEGORIES</AppText>
       <MenuItem icon="layers" label="Accounts" onPress={() => go('/accounts')} />
+      <MenuItem icon="sliders" label="Account Types" onPress={() => go('/account-types')} />
       <MenuItem icon="tag" label="Categories" onPress={() => go('/categories')} />
 
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>ANALYTICS</AppText>

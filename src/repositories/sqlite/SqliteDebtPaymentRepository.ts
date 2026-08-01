@@ -3,6 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
+import { syncLinkedCreditDebt } from './creditSync';
 import type { DebtPaymentFilter, IDebtPaymentRepository } from '../IDebtPaymentRepository';
 import type { DebtPayment, CreateDebtPaymentInput } from '../../domain/types';
 
@@ -54,18 +55,17 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
     const now = nowIso();
     const amount = roundCentavos(input.amount);
     const debt = await db.getFirstAsync<any>(
-      `SELECT outstandingBalance FROM debts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT outstandingBalance, linkedAccountId FROM debts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [debtId, FIXED_USER_ID],
     );
     if (!debt) throw new Error(`Debt ${debtId} not found`);
     if (amount > roundCentavos(debt.outstandingBalance)) throw new Error('Payment exceeds remaining debt');
     const account = await db.getFirstAsync<any>(
-      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!account) throw new Error(`Account ${input.accountId} not found`);
-    // Credit cards may go negative — that's spending credit to pay the debt.
-    if (account.type !== 'CreditCard' && amount > roundCentavos(account.currentBalance)) {
+    if (amount > roundCentavos(account.currentBalance)) {
       throw new Error('Payment exceeds account balance');
     }
     await db.withTransactionAsync(async () => {
@@ -88,6 +88,15 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
         `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [amount, now, input.accountId, FIXED_USER_ID],
       );
+      if (debt.linkedAccountId) {
+        // Paying off a Credit Card's linked debt frees up that much credit again.
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [amount, now, debt.linkedAccountId, FIXED_USER_ID],
+        );
+        await syncLinkedCreditDebt(db, debt.linkedAccountId);
+      }
+      await syncLinkedCreditDebt(db, input.accountId);
     });
     const created = await this.getById(id);
     if (!created) throw new Error('DebtPayment creation failed silently');
@@ -99,6 +108,10 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
     if (!payment) return;
     const db = await getDatabase();
     const now = nowIso();
+    const debt = await db.getFirstAsync<any>(
+      `SELECT linkedAccountId FROM debts WHERE id = ? AND userId = ?`,
+      [payment.debtId, FIXED_USER_ID],
+    );
     await db.withTransactionAsync(async () => {
       await db.runAsync(
         `UPDATE debt_payments SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
@@ -118,6 +131,15 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [payment.amount, now, payment.accountId, FIXED_USER_ID],
       );
+      if (debt?.linkedAccountId) {
+        // Undo the credit this payment freed up on the card.
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [payment.amount, now, debt.linkedAccountId, FIXED_USER_ID],
+        );
+        await syncLinkedCreditDebt(db, debt.linkedAccountId);
+      }
+      await syncLinkedCreditDebt(db, payment.accountId);
     });
   }
 }

@@ -11,11 +11,13 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
-import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
+import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
 import type { Debt, DebtPayment, Account } from '../../src/domain/types';
+
+type CategorySpend = { name: string; total: number };
 
 export default function DebtDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,6 +26,7 @@ export default function DebtDetailScreen() {
   const [debt, setDebt] = useState<Debt | null>(null);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categoryBreakdown, setCategoryBreakdown] = useState<CategorySpend[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
@@ -38,6 +41,23 @@ export default function DebtDetailScreen() {
     setDebt(d);
     setPayments(p);
     setAccounts(a);
+    if (d?.linkedAccountId) {
+      const txns = await transactionRepo.list({ accountId: d.linkedAccountId, type: 'Expense' });
+      const cats = await categoryRepo.list();
+      const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+      const totals: Record<string, number> = {};
+      for (const t of txns) {
+        if (!t.categoryId) continue;
+        totals[t.categoryId] = (totals[t.categoryId] ?? 0) + t.amount;
+      }
+      setCategoryBreakdown(
+        Object.entries(totals)
+          .map(([categoryId, total]) => ({ name: catName[categoryId] ?? 'Other', total }))
+          .sort((x, y) => y.total - x.total),
+      );
+    } else {
+      setCategoryBreakdown([]);
+    }
     setLoading(false);
   }, [id]);
 
@@ -69,6 +89,9 @@ export default function DebtDetailScreen() {
   }
 
   const statusColor = debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
+  const linkedCreditLimit = debt.linkedAccountId
+    ? accounts.find((a) => a.id === debt.linkedAccountId)?.creditLimit ?? null
+    : null;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -82,14 +105,18 @@ export default function DebtDetailScreen() {
           <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Debt Detail</AppText>
-        <Pressable
-          onPress={() => setEditVisible(true)}
-          style={styles.iconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Edit debt"
-        >
-          <Feather name="edit-2" size={18} color={theme.colors.accentPrimary} />
-        </Pressable>
+        {debt.linkedAccountId ? (
+          <View style={styles.iconBtn} />
+        ) : (
+          <Pressable
+            onPress={() => setEditVisible(true)}
+            style={styles.iconBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Edit debt"
+          >
+            <Feather name="edit-2" size={18} color={theme.colors.accentPrimary} />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView
@@ -106,6 +133,16 @@ export default function DebtDetailScreen() {
               <Amount value={totalPaid} variant="amountLg" semanticColor={false} color="positive" />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
                 Fully paid • {formatPHP(debt.originalAmount)} borrowed
+              </AppText>
+            </>
+          ) : linkedCreditLimit != null ? (
+            <>
+              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
+              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+                of {formatPHP(linkedCreditLimit)} limit
+              </AppText>
+              <AppText variant="bodySm" color="positive">
+                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
               </AppText>
             </>
           ) : (
@@ -154,6 +191,18 @@ export default function DebtDetailScreen() {
           </View>
         )}
 
+        {categoryBreakdown.length > 0 && (
+          <>
+            <AppText variant="h3" style={styles.sectionTitle}>Charges by Category</AppText>
+            {categoryBreakdown.map((c) => (
+              <View key={c.name} style={styles.categoryRow}>
+                <AppText variant="body" color="textSecondary">{c.name}</AppText>
+                <Amount value={c.total} variant="amountSm" semanticColor={false} />
+              </View>
+            ))}
+          </>
+        )}
+
         <AppText variant="h3" style={styles.sectionTitle}>Payment History</AppText>
 
         {payments.length === 0 ? (
@@ -175,19 +224,26 @@ export default function DebtDetailScreen() {
           ))
         )}
 
-        <Pressable
-          onPress={() => setDeleteVisible(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Delete debt"
-          style={styles.deleteBtn}
-        >
-          <Feather name="trash-2" size={16} color={theme.colors.negative} />
-          <AppText variant="body" color="negative">Delete Debt</AppText>
-        </Pressable>
+        {debt.linkedAccountId ? (
+          <AppText variant="bodySm" color="textMuted" style={styles.linkedNote}>
+            This debt tracks your Credit Card account automatically. Delete the account to remove it.
+          </AppText>
+        ) : (
+          <Pressable
+            onPress={() => setDeleteVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Delete debt"
+            style={styles.deleteBtn}
+          >
+            <Feather name="trash-2" size={16} color={theme.colors.negative} />
+            <AppText variant="body" color="negative">Delete Debt</AppText>
+          </Pressable>
+        )}
       </ScrollView>
 
       <AddDebtSheet
         visible={editVisible}
+        debtType={debt.debtType}
         onClose={() => setEditVisible(false)}
         onSuccess={load}
         initial={debt}
@@ -264,6 +320,18 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[4],
   },
   paymentInfo: { flex: 1, gap: theme.spacing[1] },
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderDefault,
+  },
+  linkedNote: {
+    textAlign: 'center',
+    marginTop: theme.spacing[3],
+    paddingVertical: theme.spacing[5],
+  },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',

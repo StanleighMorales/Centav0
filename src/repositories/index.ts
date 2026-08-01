@@ -1,4 +1,5 @@
 import { SqliteAccountRepository } from './sqlite/SqliteAccountRepository';
+import { SqliteAccountTypeRepository } from './sqlite/SqliteAccountTypeRepository';
 import { SqliteCategoryRepository } from './sqlite/SqliteCategoryRepository';
 import { SqliteTransactionRepository } from './sqlite/SqliteTransactionRepository';
 import { SqliteDebtRepository } from './sqlite/SqliteDebtRepository';
@@ -8,6 +9,7 @@ import { SqliteLendingPersonRepository } from './sqlite/SqliteLendingPersonRepos
 import { SqliteLendingRepository } from './sqlite/SqliteLendingRepository';
 import { SqliteLendingPaymentRepository } from './sqlite/SqliteLendingPaymentRepository';
 import type { IAccountRepository } from './IAccountRepository';
+import type { IAccountTypeRepository } from './IAccountTypeRepository';
 import type { ICategoryRepository } from './ICategoryRepository';
 import type { ITransactionRepository } from './ITransactionRepository';
 import type { IDebtRepository } from './IDebtRepository';
@@ -18,6 +20,7 @@ import type { ILendingRepository } from './ILendingRepository';
 import type { ILendingPaymentRepository } from './ILendingPaymentRepository';
 
 export const accountRepo: IAccountRepository = new SqliteAccountRepository();
+export const accountTypeRepo: IAccountTypeRepository = new SqliteAccountTypeRepository();
 export const categoryRepo: ICategoryRepository = new SqliteCategoryRepository();
 export const transactionRepo: ITransactionRepository = new SqliteTransactionRepository();
 export const debtRepo: IDebtRepository = new SqliteDebtRepository();
@@ -30,6 +33,6 @@ export const lendingPaymentRepo: ILendingPaymentRepository = new SqliteLendingPa
 export { getSetting, setSetting } from './settings';
 
 export type {
-  IAccountRepository, ICategoryRepository, ITransactionRepository, IDebtRepository, IDebtPaymentRepository, IAllocationRepository,
+  IAccountRepository, IAccountTypeRepository, ICategoryRepository, ITransactionRepository, IDebtRepository, IDebtPaymentRepository, IAllocationRepository,
   ILendingPersonRepository, ILendingRepository, ILendingPaymentRepository,
 };

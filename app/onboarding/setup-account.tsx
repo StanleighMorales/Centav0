@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,19 +12,27 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { accountRepo } from '../../src/repositories';
+import { accountRepo, accountTypeRepo } from '../../src/repositories';
 import type { AccountType } from '../../src/domain/types';
 import { theme } from '../../src/theme';
-
-const ACCOUNT_TYPES: AccountType[] = ['Cash', 'Bank', 'EWallet', 'Other'];
 
 export default function SetupAccountScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [type, setType] = useState<AccountType>('Cash');
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [accountTypeId, setAccountTypeId] = useState('');
   const [balance, setBalance] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    accountTypeRepo.list().then((types) => {
+      // A first account shouldn't start as an overdraft-capable type (e.g. Credit Card).
+      const startTypes = types.filter((t) => !t.allowsOverdraft);
+      setAccountTypes(startTypes);
+      if (startTypes.length > 0) setAccountTypeId(startTypes[0].id);
+    });
+  }, []);
 
   async function handleCreate() {
     const trimmed = name.trim();
@@ -33,7 +41,7 @@ export default function SetupAccountScreen() {
     setSaving(true);
     setError(null);
     try {
-      await accountRepo.create({ name: trimmed, type, initialBalance });
+      await accountRepo.create({ name: trimmed, accountTypeId, initialBalance });
       router.replace('/(tabs)');
     } catch (e) {
       setError('Failed to create account. Please try again.');
@@ -70,17 +78,17 @@ export default function SetupAccountScreen() {
 
           <Text style={styles.label}>Account Type</Text>
           <View style={styles.typeRow}>
-            {ACCOUNT_TYPES.map((t) => (
+            {accountTypes.map((t) => (
               <TouchableOpacity
-                key={t}
-                style={[styles.chip, type === t && styles.chipActive]}
-                onPress={() => setType(t)}
+                key={t.id}
+                style={[styles.chip, accountTypeId === t.id && styles.chipActive]}
+                onPress={() => setAccountTypeId(t.id)}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: type === t }}
-                accessibilityLabel={t}
+                accessibilityState={{ checked: accountTypeId === t.id }}
+                accessibilityLabel={t.name}
               >
-                <Text style={[styles.chipText, type === t && styles.chipTextActive]}>
-                  {t}
+                <Text style={[styles.chipText, accountTypeId === t.id && styles.chipTextActive]}>
+                  {t.name}
                 </Text>
               </TouchableOpacity>
             ))}

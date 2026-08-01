@@ -3,6 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
+import { syncLinkedCreditDebt } from './creditSync';
 import type { ITransactionRepository } from '../ITransactionRepository';
 import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter, CreateTransferInput } from '../../domain/types';
 
@@ -58,6 +59,17 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const id = newId();
     const now = nowIso();
     const amount = roundCentavos(input.amount);
+    if (input.type === 'Expense') {
+      const account = await db.getFirstAsync<any>(
+        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        [input.accountId, FIXED_USER_ID],
+      );
+      if (!account) throw new Error(`Account ${input.accountId} not found`);
+      // Credit accounts spend down available balance like any other account now — can't overspend it.
+      if (account.allowsOverdraft === 1 && amount > roundCentavos(account.currentBalance)) {
+        throw new Error('Expense exceeds available credit');
+      }
+    }
     await db.withTransactionAsync(async () => {
       await db.runAsync(
         `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
@@ -68,6 +80,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [delta(input.type, amount), now, input.accountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, input.accountId);
     });
     const created = await this.getById(id);
     if (!created) throw new Error('Transaction creation failed silently');
@@ -83,7 +96,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const now = nowIso();
     const amount = roundCentavos(input.amount);
     const source = await db.getFirstAsync<any>(
-      `SELECT currentBalance, type FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!source) throw new Error(`Account ${input.accountId} not found`);
@@ -92,9 +105,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
       [input.toAccountId, FIXED_USER_ID],
     );
     if (!dest) throw new Error(`Account ${input.toAccountId} not found`);
-    // CreditCard sources may go negative (spending credit); other account
-    // types cannot be overdrawn by a transfer, same rule as debt payments.
-    if (source.type !== 'CreditCard' && amount > roundCentavos(source.currentBalance)) {
+    if (amount > roundCentavos(source.currentBalance)) {
       throw new Error('Transfer exceeds source account balance');
     }
     await db.withTransactionAsync(async () => {
@@ -111,6 +122,8 @@ export class SqliteTransactionRepository implements ITransactionRepository {
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [amount, now, input.toAccountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, input.accountId);
+      await syncLinkedCreditDebt(db, input.toAccountId);
     });
     const created = await this.getById(id);
     if (!created) throw new Error('Transfer creation failed silently');
@@ -128,6 +141,17 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const newAmount = roundCentavos(input.amount ?? existing.amount);
     const newType = input.type ?? existing.type;
     const newAccountId = input.accountId ?? existing.accountId;
+    if (newType === 'Expense') {
+      const account = await db.getFirstAsync<any>(
+        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        [newAccountId, FIXED_USER_ID],
+      );
+      if (!account) throw new Error(`Account ${newAccountId} not found`);
+      const alreadySpentHere = existing.accountId === newAccountId && existing.type === 'Expense' ? existing.amount : 0;
+      if (account.allowsOverdraft === 1 && newAmount - alreadySpentHere > roundCentavos(account.currentBalance)) {
+        throw new Error('Expense exceeds available credit');
+      }
+    }
     await db.withTransactionAsync(async () => {
       // Reverse old effect on old account
       await db.runAsync(
@@ -150,6 +174,8 @@ export class SqliteTransactionRepository implements ITransactionRepository {
           now, id, FIXED_USER_ID,
         ],
       );
+      await syncLinkedCreditDebt(db, existing.accountId);
+      if (newAccountId !== existing.accountId) await syncLinkedCreditDebt(db, newAccountId);
     });
     const updated = await this.getById(id);
     if (!updated) throw new Error('Transaction vanished after update');
@@ -176,11 +202,14 @@ export class SqliteTransactionRepository implements ITransactionRepository {
           `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
           [existing.amount, now, existing.toAccountId, FIXED_USER_ID],
         );
+        await syncLinkedCreditDebt(db, existing.accountId);
+        await syncLinkedCreditDebt(db, existing.toAccountId);
       } else {
         await db.runAsync(
           `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
           [-delta(existing.type, existing.amount), now, existing.accountId, FIXED_USER_ID],
         );
+        await syncLinkedCreditDebt(db, existing.accountId);
       }
     });
   }

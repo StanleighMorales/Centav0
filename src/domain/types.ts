@@ -9,26 +9,41 @@ export interface LocalSyncFields {
   syncedAt: string | null;
 }
 
-export type AccountType = 'Cash' | 'Bank' | 'EWallet' | 'CreditCard' | 'Other';
+export interface AccountType extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  name: string;
+  allowsOverdraft: boolean;
+}
+export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; }
+export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; }
 
 export interface Account extends AuditFields, LocalSyncFields {
   id: string;
   userId: string;
   name: string;
-  type: AccountType;
+  accountTypeId: string;
+  /** Denormalized from the account's type at write time. */
+  allowsOverdraft: boolean;
+  /** Joined from account_types for display. */
+  typeName: string;
   initialBalance: number;
   currentBalance: number;
-  /** Day of month (1–31) the credit card statement is generated. CreditCard only. */
+  /** Day of month (1–31) the statement is generated. Overdraft-capable types only. */
   billDay: number | null;
-  /** Day of month (1–31) the credit card payment is due. CreditCard only. */
+  /** Day of month (1–31) the payment is due. Overdraft-capable types only. */
   dueDay: number | null;
+  /** Max amount that can be owed on this account. Overdraft-capable types only. */
+  creditLimit: number | null;
 }
 
 export interface CreateAccountInput {
-  name: string; type: AccountType; initialBalance: number;
-  billDay?: number; dueDay?: number;
+  name: string; accountTypeId: string; initialBalance: number;
+  billDay?: number; dueDay?: number; creditLimit?: number;
 }
-export interface UpdateAccountInput { name?: string; type?: AccountType; billDay?: number; dueDay?: number; }
+export interface UpdateAccountInput {
+  name?: string; accountTypeId?: string; billDay?: number; dueDay?: number; creditLimit?: number;
+}
 
 export type CategoryType = 'Expense' | 'Income';
 
@@ -79,6 +94,7 @@ export interface CreateTransferInput {
 }
 
 export type DebtStatus = 'Open' | 'Paid' | 'Overdue';
+export type DebtType = 'Credit' | 'Loan' | 'Custom';
 
 export interface Debt extends AuditFields, LocalSyncFields {
   id: string;
@@ -88,6 +104,13 @@ export interface Debt extends AuditFields, LocalSyncFields {
   outstandingBalance: number;
   dueDate: string | null;
   status: DebtStatus;
+  debtType: DebtType;
+  /** Account credited with originalAmount at creation. Loan debts only. */
+  disbursementAccountId: string | null;
+  /** Account this debt auto-syncs with. Set only for Credit Card-linked debts. */
+  linkedAccountId: string | null;
+  /** Transaction that disbursed this loan, reversed on delete. Loan debts only. */
+  disbursementTransactionId: string | null;
   interestRate: number | null;
   note: string | null;
   isInstallment: boolean;
@@ -96,7 +119,9 @@ export interface Debt extends AuditFields, LocalSyncFields {
 }
 
 export interface CreateDebtInput {
-  creditor: string; originalAmount: number;
+  creditor: string; originalAmount: number; debtType: DebtType;
+  /** Required when debtType === 'Loan'. Account to credit with originalAmount. */
+  accountId?: string;
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
 }

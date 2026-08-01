@@ -63,6 +63,14 @@ const dayStart = (y: number, m: number, d: number) =>
 const dayEnd = (y: number, m: number, d: number) =>
   new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - MANILA_OFFSET).toISOString();
 
+// Next occurrence of `dueDay` (1-31) on/after today, Manila time. Date.UTC
+// clamps out-of-range days (e.g. dueDay=31 in Feb -> Feb 28/29).
+export function nextDueDateIso(dueDay: number, from: Date = new Date()): string {
+  const { y, m, d } = manilaParts(from);
+  const targetMonth = d <= dueDay ? m : m + 1;
+  return dayStart(y, targetMonth, dueDay);
+}
+
 // Date.UTC normalizes out-of-range day numbers (e.g. week spilling into the
 // previous/next month), so the arithmetic below is safe without guards.
 export function periodRangeIso(period: Period, date: Date = new Date()): { from: string; to: string } {

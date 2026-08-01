@@ -14,25 +14,28 @@ import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate, monthRangeIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import type { Account, Debt, DebtStatus } from '../../src/domain/types';
+import { spendableAccounts } from '../../src/utils/accumulated';
+import type { Account, Debt, DebtStatus, DebtType } from '../../src/domain/types';
 
-const TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
+const TYPE_TABS: DebtType[] = ['Credit', 'Loan', 'Custom'];
+const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
 
 type DebtRowProps = {
   debt: Debt;
   paidTotal: number;
+  creditLimit: number | null;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit }: DebtRowProps) {
   const swipeRef = useRef<Swipeable>(null);
 
   return (
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
-      renderRightActions={() => (
+      renderRightActions={debt.linkedAccountId ? undefined : () => (
         <Pressable
           onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
           accessibilityRole="button"
@@ -85,6 +88,13 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
               <AppText variant="labelSm" color="positive">PAID</AppText>
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
             </View>
+          ) : creditLimit != null ? (
+            <View style={styles.paidTrail}>
+              <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} color="negative" />
+              <AppText variant="labelSm" color="positive">
+                {formatPHP(Math.max(0, creditLimit - debt.outstandingBalance))} avail
+              </AppText>
+            </View>
           ) : (
             <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
           )}
@@ -98,14 +108,15 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
 export default function DebtsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<DebtStatus>('Open');
+  const [activeType, setActiveType] = useState<DebtType>('Credit');
+  const [activeStatus, setActiveStatus] = useState<DebtStatus>('Open');
   const [debts, setDebts] = useState<Debt[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editDebt, setEditDebt] = useState<Debt | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
-  const [paidThisMonth, setPaidThisMonth] = useState(0);
+  const [monthPayments, setMonthPayments] = useState<{ debtId: string; amount: number }[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,23 +126,24 @@ export default function DebtsScreen() {
     const totals: Record<string, number> = {};
     for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
     const { from, to } = monthRangeIso();
-    const monthTotal = allPayments
-      .filter((p) => p.date >= from && p.date <= to)
-      .reduce((sum, p) => sum + p.amount, 0);
     setDebts(all);
     setAccounts(accs);
     setPaidTotals(totals);
-    setPaidThisMonth(monthTotal);
+    setMonthPayments(allPayments.filter((p) => p.date >= from && p.date <= to));
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const filtered = debts.filter((d) => d.status === activeTab);
-  const activeDebts = debts.filter((d) => d.status !== 'Paid');
+  const typeDebts = debts.filter((d) => d.debtType === activeType);
+  const typeDebtIds = new Set(typeDebts.map((d) => d.id));
+  const paidThisMonth = monthPayments
+    .filter((p) => typeDebtIds.has(p.debtId))
+    .reduce((sum, p) => sum + p.amount, 0);
+  const filtered = typeDebts.filter((d) => d.status === activeStatus);
+  const activeDebts = typeDebts.filter((d) => d.status !== 'Paid');
   const totalDebt = activeDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
-  const availableFunds = accounts
-    .filter((a) => a.type === 'Cash' || a.type === 'EWallet')
+  const availableFunds = spendableAccounts(accounts)
     .reduce((sum, a) => sum + a.currentBalance, 0);
   const remainingAfterFunds = Math.max(0, totalDebt - availableFunds);
 
@@ -142,16 +154,33 @@ export default function DebtsScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        {TABS.map((tab) => (
+        {TYPE_TABS.map((tab) => (
           <Pressable
             key={tab}
-            onPress={() => setActiveTab(tab)}
+            onPress={() => setActiveType(tab)}
             accessibilityRole="tab"
             accessibilityLabel={tab}
-            accessibilityState={{ selected: activeTab === tab }}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
+            accessibilityState={{ selected: activeType === tab }}
+            style={[styles.tab, activeType === tab && styles.tabActive]}
           >
-            <AppText variant="labelLg" color={activeTab === tab ? 'accentPrimary' : 'textSecondary'}>
+            <AppText variant="labelLg" color={activeType === tab ? 'accentPrimary' : 'textSecondary'}>
+              {tab}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.statusTabRow}>
+        {STATUS_TABS.map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => setActiveStatus(tab)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab}
+            accessibilityState={{ selected: activeStatus === tab }}
+            style={[styles.statusChip, activeStatus === tab && styles.statusChipActive]}
+          >
+            <AppText variant="labelSm" color={activeStatus === tab ? 'accentPrimary' : 'textSecondary'}>
               {tab}
             </AppText>
           </Pressable>
@@ -205,14 +234,15 @@ export default function DebtsScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="credit-card"
-              title={`No ${activeTab.toLowerCase()} debts`}
-              subtitle={activeTab === 'Paid' ? 'Paid debts will appear here' : 'Tap + to add a debt'}
+              title={`No ${activeStatus.toLowerCase()} ${activeType.toLowerCase()} debts`}
+              subtitle={activeStatus === 'Paid' ? 'Paid debts will appear here' : 'Tap + to add a debt'}
             />
           }
           renderItem={({ item }) => (
             <DebtRow
               debt={item}
               paidTotal={paidTotals[item.id] ?? 0}
+              creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
             />
@@ -224,12 +254,14 @@ export default function DebtsScreen() {
 
       <AddDebtSheet
         visible={sheetVisible}
+        debtType={activeType}
         onClose={() => setSheetVisible(false)}
         onSuccess={load}
       />
 
       <AddDebtSheet
         visible={editDebt !== null}
+        debtType={editDebt?.debtType ?? activeType}
         initial={editDebt ?? undefined}
         onClose={() => setEditDebt(null)}
         onSuccess={load}
@@ -259,6 +291,19 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: { borderBottomColor: theme.colors.accentPrimary },
+  statusTabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing[5],
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[4],
+  },
+  statusChip: {
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bgSurface,
+  },
+  statusChipActive: { backgroundColor: theme.colors.accentSubtle },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
   summary: {

@@ -3,6 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
+import { syncLinkedCreditDebt } from './creditSync';
 import type { ILendingPaymentRepository } from '../ILendingPaymentRepository';
 import type { LendingPayment, CreateLendingPaymentInput } from '../../domain/types';
 
@@ -79,6 +80,7 @@ export class SqliteLendingPaymentRepository implements ILendingPaymentRepository
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [amount, now, input.accountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, input.accountId);
     });
     const created = await this.getById(id);
     if (!created) throw new Error('LendingPayment creation failed silently');
@@ -108,6 +110,7 @@ export class SqliteLendingPaymentRepository implements ILendingPaymentRepository
         `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [payment.amount, now, payment.accountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, payment.accountId);
     });
   }
 }

@@ -68,8 +68,7 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
     if (!accountId) errs.accountId = 'Select an account';
     if (amount > outstandingBalance) errs.amount = 'Payment is more than the remaining debt';
     if (isAccumulated && amount > totalAvailable) errs.amount = 'Payment is more than your accumulated balance';
-    // Credit cards may overdraw — paying debt with credit.
-    if (selectedAccount && selectedAccount.type !== 'CreditCard' && amount > selectedAccount.currentBalance) {
+    if (selectedAccount && amount > selectedAccount.currentBalance) {
       errs.amount = 'Payment is more than this account has';
     }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
@@ -98,7 +97,7 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   const accountOptions = [
     { label: `Accumulated Balance (${formatPHP(totalAvailable)})`, value: ACCUMULATED_ID },
     ...accounts.map((a) => ({
-      label: `${a.name} (${a.type === 'CreditCard' ? 'Credit' : formatPHP(a.currentBalance)})`,
+      label: `${a.name} (${formatPHP(a.currentBalance)})`,
       value: a.id,
     })),
   ];
@@ -185,10 +184,9 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
             </AppText>
             <AppText
               variant="bodySm"
-              color={remainingSource < 0 && selectedAccount.type !== 'CreditCard' ? 'negative' : 'textSecondary'}
+              color={remainingSource < 0 ? 'negative' : 'textSecondary'}
             >
               {selectedAccount.name} after payment: {formatPHP(remainingSource)}
-              {selectedAccount.type === 'CreditCard' && remainingSource < 0 ? ' (credit used)' : ''}
             </AppText>
             <AppText variant="bodySm" color={remainingDebt > 0 ? 'textSecondary' : 'positive'}>
               Debt left after payment: {formatPHP(remainingDebt)}

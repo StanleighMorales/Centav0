@@ -33,13 +33,17 @@ export interface Account extends AuditFields, LocalSyncFields {
   billDay: number | null;
   /** Day of month (1–31) the payment is due. Overdraft-capable types only. */
   dueDay: number | null;
+  /** Max amount that can be owed on this account. Overdraft-capable types only. */
+  creditLimit: number | null;
 }
 
 export interface CreateAccountInput {
   name: string; accountTypeId: string; initialBalance: number;
-  billDay?: number; dueDay?: number;
+  billDay?: number; dueDay?: number; creditLimit?: number;
 }
-export interface UpdateAccountInput { name?: string; accountTypeId?: string; billDay?: number; dueDay?: number; }
+export interface UpdateAccountInput {
+  name?: string; accountTypeId?: string; billDay?: number; dueDay?: number; creditLimit?: number;
+}
 
 export type CategoryType = 'Expense' | 'Income';
 
@@ -103,6 +107,10 @@ export interface Debt extends AuditFields, LocalSyncFields {
   debtType: DebtType;
   /** Account credited with originalAmount at creation. Loan debts only. */
   disbursementAccountId: string | null;
+  /** Account this debt auto-syncs with. Set only for Credit Card-linked debts. */
+  linkedAccountId: string | null;
+  /** Transaction that disbursed this loan, reversed on delete. Loan debts only. */
+  disbursementTransactionId: string | null;
   interestRate: number | null;
   note: string | null;
   isInstallment: boolean;

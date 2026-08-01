@@ -3,6 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
+import { syncLinkedCreditDebt } from './creditSync';
 import type { ILendingRepository } from '../ILendingRepository';
 import type { Lending, CreateLendingInput, UpdateLendingInput } from '../../domain/types';
 
@@ -43,11 +44,11 @@ export class SqliteLendingRepository implements ILendingRepository {
     const now = nowIso();
     const amount = roundCentavos(input.amount);
     const account = await db.getFirstAsync<any>(
-      `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      `SELECT currentBalance FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountId, FIXED_USER_ID],
     );
     if (!account) throw new Error(`Account ${input.accountId} not found`);
-    if (!account.allowsOverdraft && amount > roundCentavos(account.currentBalance)) {
+    if (amount > roundCentavos(account.currentBalance)) {
       throw new Error('Lending amount is more than this account has');
     }
     await db.withTransactionAsync(async () => {
@@ -60,6 +61,7 @@ export class SqliteLendingRepository implements ILendingRepository {
         `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [amount, now, input.accountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, input.accountId);
     });
     const created = await this.getById(id);
     if (!created) throw new Error('Lending creation failed silently');
@@ -107,6 +109,7 @@ export class SqliteLendingRepository implements ILendingRepository {
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [lending.amount, now, lending.accountId, FIXED_USER_ID],
       );
+      await syncLinkedCreditDebt(db, lending.accountId);
     });
   }
 }

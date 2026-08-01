@@ -1,6 +1,6 @@
 import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
-import { nowIso } from '../../utils/date';
+import { nowIso, nextDueDateIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import type { IAccountRepository } from '../IAccountRepository';
@@ -13,6 +13,7 @@ function rowToAccount(row: any): Account {
     typeName: row.typeName,
     initialBalance: row.initialBalance, currentBalance: row.currentBalance,
     billDay: row.billDay ?? null, dueDay: row.dueDay ?? null,
+    creditLimit: row.creditLimit ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null, isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
   };
@@ -47,20 +48,34 @@ export class SqliteAccountRepository implements IAccountRepository {
     const db = await getDatabase();
     const id = newId();
     const now = nowIso();
-    const initial = roundCentavos(input.initialBalance);
     const accountType = await db.getFirstAsync<any>(
       `SELECT allowsOverdraft FROM account_types WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
       [input.accountTypeId, FIXED_USER_ID],
     );
     if (!accountType) throw new Error(`Account type ${input.accountTypeId} not found`);
-    await db.runAsync(
-      `INSERT INTO accounts (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [
-        id, FIXED_USER_ID, input.name, input.accountTypeId, accountType.allowsOverdraft,
-        initial, initial, input.billDay ?? null, input.dueDay ?? null, now, now,
-      ],
-    );
+    // Credit accounts start full at their max balance (available credit),
+    // not at the form's balance input — spending draws it down from there.
+    const initial = accountType.allowsOverdraft
+      ? roundCentavos(input.creditLimit ?? 0)
+      : roundCentavos(input.initialBalance);
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `INSERT INTO accounts (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, creditLimit, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [
+          id, FIXED_USER_ID, input.name, input.accountTypeId, accountType.allowsOverdraft,
+          initial, initial, input.billDay ?? null, input.dueDay ?? null, input.creditLimit ?? null, now, now,
+        ],
+      );
+      if (accountType.allowsOverdraft) {
+        const dueDate = input.dueDay != null ? nextDueDateIso(input.dueDay) : null;
+        await db.runAsync(
+          `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, linkedAccountId, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+           VALUES (?, ?, ?, 0, 0, ?, 'Open', 'Credit', NULL, ?, NULL, NULL, 0, NULL, NULL, ?, ?, NULL, 1, NULL)`,
+          [newId(), FIXED_USER_ID, input.name, dueDate, id, now, now],
+        );
+      }
+    });
     const created = await this.getById(id);
     if (!created) throw new Error('Account creation failed silently');
     return created;
@@ -81,11 +96,12 @@ export class SqliteAccountRepository implements IAccountRepository {
       allowsOverdraft = accountType.allowsOverdraft === 1;
     }
     await db.runAsync(
-      `UPDATE accounts SET name = ?, accountTypeId = ?, allowsOverdraft = ?, billDay = ?, dueDay = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      `UPDATE accounts SET name = ?, accountTypeId = ?, allowsOverdraft = ?, billDay = ?, dueDay = ?, creditLimit = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
       [
         input.name ?? existing.name, input.accountTypeId ?? existing.accountTypeId, allowsOverdraft ? 1 : 0,
         'billDay' in input ? (input.billDay ?? null) : existing.billDay,
         'dueDay' in input ? (input.dueDay ?? null) : existing.dueDay,
+        'creditLimit' in input ? (input.creditLimit ?? null) : existing.creditLimit,
         updatedAt, id, FIXED_USER_ID,
       ],
     );
@@ -97,10 +113,17 @@ export class SqliteAccountRepository implements IAccountRepository {
   async softDelete(id: string): Promise<void> {
     const db = await getDatabase();
     const now = nowIso();
-    await db.runAsync(
-      `UPDATE accounts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-      [now, now, id, FIXED_USER_ID],
-    );
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `UPDATE accounts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [now, now, id, FIXED_USER_ID],
+      );
+      // Cascade: a Credit Card account's linked debt has no life outside the account.
+      await db.runAsync(
+        `UPDATE debts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE linkedAccountId = ? AND userId = ?`,
+        [now, now, id, FIXED_USER_ID],
+      );
+    });
   }
 
   async getBalance(id: string): Promise<number> {

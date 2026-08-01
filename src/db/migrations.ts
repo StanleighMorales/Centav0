@@ -1,6 +1,6 @@
 import type * as SQLite from 'expo-sqlite';
 import { SCHEMA_V1 } from './schema';
-import { nowIso } from '../utils/date';
+import { nowIso, nextDueDateIso } from '../utils/date';
 import { newId } from '../utils/id';
 import { FIXED_USER_ID } from '../constants/user';
 
@@ -277,6 +277,36 @@ const MIGRATIONS: Migration[] = [
         DROP TABLE accounts;
         ALTER TABLE accounts_new RENAME TO accounts;
       `);
+    },
+  },
+  {
+    name: '011_credit_card_linked_debt',
+    up: async (db) => {
+      await db.execAsync(`
+        ALTER TABLE debts ADD COLUMN linkedAccountId TEXT;
+        ALTER TABLE debts ADD COLUMN disbursementTransactionId TEXT;
+      `);
+      const now = nowIso();
+      const overdraftAccounts = await db.getAllAsync<any>(
+        `SELECT id, name, currentBalance, dueDay FROM accounts WHERE userId = ? AND allowsOverdraft = 1 AND deletedAt IS NULL`,
+        [FIXED_USER_ID],
+      );
+      for (const account of overdraftAccounts) {
+        const owed = Math.max(0, -account.currentBalance);
+        const dueDate = account.dueDay != null ? nextDueDateIso(account.dueDay) : null;
+        const status = owed <= 0 ? 'Open' : (dueDate && dueDate < now ? 'Overdue' : 'Open');
+        await db.runAsync(
+          `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, linkedAccountId, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Credit', NULL, ?, NULL, NULL, 0, NULL, NULL, ?, ?, NULL, 1, NULL)`,
+          [newId(), FIXED_USER_ID, account.name, owed, owed, dueDate, status, account.id, now, now],
+        );
+      }
+    },
+  },
+  {
+    name: '012_credit_limit',
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE accounts ADD COLUMN creditLimit REAL;`);
     },
   },
 ];

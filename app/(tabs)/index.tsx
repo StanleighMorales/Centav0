@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
+import { Amount } from '../../src/components/ui/Amount';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
@@ -42,6 +43,8 @@ export default function DashboardScreen() {
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const creditAccounts = accounts.filter((a) => a.allowsOverdraft);
+  const totalCredit = creditAccounts.reduce((s, a) => s + a.currentBalance, 0);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
   const [recentFilter, setRecentFilter] = useState<'day' | 'week' | 'all'>('all');
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
@@ -70,7 +73,7 @@ export default function DashboardScreen() {
     const txns = await transactionRepo.list();
     const debtPayments = await debtPaymentRepo.list();
     setAccounts(accs);
-    setTotalBalance(accs.reduce((s, a) => s + a.currentBalance, 0));
+    setTotalBalance(accs.filter((a) => !a.allowsOverdraft).reduce((s, a) => s + a.currentBalance, 0));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setAllTxns(txns);
     const { from, to } = periodRangeIso(period);
@@ -119,20 +122,35 @@ export default function DashboardScreen() {
         >
           <ScreenHeader title="Dashboard" />
 
-          {/* Hero Balance Card - goldGlow shadow per design spec */}
+          {/* Hero Balance Card */}
           <View style={styles.heroCard}>
             <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
               TOTAL BALANCE
             </AppText>
             <View style={styles.heroAmount}>
-              <AppText variant="amountMd" color="accentPrimary" style={styles.currencySymbol}>
+              <AppText variant="amountMd" color="positive" style={styles.currencySymbol}>
                 {'\u20B1'}
               </AppText>
-              <AppText variant="displayLg" color="accentPrimary">
+              <AppText variant="displayLg" color="positive">
                 {formatAmount(totalBalance)}
               </AppText>
             </View>
           </View>
+
+          {creditAccounts.length > 0 && (
+            <View style={styles.creditCard}>
+              <AppText variant="labelSm" color="textMuted" style={styles.heroLabel}>
+                TOTAL CREDIT
+              </AppText>
+              <Amount value={totalCredit} variant="amountLg" color="accentPrimary" semanticColor={false} />
+              {creditAccounts.map((a) => (
+                <View key={a.id} style={styles.creditRow}>
+                  <AppText variant="bodySm" color="textMuted">{a.name}</AppText>
+                  <Amount value={a.currentBalance} variant="amountSm" color="accentPrimary" semanticColor={false} />
+                </View>
+              ))}
+            </View>
+          )}
 
           <SectionHeader
             title="Accounts"
@@ -365,11 +383,26 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgElevated,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[6],
-    ...theme.shadows.goldGlow,
+    ...theme.shadows.md,
   },
   heroLabel: {
     letterSpacing: 1.2,
     marginBottom: theme.spacing[3],
+  },
+  creditCard: {
+    backgroundColor: theme.colors.bgSurface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[5],
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
+    ...theme.shadows.goldGlow,
+  },
+  creditRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: theme.spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderDefault,
   },
   heroAmount: {
     flexDirection: 'row',

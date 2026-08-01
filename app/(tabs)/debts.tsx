@@ -23,18 +23,19 @@ const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
 type DebtRowProps = {
   debt: Debt;
   paidTotal: number;
+  creditLimit: number | null;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit }: DebtRowProps) {
   const swipeRef = useRef<Swipeable>(null);
 
   return (
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
-      renderRightActions={() => (
+      renderRightActions={debt.linkedAccountId ? undefined : () => (
         <Pressable
           onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
           accessibilityRole="button"
@@ -86,6 +87,13 @@ function DebtRow({ debt, paidTotal, onPress, onEdit }: DebtRowProps) {
             <View style={styles.paidTrail}>
               <AppText variant="labelSm" color="positive">PAID</AppText>
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
+            </View>
+          ) : creditLimit != null ? (
+            <View style={styles.paidTrail}>
+              <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} color="negative" />
+              <AppText variant="labelSm" color="positive">
+                {formatPHP(Math.max(0, creditLimit - debt.outstandingBalance))} avail
+              </AppText>
             </View>
           ) : (
             <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
@@ -234,6 +242,7 @@ export default function DebtsScreen() {
             <DebtRow
               debt={item}
               paidTotal={paidTotals[item.id] ?? 0}
+              creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
             />

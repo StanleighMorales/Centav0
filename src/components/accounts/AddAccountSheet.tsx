@@ -32,6 +32,7 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
   const [balance, setBalance] = useState(0);
   const [billDay, setBillDay] = useState('');
   const [dueDay, setDueDay] = useState('');
+  const [creditLimit, setCreditLimit] = useState(0);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -42,6 +43,7 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
       setBalance(initial?.initialBalance ?? 0);
       setBillDay(initial?.billDay != null ? String(initial.billDay) : '');
       setDueDay(initial?.dueDay != null ? String(initial.dueDay) : '');
+      setCreditLimit(initial?.creditLimit ?? 0);
       setErrors({});
       accountTypeRepo.list().then((types) => {
         setAccountTypes(types);
@@ -58,12 +60,14 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
     if (!accountTypeId) errs.accountTypeId = 'Select a type';
     if (allowsOverdraft && billDay.trim() && !parseDay(billDay)) errs.billDay = 'Enter a day between 1 and 31';
     if (allowsOverdraft && dueDay.trim() && !parseDay(dueDay)) errs.dueDay = 'Enter a day between 1 and 31';
+    if (allowsOverdraft && !isEdit && creditLimit <= 0) errs.creditLimit = 'Enter the card\'s max balance';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
       const cardFields = {
         billDay: allowsOverdraft ? parseDay(billDay) : undefined,
         dueDay: allowsOverdraft ? parseDay(dueDay) : undefined,
+        creditLimit: allowsOverdraft && creditLimit > 0 ? creditLimit : undefined,
       };
       if (initial) {
         // Balance is computed from transactions, so edit only name + type.
@@ -125,9 +129,17 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
               numeric
               error={errors.dueDay}
             />
+            {isEdit ? null : (
+              <AmountInput
+                label="Max Balance"
+                value={creditLimit}
+                onChange={setCreditLimit}
+                error={errors.creditLimit}
+              />
+            )}
           </>
         )}
-        {isEdit ? null : (
+        {isEdit || allowsOverdraft ? null : (
           <AmountInput label="Initial Balance" value={balance} onChange={setBalance} />
         )}
         <Button label={isEdit ? 'Save Changes' : 'Add Account'} onPress={handleSave} loading={saving} />

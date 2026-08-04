@@ -23,9 +23,10 @@ type Props = {
   onClose: () => void;
   onSuccess: () => void;
   initial?: Transaction | null;
+  lockAccountAndType?: boolean;
 };
 
-export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Props) {
+export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType }: Props) {
   const [amount, setAmount] = useState(0);
   // AddTransactionSheet only ever toggles Expense/Income — Transfer has its own TransferSheet.
   const [type, setType] = useState<'Expense' | 'Income'>('Expense');
@@ -149,25 +150,27 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.typeRow}>
-          {(['Expense', 'Income'] as const).map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => {
-                setType(t);
-                setCategoryId(null);
-                if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={t}
-              style={[styles.typeBtn, type === t && styles.typeBtnActive]}
-            >
-              <AppText variant="labelLg" color={type === t ? 'bgPrimary' : 'textSecondary'}>
-                {t}
-              </AppText>
-            </Pressable>
-          ))}
-        </View>
+        {lockAccountAndType ? null : (
+          <View style={styles.typeRow}>
+            {(['Expense', 'Income'] as const).map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => {
+                  setType(t);
+                  setCategoryId(null);
+                  if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t}
+                style={[styles.typeBtn, type === t && styles.typeBtnActive]}
+              >
+                <AppText variant="labelLg" color={type === t ? 'bgPrimary' : 'textSecondary'}>
+                  {t}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <AmountInput label="Amount" value={amount} onChange={setAmount} error={errors.amount} />
         <View style={styles.pickerRow}>
@@ -190,30 +193,32 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial }: Pr
             <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
           </Pressable>
         </View>
-        <View style={styles.pickerRow}>
-          <View style={styles.pickerFlex}>
-            <Select
-              label="Account"
-              options={[
-                ...(allowAccumulated
-                  ? [{ label: `Accumulated Balance (${formatPHP(accumulatedTotal(accounts))})`, value: ACCUMULATED_ID }]
-                  : []),
-                ...accounts.map((a) => ({ label: a.name, value: a.id })),
-              ]}
-              value={accountId}
-              onChange={setAccountId}
-              error={errors.accountId}
-            />
+        {lockAccountAndType ? null : (
+          <View style={styles.pickerRow}>
+            <View style={styles.pickerFlex}>
+              <Select
+                label="Account"
+                options={[
+                  ...(allowAccumulated
+                    ? [{ label: `Accumulated Balance (${formatPHP(accumulatedTotal(accounts))})`, value: ACCUMULATED_ID }]
+                    : []),
+                  ...accounts.map((a) => ({ label: a.name, value: a.id })),
+                ]}
+                value={accountId}
+                onChange={setAccountId}
+                error={errors.accountId}
+              />
+            </View>
+            <Pressable
+              onPress={() => setAccountSheetVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Add new account"
+              style={styles.plusBtn}
+            >
+              <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+            </Pressable>
           </View>
-          <Pressable
-            onPress={() => setAccountSheetVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Add new account"
-            style={styles.plusBtn}
-          >
-            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
-          </Pressable>
-        </View>
+        )}
         <DatePicker label="Date" value={date} onChange={setDate} />
         <AppTextInput
           label="Note (optional)"

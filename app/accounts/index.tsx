@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
 import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
 import { TransferSheet } from '../../src/components/transactions/TransferSheet';
-import { accountRepo, transactionRepo } from '../../src/repositories';
+import { accountRepo, debtRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { theme } from '../../src/theme';
 import type { Account } from '../../src/domain/types';
@@ -111,6 +111,7 @@ export default function AccountsScreen() {
   const [addMoneyAccount, setAddMoneyAccount] = useState<Account | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [deleteBlocked, setDeleteBlocked] = useState(false);
+  const [deleteHasHistory, setDeleteHasHistory] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
@@ -122,8 +123,12 @@ export default function AccountsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function handleDeletePress(account: Account) {
+    const debts = await debtRepo.list();
+    const linkedDebt = debts.find((d) => d.linkedAccountId === account.id);
+    const owed = linkedDebt ? linkedDebt.outstandingBalance : account.currentBalance;
     const txns = await transactionRepo.list({ accountId: account.id });
-    setDeleteBlocked(txns.length > 0);
+    setDeleteBlocked(owed !== 0);
+    setDeleteHasHistory(txns.length > 0 || linkedDebt !== undefined);
     setPendingDelete(account);
   }
 
@@ -142,6 +147,7 @@ export default function AccountsScreen() {
   function handleDialogDismiss() {
     setPendingDelete(null);
     setDeleteBlocked(false);
+    setDeleteHasHistory(false);
   }
 
   return (
@@ -228,8 +234,10 @@ export default function AccountsScreen() {
         title={deleteBlocked ? 'Cannot Delete' : 'Delete Account'}
         message={
           deleteBlocked
-            ? `"${pendingDelete?.name}" has transactions and cannot be deleted.`
-            : `Delete "${pendingDelete?.name}"? This cannot be undone.`
+            ? `"${pendingDelete?.name}" still has an outstanding balance. Pay it off before deleting.`
+            : deleteHasHistory
+              ? `"${pendingDelete?.name}" has debts or transactions linked to it. Deleting it won't delete them — they'll stay visible, marked as a deleted account. You can manually delete individual transactions later from Settings > Transaction Archive.`
+              : `Delete "${pendingDelete?.name}"? This cannot be undone.`
         }
         confirmLabel={deleteBlocked ? 'OK' : deleting ? 'Deleting…' : 'Delete'}
         onConfirm={deleteBlocked ? handleDialogDismiss : handleDeleteConfirm}

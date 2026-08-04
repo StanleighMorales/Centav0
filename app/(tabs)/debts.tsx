@@ -9,6 +9,7 @@ import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Amount } from '../../src/components/ui/Amount';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
+import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
@@ -26,9 +27,10 @@ type DebtRowProps = {
   creditLimit: number | null;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
+  onDelete: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: DebtRowProps) {
   const swipeRef = useRef<Swipeable>(null);
 
   return (
@@ -36,15 +38,26 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit }: DebtRowProps
       ref={swipeRef}
       overshootRight={false}
       renderRightActions={debt.linkedAccountId ? undefined : () => (
-        <Pressable
-          onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit debt from ${debt.creditor}`}
-          style={styles.editAction}
-        >
-          <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
-          <AppText variant="labelSm" color="textPrimary">Edit</AppText>
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => { swipeRef.current?.close(); onEdit(debt); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit debt from ${debt.creditor}`}
+            style={styles.editAction}
+          >
+            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Edit</AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => { swipeRef.current?.close(); onDelete(debt); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete debt from ${debt.creditor}`}
+            style={styles.deleteAction}
+          >
+            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Delete</AppText>
+          </Pressable>
+        </View>
       )}
     >
       <Pressable
@@ -115,6 +128,7 @@ export default function DebtsScreen() {
   const [loading, setLoading] = useState(true);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editDebt, setEditDebt] = useState<Debt | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Debt | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
   const [monthPayments, setMonthPayments] = useState<{ debtId: string; amount: number }[]>([]);
 
@@ -135,7 +149,20 @@ export default function DebtsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const typeDebts = debts.filter((d) => d.debtType === activeType);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    await debtRepo.softDelete(deleteTarget.id);
+    setDeleteTarget(null);
+    load();
+  }
+
+  // Auto-managed credit cards stay hidden only while truly untouched — a fresh
+  // card at ₱0 isn't a debt yet. One that was charged and paid off still has
+  // payment history, so it stays visible (on the Paid tab) instead of vanishing.
+  const typeDebts = debts.filter(
+    (d) => d.debtType === activeType
+      && !(d.linkedAccountId && d.outstandingBalance <= 0 && !(paidTotals[d.id] > 0)),
+  );
   const typeDebtIds = new Set(typeDebts.map((d) => d.id));
   const paidThisMonth = monthPayments
     .filter((p) => typeDebtIds.has(p.debtId))
@@ -245,6 +272,7 @@ export default function DebtsScreen() {
               creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
+              onDelete={setDeleteTarget}
             />
           )}
         />
@@ -265,6 +293,16 @@ export default function DebtsScreen() {
         initial={editDebt ?? undefined}
         onClose={() => setEditDebt(null)}
         onSuccess={load}
+      />
+
+      <ConfirmDialog
+        visible={deleteTarget !== null}
+        title="Delete Debt"
+        message={`Delete debt from "${deleteTarget?.creditor}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+        destructive
       />
     </View>
   );
@@ -326,12 +364,20 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.borderDefault,
     backgroundColor: theme.colors.bgPrimary,
   },
+  actions: { flexDirection: 'row', alignItems: 'stretch' },
   editAction: {
     width: 76,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],
     backgroundColor: theme.colors.bgElevated,
+  },
+  deleteAction: {
+    width: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.negative,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {

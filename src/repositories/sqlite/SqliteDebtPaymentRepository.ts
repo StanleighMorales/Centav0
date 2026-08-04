@@ -5,7 +5,7 @@ import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
 import type { DebtPaymentFilter, IDebtPaymentRepository } from '../IDebtPaymentRepository';
-import type { DebtPayment, CreateDebtPaymentInput } from '../../domain/types';
+import type { DebtPayment, CreateDebtPaymentInput, SettleChargesInput } from '../../domain/types';
 
 function rowToPayment(row: any): DebtPayment {
   return {
@@ -103,6 +103,65 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
     return created;
   }
 
+  async settle(debtId: string, input: SettleChargesInput): Promise<void> {
+    if (input.transactionIds.length === 0) throw new Error('No charges selected');
+    const db = await getDatabase();
+    const now = nowIso();
+    const debt = await db.getFirstAsync<any>(
+      `SELECT linkedAccountId FROM debts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [debtId, FIXED_USER_ID],
+    );
+    if (!debt) throw new Error(`Debt ${debtId} not found`);
+    if (!debt.linkedAccountId) throw new Error('Only Credit Card charges can be settled individually');
+    if (input.accountId === debt.linkedAccountId) throw new Error('Choose a different account to pay from');
+    // Only the referenced charges still unsettled on this card count toward the payment.
+    const placeholders = input.transactionIds.map(() => '?').join(',');
+    const charges = await db.getAllAsync<any>(
+      `SELECT id, amount FROM transactions
+       WHERE id IN (${placeholders}) AND userId = ? AND accountId = ? AND type = 'Expense'
+         AND settledAt IS NULL AND deletedAt IS NULL`,
+      [...input.transactionIds, FIXED_USER_ID, debt.linkedAccountId],
+    );
+    if (charges.length === 0) throw new Error('No unsettled charges to pay');
+    // Amount is derived from the charges themselves, never trusted from the caller,
+    // so Σ(settled charges) always matches the credit freed and the debt stays exact.
+    const amount = roundCentavos(charges.reduce((sum: number, c: any) => sum + c.amount, 0));
+    const account = await db.getFirstAsync<any>(
+      `SELECT currentBalance FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+      [input.accountId, FIXED_USER_ID],
+    );
+    if (!account) throw new Error(`Account ${input.accountId} not found`);
+    if (amount > roundCentavos(account.currentBalance)) throw new Error('Payment exceeds account balance');
+    const paymentId = newId();
+    const settledIds = charges.map((c: any) => c.id);
+    const settledPlaceholders = settledIds.map(() => '?').join(',');
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `INSERT INTO debt_payments (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [paymentId, FIXED_USER_ID, debtId, input.date, amount, input.accountId, now, now],
+      );
+      // Money leaves the paying account…
+      await db.runAsync(
+        `UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [amount, now, input.accountId, FIXED_USER_ID],
+      );
+      // …and frees that much credit back on the card.
+      await db.runAsync(
+        `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+        [amount, now, debt.linkedAccountId, FIXED_USER_ID],
+      );
+      // Mark the paid charges settled, linked to this payment so a reversal can un-settle them.
+      await db.runAsync(
+        `UPDATE transactions SET settledAt = ?, settledPaymentId = ?, updatedAt = ?, isDirty = 1
+         WHERE id IN (${settledPlaceholders}) AND userId = ?`,
+        [now, paymentId, now, ...settledIds, FIXED_USER_ID],
+      );
+      await syncLinkedCreditDebt(db, debt.linkedAccountId);
+      await syncLinkedCreditDebt(db, input.accountId);
+    });
+  }
+
   async softDelete(id: string): Promise<void> {
     const payment = await this.getById(id);
     if (!payment) return;
@@ -116,6 +175,11 @@ export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
       await db.runAsync(
         `UPDATE debt_payments SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [now, now, id, FIXED_USER_ID],
+      );
+      // If this payment settled Credit Card charges, un-settle them so they're owed again.
+      await db.runAsync(
+        `UPDATE transactions SET settledAt = NULL, settledPaymentId = NULL, updatedAt = ?, isDirty = 1 WHERE settledPaymentId = ? AND userId = ?`,
+        [now, id, FIXED_USER_ID],
       );
       // Restore outstanding balance and reopen debt
       await db.runAsync(

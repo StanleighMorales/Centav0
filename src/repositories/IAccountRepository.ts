@@ -2,6 +2,7 @@ import type { Account, CreateAccountInput, UpdateAccountInput } from '../domain/
 
 export interface IAccountRepository {
   list(): Promise<Account[]>;
+  listDeleted(): Promise<Account[]>;
   getById(id: string): Promise<Account | null>;
   create(input: CreateAccountInput): Promise<Account>;
   update(id: string, input: UpdateAccountInput): Promise<Account>;

@@ -35,6 +35,15 @@ export class SqliteAccountRepository implements IAccountRepository {
     return rows.map(rowToAccount);
   }
 
+  async listDeleted(): Promise<Account[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<any>(
+      `${SELECT_ACCOUNT} WHERE a.userId = ? AND a.deletedAt IS NOT NULL ORDER BY a.deletedAt DESC`,
+      [FIXED_USER_ID],
+    );
+    return rows.map(rowToAccount);
+  }
+
   async getById(id: string): Promise<Account | null> {
     const db = await getDatabase();
     const row = await db.getFirstAsync<any>(

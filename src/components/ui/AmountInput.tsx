@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { AppText } from './AppText';
 import { theme } from '../../theme';
@@ -14,6 +14,14 @@ type Props = {
 // ponytail: keeps raw string for editing, converts to number on blur
 export function AmountInput({ label, value, onChange, error, autoFocus }: Props) {
   const [raw, setRaw] = useState(value > 0 ? String(value) : '');
+  const skipNextSync = useRef(false);
+
+  // Resync when `value` changes from outside (e.g. loading a record to edit) —
+  // skip right after our own onChange so mid-typing decimals aren't clobbered.
+  useEffect(() => {
+    if (skipNextSync.current) { skipNextSync.current = false; return; }
+    setRaw(value > 0 ? String(value) : '');
+  }, [value]);
 
   function handleChange(text: string) {
     const cleaned = text.replace(/[^0-9.]/g, '');
@@ -21,6 +29,7 @@ export function AmountInput({ label, value, onChange, error, autoFocus }: Props)
     const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
     setRaw(normalized);
     const num = parseFloat(normalized);
+    skipNextSync.current = true;
     onChange(isNaN(num) ? 0 : num);
   }
 

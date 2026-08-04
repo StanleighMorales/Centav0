@@ -16,6 +16,7 @@ function rowToTransaction(row: any): Transaction {
     toAccountId: row.toAccountId ?? null,
     note: row.note ?? null,
     receiptUri: row.receiptUri ?? null,
+    settledAt: row.settledAt ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -41,6 +42,15 @@ export class SqliteTransactionRepository implements ITransactionRepository {
     const rows = await db.getAllAsync<any>(
       `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date DESC, createdAt DESC`,
       params,
+    );
+    return rows.map(rowToTransaction);
+  }
+
+  async listDeleted(): Promise<Transaction[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<any>(
+      `SELECT * FROM transactions WHERE userId = ? AND deletedAt IS NOT NULL ORDER BY deletedAt DESC`,
+      [FIXED_USER_ID],
     );
     return rows.map(rowToTransaction);
   }
@@ -133,6 +143,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
   async update(id: string, input: UpdateTransactionInput): Promise<Transaction> {
     const existing = await this.getById(id);
     if (!existing) throw new Error(`Transaction ${id} not found`);
+    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     if (existing.type === 'Transfer' || input.type === 'Transfer') {
       throw new Error('Transfers cannot be edited — delete and recreate instead');
     }
@@ -185,6 +196,7 @@ export class SqliteTransactionRepository implements ITransactionRepository {
   async softDelete(id: string): Promise<void> {
     const existing = await this.getById(id);
     if (!existing) return;
+    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     const db = await getDatabase();
     const now = nowIso();
     await db.withTransactionAsync(async () => {

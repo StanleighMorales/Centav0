@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator, Animated } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,13 +12,84 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
+import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import type { Debt, DebtPayment, Account } from '../../src/domain/types';
+import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
-type CategorySpend = { name: string; total: number };
+type Charge = Transaction & { label: string };
+type SettleTarget = { transactionIds: string[]; amount: number; label: string };
+
+const CHARGE_ACTION_WIDTH = 76;
+
+type ChargeRowProps = {
+  charge: Charge;
+  onPay: (c: Charge) => void;
+  onEdit: (c: Charge) => void;
+  onDelete: (c: Charge) => void;
+};
+
+function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
+  const swipeRef = useRef<Swipeable>(null);
+  const close = () => swipeRef.current?.close();
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootRight={false}
+      renderRightActions={(progress) => (
+        <Animated.View
+          style={[
+            styles.chargeActions,
+            {
+              transform: [{
+                translateX: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [CHARGE_ACTION_WIDTH * 2, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          <Pressable
+            onPress={() => { close(); onEdit(charge); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit charge ${charge.label}`}
+            style={[styles.chargeAction, styles.chargeEditAction]}
+          >
+            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Edit</AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => { close(); onDelete(charge); }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete charge ${charge.label}`}
+            style={[styles.chargeAction, styles.chargeDeleteAction]}
+          >
+            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <AppText variant="labelSm" color="textPrimary">Delete</AppText>
+          </Pressable>
+        </Animated.View>
+      )}
+    >
+      <Pressable
+        onPress={() => onPay(charge)}
+        accessibilityRole="button"
+        accessibilityLabel={`Pay charge ${charge.label}, ${formatPHP(charge.amount)}`}
+        style={({ pressed }) => [styles.chargeRow, pressed && styles.rowPressed]}
+      >
+        <View style={styles.chargeInfo}>
+          <AppText variant="body">{charge.label}</AppText>
+          <AppText variant="bodySm" color="textMuted">{displayDate(charge.date)}</AppText>
+        </View>
+        <Amount value={charge.amount} variant="amountSm" semanticColor={false} />
+        <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+      </Pressable>
+    </Swipeable>
+  );
+}
 
 export default function DebtDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,11 +98,15 @@ export default function DebtDetailScreen() {
   const [debt, setDebt] = useState<Debt | null>(null);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState<CategorySpend[]>([]);
+  const [charges, setCharges] = useState<Charge[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
+  const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [editCharge, setEditCharge] = useState<Charge | null>(null);
+  const [deleteCharge, setDeleteCharge] = useState<Charge | null>(null);
+  const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -45,18 +121,17 @@ export default function DebtDetailScreen() {
       const txns = await transactionRepo.list({ accountId: d.linkedAccountId, type: 'Expense' });
       const cats = await categoryRepo.list();
       const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
-      const totals: Record<string, number> = {};
-      for (const t of txns) {
-        if (!t.categoryId) continue;
-        totals[t.categoryId] = (totals[t.categoryId] ?? 0) + t.amount;
-      }
-      setCategoryBreakdown(
-        Object.entries(totals)
-          .map(([categoryId, total]) => ({ name: catName[categoryId] ?? 'Other', total }))
-          .sort((x, y) => y.total - x.total),
+      // Only unsettled charges are still owed; settled ones live in Payment History.
+      setCharges(
+        txns
+          .filter((t) => t.settledAt == null)
+          .map((t) => ({
+            ...t,
+            label: t.note || catName[t.categoryId ?? ''] || 'Charge',
+          })),
       );
     } else {
-      setCategoryBreakdown([]);
+      setCharges([]);
     }
     setLoading(false);
   }, [id]);
@@ -70,6 +145,14 @@ export default function DebtDetailScreen() {
     if (!debt) return;
     await debtRepo.softDelete(debt.id);
     router.back();
+  }
+
+  async function handleDeleteCharge() {
+    if (!deleteCharge) return;
+    await transactionRepo.softDelete(deleteCharge.id);
+    setDeleteCharge(null);
+    setChargeDeletedNotice(true);
+    load();
   }
 
   if (loading) {
@@ -181,7 +264,7 @@ export default function DebtDetailScreen() {
           ) : null}
         </Card>
 
-        {debt.status !== 'Paid' && (
+        {debt.status !== 'Paid' && !debt.linkedAccountId && (
           <View style={styles.actions}>
             <Button
               label="Add Payment"
@@ -191,14 +274,27 @@ export default function DebtDetailScreen() {
           </View>
         )}
 
-        {categoryBreakdown.length > 0 && (
+        {debt.linkedAccountId && charges.length > 0 && (
           <>
-            <AppText variant="h3" style={styles.sectionTitle}>Charges by Category</AppText>
-            {categoryBreakdown.map((c) => (
-              <View key={c.name} style={styles.categoryRow}>
-                <AppText variant="body" color="textSecondary">{c.name}</AppText>
-                <Amount value={c.total} variant="amountSm" semanticColor={false} />
-              </View>
+            <Button
+              label={`Pay All · ${formatPHP(debt.outstandingBalance)}`}
+              onPress={() =>
+                setSettleTarget({
+                  transactionIds: charges.map((c) => c.id),
+                  amount: debt.outstandingBalance,
+                  label: 'all charges',
+                })
+              }
+            />
+            <AppText variant="h3" style={styles.sectionTitle}>Charges</AppText>
+            {charges.map((c) => (
+              <ChargeRow
+                key={c.id}
+                charge={c}
+                onPay={(charge) => setSettleTarget({ transactionIds: [charge.id], amount: charge.amount, label: charge.label })}
+                onEdit={setEditCharge}
+                onDelete={setDeleteCharge}
+              />
             ))}
           </>
         )}
@@ -224,11 +320,7 @@ export default function DebtDetailScreen() {
           ))
         )}
 
-        {debt.linkedAccountId ? (
-          <AppText variant="bodySm" color="textMuted" style={styles.linkedNote}>
-            This debt tracks your Credit Card account automatically. Delete the account to remove it.
-          </AppText>
-        ) : (
+        {debt.linkedAccountId ? null : (
           <Pressable
             onPress={() => setDeleteVisible(true)}
             accessibilityRole="button"
@@ -259,6 +351,16 @@ export default function DebtDetailScreen() {
         monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
       />
 
+      <AddPaymentSheet
+        visible={settleTarget !== null}
+        onClose={() => setSettleTarget(null)}
+        onSuccess={load}
+        debtId={debt.id}
+        creditor={debt.creditor}
+        outstandingBalance={debt.outstandingBalance}
+        settle={settleTarget ?? undefined}
+      />
+
       <ConfirmDialog
         visible={deleteVisible}
         title="Delete Debt"
@@ -267,6 +369,33 @@ export default function DebtDetailScreen() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteVisible(false)}
         destructive
+      />
+
+      <AddTransactionSheet
+        visible={editCharge !== null}
+        initial={editCharge}
+        lockAccountAndType
+        onClose={() => setEditCharge(null)}
+        onSuccess={() => { setEditCharge(null); load(); }}
+      />
+
+      <ConfirmDialog
+        visible={deleteCharge !== null}
+        title="Delete Charge"
+        message={`Delete charge "${deleteCharge?.label}" (${formatPHP(deleteCharge?.amount ?? 0)})? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteCharge}
+        onCancel={() => setDeleteCharge(null)}
+        destructive
+      />
+
+      <ConfirmDialog
+        visible={chargeDeletedNotice}
+        title="Charge Deleted"
+        message="This charge was removed and its amount was returned to your available credit. You can find it in Settings > Transaction Archive."
+        confirmLabel="OK"
+        onConfirm={() => setChargeDeletedNotice(false)}
+        onCancel={() => setChargeDeletedNotice(false)}
       />
     </View>
   );
@@ -320,18 +449,25 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing[4],
   },
   paymentInfo: { flex: 1, gap: theme.spacing[1] },
-  categoryRow: {
+  chargeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: theme.spacing[3],
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.borderDefault,
   },
-  linkedNote: {
-    textAlign: 'center',
-    marginTop: theme.spacing[3],
-    paddingVertical: theme.spacing[5],
+  chargeInfo: { flex: 1, gap: theme.spacing[1] },
+  rowPressed: { opacity: 0.6 },
+  chargeActions: { flexDirection: 'row', alignItems: 'stretch' },
+  chargeAction: {
+    width: CHARGE_ACTION_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing[2],
   },
+  chargeEditAction: { backgroundColor: theme.colors.bgElevated },
+  chargeDeleteAction: { backgroundColor: theme.colors.negative },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',

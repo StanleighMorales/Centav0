@@ -48,6 +48,9 @@ export function MoreMenuSheet({ visible, onClose }: Props) {
       <MenuItem icon="pie-chart" label="Budgets" onPress={() => go('/budgets')} />
       <MenuItem icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
 
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>SETTINGS</AppText>
+      <MenuItem icon="archive" label="Transaction Archive" onPress={() => go('/transaction-archive')} />
+
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>HELP</AppText>
       <MenuItem icon="help-circle" label="How to use Centav0" onPress={() => go('/onboarding/tutorial?replay=1')} />
     </BottomSheet>

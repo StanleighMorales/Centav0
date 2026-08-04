@@ -51,6 +51,7 @@ export default function TransactionsScreen() {
   const [detailTransaction, setDetailTransaction] = useState<Transaction | null>(null);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
+  const [undoneNotice, setUndoneNotice] = useState(false);
 
   const load = useCallback(async (activeFilter: Filter, activeDateFilter: DateFilter) => {
     setLoading(true);
@@ -62,7 +63,11 @@ export default function TransactionsScreen() {
     const cats = await categoryRepo.list();
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     const accs = await accountRepo.list();
-    setAccountMap(Object.fromEntries(accs.map((a) => [a.id, a.name])));
+    const deletedAccs = await accountRepo.listDeleted();
+    setAccountMap(Object.fromEntries([
+      ...accs.map((a) => [a.id, a.name]),
+      ...deletedAccs.map((a) => [a.id, `${a.name} (Deleted ${displayDate(a.deletedAt!)})`]),
+    ]));
     setSections(groupByDate(txns));
     setLoading(false);
   }, []);
@@ -83,6 +88,7 @@ export default function TransactionsScreen() {
     if (!pendingUndo) return;
     await transactionRepo.softDelete(pendingUndo.id);
     setPendingUndo(null);
+    setUndoneNotice(true);
     load(filter, dateFilter);
   }
 
@@ -199,6 +205,15 @@ export default function TransactionsScreen() {
         confirmLabel="Undo"
         onConfirm={handleUndo}
         onCancel={() => setPendingUndo(null)}
+      />
+
+      <ConfirmDialog
+        visible={undoneNotice}
+        title="Transaction Deleted"
+        message="This transaction was removed. You can find it in Settings > Transaction Archive."
+        confirmLabel="OK"
+        onConfirm={() => setUndoneNotice(false)}
+        onCancel={() => setUndoneNotice(false)}
       />
     </View>
   );

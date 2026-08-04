@@ -2,6 +2,7 @@ import type { Transaction, CreateTransactionInput, UpdateTransactionInput, Trans
 
 export interface ITransactionRepository {
   list(filter?: TransactionFilter): Promise<Transaction[]>;
+  listDeleted(): Promise<Transaction[]>;
   getById(id: string): Promise<Transaction | null>;
   create(input: CreateTransactionInput): Promise<Transaction>;
   createTransfer(input: CreateTransferInput): Promise<Transaction>;

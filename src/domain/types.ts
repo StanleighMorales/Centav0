@@ -73,6 +73,8 @@ export interface Transaction extends AuditFields, LocalSyncFields {
   toAccountId: string | null;
   note: string | null;
   receiptUri: string | null;
+  /** When this Credit Card charge was paid off. Null = still owed. Non-credit charges stay null. */
+  settledAt: string | null;
 }
 
 export interface CreateTransactionInput {
@@ -135,6 +137,9 @@ export interface DebtPayment extends AuditFields, LocalSyncFields {
   date: string; amount: number; accountId: string;
 }
 export interface CreateDebtPaymentInput { date: string; amount: number; accountId: string; }
+
+/** Pay off specific Credit Card charges. Amount is derived from the charges, not passed. */
+export interface SettleChargesInput { transactionIds: string[]; accountId: string; date: string; }
 
 export type AllocationPeriod = 'Weekly' | 'Monthly';
 

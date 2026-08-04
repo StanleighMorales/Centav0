@@ -309,6 +309,18 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`ALTER TABLE accounts ADD COLUMN creditLimit REAL;`);
     },
   },
+  {
+    name: '013_credit_charge_settlement',
+    up: async (db) => {
+      // Per-charge settlement for Credit Card accounts: which individual charge
+      // a payment cleared. Null = still owed. No backfill — existing charges
+      // read as unsettled, which correctly matches each card's current balance.
+      await db.execAsync(`
+        ALTER TABLE transactions ADD COLUMN settledAt TEXT;
+        ALTER TABLE transactions ADD COLUMN settledPaymentId TEXT;
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

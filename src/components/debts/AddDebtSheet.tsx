@@ -32,6 +32,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   const [isInstallment, setIsInstallment] = useState(false);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [installmentFee, setInstallmentFee] = useState(0);
+  const [termMonths, setTermMonths] = useState('');
+  const [monthlyInterest, setMonthlyInterest] = useState(0);
   const [accountId, setAccountId] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
@@ -52,6 +54,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
       setIsInstallment(initial?.isInstallment ?? false);
       setMonthlyPayment(initial?.monthlyPayment ?? 0);
       setInstallmentFee(initial?.installmentFee ?? 0);
+      setTermMonths(initial?.termMonths != null ? String(initial.termMonths) : '');
+      setMonthlyInterest(initial?.monthlyInterest ?? 0);
       setAccountId('');
       setErrors({});
       if (isLoan) accountRepo.list().then(setAccounts);
@@ -63,6 +67,9 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
     if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
+    if (isInstallment && (!termMonths.trim() || parseInt(termMonths, 10) <= 0)) {
+      errs.termMonths = 'Enter the number of months';
+    }
     if (!isEdit && isLoan && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
@@ -72,6 +79,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         isInstallment,
         monthlyPayment: isInstallment ? monthlyPayment : undefined,
         installmentFee: isInstallment && installmentFee > 0 ? installmentFee : undefined,
+        termMonths: isInstallment ? parseInt(termMonths, 10) : undefined,
+        monthlyInterest: isInstallment && monthlyInterest > 0 ? monthlyInterest : undefined,
       };
       if (isEdit && initial) {
         await debtRepo.update(initial.id, {
@@ -186,6 +195,19 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
               value={monthlyPayment}
               onChange={setMonthlyPayment}
               error={errors.monthlyPayment}
+            />
+            <AppTextInput
+              label="Term (months)"
+              value={termMonths}
+              onChangeText={setTermMonths}
+              placeholder="e.g. 12"
+              error={errors.termMonths}
+              numeric
+            />
+            <AmountInput
+              label="Monthly Interest (optional)"
+              value={monthlyInterest}
+              onChange={setMonthlyInterest}
             />
             <AmountInput
               label="Other Fees (optional)"

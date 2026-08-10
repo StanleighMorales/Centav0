@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, FlatList, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,8 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
+import { MonthlyDebtView } from '../../src/components/debts/MonthlyDebtView';
+import { InstallmentGridView } from '../../src/components/debts/InstallmentGridView';
 import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
 import { theme } from '../../src/theme';
 import { displayDate, monthRangeIso } from '../../src/utils/date';
@@ -20,6 +22,8 @@ import type { Account, Debt, DebtStatus, DebtType } from '../../src/domain/types
 
 const TYPE_TABS: DebtType[] = ['Credit', 'Loan', 'Custom'];
 const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
+const VIEW_MODES = ['List', 'Monthly', 'Grid'] as const;
+type ViewMode = (typeof VIEW_MODES)[number];
 
 type DebtRowProps = {
   debt: Debt;
@@ -121,6 +125,7 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
 export default function DebtsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<ViewMode>('List');
   const [activeType, setActiveType] = useState<DebtType>('Credit');
   const [activeStatus, setActiveStatus] = useState<DebtStatus>('Open');
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -180,6 +185,39 @@ export default function DebtsScreen() {
         <ScreenHeader title="Debts" />
       </View>
 
+      <View style={styles.viewModeRow}>
+        {VIEW_MODES.map((mode) => (
+          <Pressable
+            key={mode}
+            onPress={() => setViewMode(mode)}
+            accessibilityRole="tab"
+            accessibilityLabel={mode}
+            accessibilityState={{ selected: viewMode === mode }}
+            style={[styles.viewModeChip, viewMode === mode && styles.viewModeChipActive]}
+          >
+            <AppText variant="labelSm" color={viewMode === mode ? 'accentPrimary' : 'textSecondary'}>
+              {mode}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+
+      {viewMode === 'Monthly' ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 80 + insets.bottom }}
+        >
+          <MonthlyDebtView debts={debts} accounts={accounts} />
+        </ScrollView>
+      ) : viewMode === 'Grid' ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 80 + insets.bottom }}
+        >
+          <InstallmentGridView debts={debts} accounts={accounts} />
+        </ScrollView>
+      ) : (
+        <>
       <View style={styles.tabRow}>
         {TYPE_TABS.map((tab) => (
           <Pressable
@@ -277,6 +315,8 @@ export default function DebtsScreen() {
           )}
         />
       )}
+        </>
+      )}
 
       <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add debt" />
 
@@ -315,6 +355,19 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[5],
     marginBottom: theme.spacing[4],
   },
+  viewModeRow: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing[5],
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[4],
+  },
+  viewModeChip: {
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.bgSurface,
+  },
+  viewModeChipActive: { backgroundColor: theme.colors.accentSubtle },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],

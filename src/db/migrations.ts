@@ -321,6 +321,18 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '014_savings_account_types',
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE account_types ADD COLUMN isSavings INTEGER NOT NULL DEFAULT 0;`);
+      const now = nowIso();
+      await db.runAsync(
+        `INSERT INTO account_types (id, userId, name, allowsOverdraft, isSavings, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, 'Savings', 0, 1, ?, ?, NULL, 1, NULL)`,
+        [newId(), FIXED_USER_ID, now, now],
+      );
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

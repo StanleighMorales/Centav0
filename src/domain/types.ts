@@ -14,9 +14,11 @@ export interface AccountType extends AuditFields, LocalSyncFields {
   userId: string;
   name: string;
   allowsOverdraft: boolean;
+  /** Held separately from Total Balance, like overdraft types. Never both. */
+  isSavings: boolean;
 }
-export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; }
-export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; }
+export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; isSavings?: boolean; }
+export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; isSavings?: boolean; }
 
 export interface Account extends AuditFields, LocalSyncFields {
   id: string;
@@ -27,6 +29,8 @@ export interface Account extends AuditFields, LocalSyncFields {
   allowsOverdraft: boolean;
   /** Joined from account_types for display. */
   typeName: string;
+  /** Joined from account_types. Excluded from Total Balance. */
+  isSavings: boolean;
   initialBalance: number;
   currentBalance: number;
   /** Day of month (1–31) the statement is generated. Overdraft-capable types only. */

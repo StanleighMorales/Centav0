@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../ui/AppText';
 import { Amount } from '../ui/Amount';
@@ -12,6 +12,7 @@ import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
 import { stillNeeded } from '../../utils/debtCoverage';
 import { buildSchedule, wholeLoanTotal, type ScheduleMonth } from '../../utils/installmentSchedule';
+import { getSetting, setSetting } from '../../repositories/settings';
 import type { Account, Debt } from '../../domain/types';
 
 type Props = { debts: Debt[]; accounts: Account[] };
@@ -33,22 +34,44 @@ export function InstallmentGridView({ debts, accounts }: Props) {
   const router = useRouter();
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [detailCell, setDetailCell] = useState<{ debt: Debt; month: ScheduleMonth } | null>(null);
+  const [expectedIncome, setExpectedIncome] = useState(0);
+  const [editingIncome, setEditingIncome] = useState(false);
+  const [incomeInput, setIncomeInput] = useState('');
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const loadIncome = useCallback(async () => {
+    const raw = await getSetting(`expectedIncome:${currentMonthKey}`);
+    setExpectedIncome(raw ? Number(raw) : 0);
+  }, [currentMonthKey]);
+
+  useEffect(() => { loadIncome(); }, [loadIncome]);
+  useFocusEffect(useCallback(() => { loadIncome(); }, [loadIncome]));
+
+  async function saveIncome() {
+    const value = Math.max(0, parseFloat(incomeInput) || 0);
+    setExpectedIncome(value);
+    setEditingIncome(false);
+    await setSetting(`expectedIncome:${currentMonthKey}`, String(value));
+  }
 
   const rows: LoanRow[] = debts
     .filter((d) => d.debtType === 'Loan' && d.isInstallment && d.termMonths)
     .map((debt) => ({ debt, schedule: buildSchedule(debt) }))
     .filter((row) => row.schedule.some((m) => new Date(m.dueDate).getFullYear() === selectedYear));
 
-  const now = new Date();
+  // Only what's still unpaid counts toward what the user still owes this month —
+  // a cell already marked 'paid' shouldn't keep inflating "Due This Month".
   const currentMonthTotal = rows.reduce((sum, row) => {
     const monthCell = row.schedule.find((m) => {
       const d = new Date(m.dueDate);
       return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     });
-    return sum + (monthCell?.amount ?? 0);
+    return sum + (monthCell && monthCell.status !== 'paid' ? monthCell.amount : 0);
   }, 0);
   const availableFunds = spendableAccounts(accounts).reduce((sum, a) => sum + a.currentBalance, 0);
-  const stillNeededAmount = stillNeeded(currentMonthTotal, availableFunds, 0);
+  const stillNeededAmount = stillNeeded(currentMonthTotal, availableFunds, expectedIncome);
 
   return (
     <View style={styles.container}>
@@ -81,6 +104,27 @@ export function InstallmentGridView({ debts, accounts }: Props) {
           <AppText variant="bodySm" color="textMuted">Available Funds</AppText>
           <Amount value={availableFunds} variant="amountSm" semanticColor={false} />
         </View>
+        <Pressable
+          style={styles.summaryRow}
+          onPress={() => { setIncomeInput(expectedIncome > 0 ? String(expectedIncome) : ''); setEditingIncome(true); }}
+          accessibilityRole="button"
+          accessibilityLabel="Edit expected income"
+        >
+          <AppText variant="bodySm" color="textMuted">Expected Income</AppText>
+          {editingIncome ? (
+            <TextInput
+              value={incomeInput}
+              onChangeText={setIncomeInput}
+              onBlur={saveIncome}
+              onSubmitEditing={saveIncome}
+              keyboardType="decimal-pad"
+              autoFocus
+              style={styles.incomeInput}
+            />
+          ) : (
+            <Amount value={expectedIncome} variant="amountSm" semanticColor={false} color="accentPrimary" />
+          )}
+        </Pressable>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryRow}>
           <AppText variant="labelLg">Still Needed</AppText>
@@ -131,6 +175,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
                       style={[styles.monthCell, { width: CELL_WIDTH }]}
                       disabled={!cell}
                       onPress={() => cell && setDetailCell({ debt, month: cell })}
+                      hitSlop={8}
                       accessibilityRole="button"
                       accessibilityLabel={
                         cell ? `${debt.creditor} ${MONTH_LABELS[monthIndex]} ${formatPHP(cell.amount)}, ${cell.status}` : 'No payment scheduled'
@@ -221,6 +266,13 @@ const styles = StyleSheet.create({
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   summaryDivider: { height: 1, backgroundColor: theme.colors.borderDefault },
+  incomeInput: {
+    ...theme.typography.amountSm,
+    color: theme.colors.accentPrimary,
+    minWidth: 80,
+    textAlign: 'right',
+    padding: 0,
+  },
   headerRow: { flexDirection: 'row' },
   row: {
     flexDirection: 'row',
@@ -236,6 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: theme.spacing[3],
+    minHeight: 44,
     gap: theme.spacing[1],
   },
   detail: { gap: theme.spacing[3] },

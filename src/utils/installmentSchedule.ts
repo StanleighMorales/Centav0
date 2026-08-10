@@ -12,10 +12,10 @@ export interface ScheduleMonth {
   status: ScheduleStatus;
 }
 
-// Advances `iso` by `months`, using the JS Date constructor's own
-// day-of-month clamping (e.g. Jan 31 + 1 month -> Feb 28), same approach
-// as nextDueDateIso in date.ts but for an arbitrary starting date instead
-// of "next occurrence from today".
+// Advances `iso` by `months`, clamping day-of-month to the last valid day
+// of the target month (e.g. Jan 31 + 1 month -> Feb 28). Plain Date construction
+// rolls over out-of-range days, so we explicitly compute and cap to the last
+// valid day of the target month instead.
 function addMonthsClamped(iso: string, months: number): string {
   const d = new Date(iso);
   const year = d.getFullYear();

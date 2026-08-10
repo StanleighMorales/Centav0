@@ -23,9 +23,9 @@ function makeDebt(overrides: Partial<Debt>): Debt {
 {
   const schedule = buildSchedule(makeDebt({}));
   assert.strictEqual(schedule.length, 5, 'termMonths=5 produces 5 rows');
-  assert.strictEqual(new Date(schedule[0].dueDate).getUTCMonth(), 0, 'month 0 due in Jan');
-  assert.strictEqual(new Date(schedule[1].dueDate).getUTCMonth(), 1, 'month 1 due in Feb');
-  assert.strictEqual(new Date(schedule[4].dueDate).getUTCMonth(), 4, 'month 4 due in May');
+  assert.strictEqual(new Date(schedule[0].dueDate).getMonth(), 0, 'month 0 due in Jan');
+  assert.strictEqual(new Date(schedule[1].dueDate).getMonth(), 1, 'month 1 due in Feb');
+  assert.strictEqual(new Date(schedule[4].dueDate).getMonth(), 4, 'month 4 due in May');
 }
 
 // Fee folds into month 0 only.

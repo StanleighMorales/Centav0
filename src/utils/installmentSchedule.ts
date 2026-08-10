@@ -12,26 +12,27 @@ export interface ScheduleMonth {
   status: ScheduleStatus;
 }
 
-// Advances `iso` by `months`, clamping the day to be valid in the target month
-// (e.g. Jan 31 + 1 month -> Feb 28), same approach as nextDueDateIso in date.ts
-// but for an arbitrary starting date instead of "next occurrence from today".
+// Advances `iso` by `months`, using the JS Date constructor's own
+// day-of-month clamping (e.g. Jan 31 + 1 month -> Feb 28), same approach
+// as nextDueDateIso in date.ts but for an arbitrary starting date instead
+// of "next occurrence from today".
 function addMonthsClamped(iso: string, months: number): string {
   const d = new Date(iso);
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth() + months;
-  let day = d.getUTCDate();
+  const year = d.getFullYear();
+  const month = d.getMonth() + months;
+  let day = d.getDate();
 
-  // Clamp day to the last valid day of the target month using Date.UTC's own normalization
-  // Date.UTC(year, month+1, 0) gives the last day of the month before month+1
-  const lastDayOfMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  if (day > lastDayOfMonth) {
-    day = lastDayOfMonth;
+  // Clamp day to the last valid day of the target month
+  // new Date(year, month + 1, 0) gives the last day of the month
+  const lastDayOfTargetMonth = new Date(year, month + 1, 0).getDate();
+  if (day > lastDayOfTargetMonth) {
+    day = lastDayOfTargetMonth;
   }
 
-  return new Date(Date.UTC(
-    y, m, day,
-    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
-  )).toISOString();
+  return new Date(
+    year, month, day,
+    d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds(),
+  ).toISOString();
 }
 
 /** Builds the full month-by-month schedule for an installment loan. Empty array if the debt isn't a valid installment plan. */

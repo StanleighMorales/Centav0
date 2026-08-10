@@ -67,8 +67,12 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
     if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
-    if (isInstallment && (!termMonths.trim() || parseInt(termMonths, 10) <= 0)) {
-      errs.termMonths = 'Enter the number of months';
+    let parsedTermMonths: number | undefined;
+    if (isInstallment) {
+      parsedTermMonths = parseInt(termMonths, 10);
+      if (!termMonths.trim() || Number.isNaN(parsedTermMonths) || parsedTermMonths <= 0) {
+        errs.termMonths = 'Enter the number of months';
+      }
     }
     if (!isEdit && isLoan && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
@@ -79,7 +83,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         isInstallment,
         monthlyPayment: isInstallment ? monthlyPayment : undefined,
         installmentFee: isInstallment && installmentFee > 0 ? installmentFee : undefined,
-        termMonths: isInstallment ? parseInt(termMonths, 10) : undefined,
+        termMonths: isInstallment ? parsedTermMonths : undefined,
         monthlyInterest: isInstallment && monthlyInterest > 0 ? monthlyInterest : undefined,
       };
       if (isEdit && initial) {

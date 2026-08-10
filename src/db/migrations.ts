@@ -333,6 +333,15 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    name: '015_installment_schedule',
+    up: async (db) => {
+      await db.execAsync(`
+        ALTER TABLE debts ADD COLUMN termMonths INTEGER;
+        ALTER TABLE debts ADD COLUMN monthlyInterest REAL;
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

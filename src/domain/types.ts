@@ -122,6 +122,10 @@ export interface Debt extends AuditFields, LocalSyncFields {
   isInstallment: boolean;
   monthlyPayment: number | null;
   installmentFee: number | null;
+  /** Total number of scheduled months for the installment plan. Installment loans only. */
+  termMonths: number | null;
+  /** Flat interest amount added on top of monthlyPayment each scheduled month. Installment loans only. */
+  monthlyInterest: number | null;
 }
 
 export interface CreateDebtInput {
@@ -130,10 +134,12 @@ export interface CreateDebtInput {
   accountId?: string;
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
 }
 export interface UpdateDebtInput {
   creditor?: string; dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
 }
 
 export interface DebtPayment extends AuditFields, LocalSyncFields {

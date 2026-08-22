@@ -155,14 +155,16 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           {dueDateEnabled ? (
             <View>
               <DatePicker label="Due Date" value={dueDate || nowIso()} onChange={setDueDate} />
-              <Pressable
-                onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
-                accessibilityRole="button"
-                accessibilityLabel="Remove due date"
-                style={styles.clearDate}
-              >
-                <AppText variant="bodySm" color="textMuted">Remove due date</AppText>
-              </Pressable>
+              {!isInstallment && (
+                <Pressable
+                  onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove due date"
+                  style={styles.clearDate}
+                >
+                  <AppText variant="bodySm" color="textMuted">Remove due date</AppText>
+                </Pressable>
+              )}
             </View>
           ) : (
             <Pressable
@@ -186,7 +188,13 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           </View>
           <Switch
             value={isInstallment}
-            onValueChange={setIsInstallment}
+            onValueChange={(on) => {
+              setIsInstallment(on);
+              // An installment plan schedules from the due date; without one
+              // buildSchedule() returns [] and the loan silently vanishes from
+              // the Monthly and Grid views.
+              if (on && !dueDateEnabled) { setDueDateEnabled(true); setDueDate(nowIso()); }
+            }}
             accessibilityLabel="Installment plan"
             trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
             thumbColor={isInstallment ? theme.colors.accentPrimary : theme.colors.textMuted}

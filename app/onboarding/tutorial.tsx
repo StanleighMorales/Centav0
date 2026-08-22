@@ -39,6 +39,16 @@ const SLIDES: Slide[] = [
     ],
   },
   {
+    icon: 'sliders',
+    title: 'Account types',
+    body: 'Types group your accounts and decide which ones count as spendable. Mark a type as Savings and its balance stays out of the “available funds” your debts are measured against — so money you’re setting aside is never counted as money you can spend.',
+    steps: [
+      'Open More ▸ Account Types',
+      'Tap + to add your own type',
+      'Flag it as Savings to ring-fence it',
+    ],
+  },
+  {
     icon: 'arrow-down-circle',
     title: 'Add income',
     body: 'Money coming in raises an account’s balance.',
@@ -63,6 +73,16 @@ const SLIDES: Slide[] = [
     ],
   },
   {
+    icon: 'repeat',
+    title: 'Move money between accounts',
+    body: 'Moving cash into your bank isn’t income or an expense — it’s a transfer. One account drops, the other rises, and your total balance stays exactly the same.',
+    steps: [
+      'Tap the ⇄ button beside ACCOUNTS on the dashboard',
+      'Pick the account it leaves and the one it lands in',
+      'Enter the amount, then Save',
+    ],
+  },
+  {
     icon: 'tag',
     title: 'Categories',
     body: 'Categories label each transaction — Salary, Food, Transport, Bills. Income and expense keep separate sets.',
@@ -84,17 +104,71 @@ const SLIDES: Slide[] = [
   {
     icon: 'trending-down',
     title: 'Debts',
-    body: 'Track money you owe and pay down over time.',
+    body: 'Track money you owe across three kinds: Credit for cards and credit lines, Loan for borrowed cash, and Custom for anything else. Borrowing can pay straight into an account, so the cash shows up where it actually landed.',
     steps: [
-      'Add a debt with its total amount',
-      'Log each payment as you pay',
-      'See open, overdue, and paid at a glance',
+      'Tap + on the Debts tab',
+      'Name the creditor and the amount owed',
+      'Choose which account receives the money',
+      'Log each payment as you pay it down',
+    ],
+  },
+  {
+    icon: 'calendar',
+    title: 'Installment plans',
+    body: 'Paying something off monthly? Turn on Installment plan and Centav0 builds the whole payment schedule for you — every month of the term, with interest and any one-time fee folded in.',
+    steps: [
+      'Switch on Installment plan when adding the debt',
+      'Enter the Monthly Payment and Term (months)',
+      'Add Monthly Interest and Other Fees if they apply',
+      'The due date sets when month one falls — it’s required here',
+    ],
+  },
+  {
+    icon: 'grid',
+    title: 'Three ways to see what’s due',
+    body: 'The Debts tab switches between List, Monthly, and Grid. List is every debt at a glance. Monthly is one month at a time. Grid lays your installment loans out as rows against all twelve months, so a whole year of payments fits on one screen.',
+    steps: [
+      'Tap List, Monthly, or Grid at the top',
+      'Swipe the Grid sideways to reach later months',
+      'Tap any cell for that month’s principal and interest',
+      'Set Expected Income and Still Needed tells you the shortfall',
+    ],
+  },
+  {
+    icon: 'users',
+    title: 'Money you lent out',
+    body: 'The Lent tab is the mirror of Debts — what other people owe you. Lendings are grouped by person, and the money leaves whichever account you lent it from, so your balances stay honest.',
+    steps: [
+      'Open the Lent tab and tap +',
+      'Pick or add the person who borrowed',
+      'Enter the amount and the account it came out of',
+      'Log repayments until it flips to Paid',
+    ],
+  },
+  {
+    icon: 'bar-chart-2',
+    title: 'Reports',
+    body: 'See income against expense for any stretch of time, plus where the money actually went — every category ranked by total, with its share of your spending.',
+    steps: [
+      'Open More ▸ Reports',
+      'Pick a preset period, or set your own From and To dates',
+      'Read the category breakdown underneath',
+    ],
+  },
+  {
+    icon: 'tool',
+    title: 'Handy extras',
+    body: 'A calculator sits in the header of every screen — tap it beside the ⋮ menu whenever you need to work out a figure mid-entry. And nothing you delete is truly gone.',
+    steps: [
+      'Tap the calculator icon in the header, beside the ⋮ menu',
+      'Deleted a transaction by mistake? More ▸ Transaction Archive',
+      'Tap the eye on the dashboard to hide your balances',
     ],
   },
   {
     icon: 'check-circle',
     title: 'You’re all set',
-    body: 'Tap + any time to record money in or out — your balances, budgets, and reports update instantly. Let’s add your first account.',
+    body: 'Tap + any time to record money in or out — your balances, budgets, and reports update instantly. You can replay this guide from More ▸ How to use Centav0. Let’s add your first account.',
   },
 ];
 

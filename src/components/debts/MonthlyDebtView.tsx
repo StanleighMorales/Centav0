@@ -10,6 +10,7 @@ import { displayDate } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
 import { stillNeeded } from '../../utils/debtCoverage';
+import { duesInMonth, type DueRow } from '../../utils/installmentSchedule';
 import { getSetting, setSetting } from '../../repositories/settings';
 import type { Account, Debt } from '../../domain/types';
 
@@ -52,21 +53,16 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
     await setSetting(`expectedIncome:${key}`, String(value));
   }
 
-  const monthDebts = debts.filter((d) => {
-    if (d.status === 'Paid' || !d.dueDate) return false;
-    const due = new Date(d.dueDate);
-    return due.getFullYear() === selectedMonth.getFullYear() && due.getMonth() === selectedMonth.getMonth();
-  });
+  const rows: DueRow[] = duesInMonth(debts, selectedMonth);
 
   const groups = Object.values(
-    monthDebts.reduce<Record<string, Debt[]>>((acc, d) => {
-      const k = d.dueDate!;
-      (acc[k] ??= []).push(d);
+    rows.reduce<Record<string, DueRow[]>>((acc, r) => {
+      (acc[r.dueDate] ??= []).push(r);
       return acc;
     }, {}),
-  ).sort((a, b) => a[0].dueDate!.localeCompare(b[0].dueDate!));
+  ).sort((a, b) => a[0].dueDate.localeCompare(b[0].dueDate));
 
-  const totalDue = monthDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
+  const totalDue = rows.reduce((sum, r) => sum + r.amount, 0);
   const availableFunds = spendableAccounts(accounts).reduce((sum, a) => sum + a.currentBalance, 0);
   const stillNeededAmount = stillNeeded(totalDue, availableFunds, expectedIncome);
 
@@ -138,20 +134,20 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
         <EmptyState icon="calendar" title={`No debts due in ${monthLabel(selectedMonth)}`} />
       ) : (
         groups.map((group) => {
-          const subtotal = group.reduce((sum, d) => sum + d.outstandingBalance, 0);
+          const subtotal = group.reduce((sum, r) => sum + r.amount, 0);
           return (
             <View key={group[0].dueDate} style={styles.group}>
-              <AppText variant="labelSm" color="textMuted">{displayDate(group[0].dueDate!)}</AppText>
-              {group.map((debt) => (
+              <AppText variant="labelSm" color="textMuted">{displayDate(group[0].dueDate)}</AppText>
+              {group.map((row) => (
                 <Pressable
-                  key={debt.id}
-                  onPress={() => router.push(`/debts/${debt.id}`)}
+                  key={row.debt.id}
+                  onPress={() => router.push(`/debts/${row.debt.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`View debt from ${debt.creditor}`}
+                  accessibilityLabel={`View debt from ${row.debt.creditor}`}
                   style={styles.debtRow}
                 >
-                  <AppText variant="body">{debt.creditor}</AppText>
-                  <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
+                  <AppText variant="body">{row.debt.creditor}</AppText>
+                  <Amount value={row.amount} variant="amountSm" semanticColor={false} />
                 </Pressable>
               ))}
               <View style={styles.subtotalRow}>

@@ -65,6 +65,40 @@ export function buildSchedule(debt: Debt): ScheduleMonth[] {
   return months;
 }
 
+/** One payment owed in a given month: a single installment, or a lump-sum debt's balance. */
+export interface DueRow {
+  debt: Debt;
+  dueDate: string;
+  amount: number;
+}
+
+/**
+ * What is actually owed across `debts` in the month containing `month`.
+ *
+ * An installment loan owes one scheduled payment per month of its term — not its whole
+ * balance, and not only in its first month. Lump-sum debts (buildSchedule -> []) fall back
+ * to the balance owed on their single due date. Installments already marked 'paid' are
+ * excluded so they stop counting toward what the user still owes.
+ */
+export function duesInMonth(debts: Debt[], month: Date): DueRow[] {
+  const inMonth = (iso: string) => {
+    const d = new Date(iso);
+    return d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth();
+  };
+  return debts.flatMap((debt) => {
+    if (debt.status === 'Paid') return [];
+    const schedule = buildSchedule(debt);
+    if (schedule.length > 0) {
+      return schedule
+        .filter((m) => m.status !== 'paid' && inMonth(m.dueDate))
+        .map((m) => ({ debt, dueDate: m.dueDate, amount: m.amount }));
+    }
+    return debt.dueDate && inMonth(debt.dueDate)
+      ? [{ debt, dueDate: debt.dueDate, amount: debt.outstandingBalance }]
+      : [];
+  });
+}
+
 /** Total amount paid over the loan's full term: (payment + interest) * term + one-time fee. */
 export function wholeLoanTotal(debt: Debt): number {
   if (!debt.termMonths) return 0;

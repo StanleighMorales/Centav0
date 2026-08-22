@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, ScrollView, FlatList, Pressable, StyleSheet, ActivityIndicator,
+  View, ScrollView, Pressable, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,17 +17,51 @@ import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { TransactionRow } from '../../src/components/transactions/TransactionRow';
+import { AccountCarousel } from '../../src/components/dashboard/AccountCarousel';
 import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting, setSetting } from '../../src/repositories';
 import { periodRangeIso, type Period } from '../../src/utils/date';
-import { formatPHP, formatAmount } from '../../src/utils/currency';
+import { formatPHP, formatAmount, HIDDEN_AMOUNT } from '../../src/utils/currency';
+import { groupAccounts, isCredit, isSavings, isSpending, sumBalance } from '../../src/utils/accounts';
 import { theme } from '../../src/theme';
 import type { Account, Transaction } from '../../src/domain/types';
 
-function accountIcon(account: Account): React.ComponentProps<typeof Feather>['name'] {
-  return account.allowsOverdraft ? 'credit-card' : 'briefcase';
+function parseOrder(raw: string | null): string[] {
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Saved order first; accounts the saved order doesn't know about keep their creation order at the end. */
+function sortByOrder(accounts: Account[], order: string[]): Account[] {
+  const rank = (id: string) => {
+    const i = order.indexOf(id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return [...accounts].sort((a, b) => rank(a.id) - rank(b.id));
+}
+
+function EyeToggle({ hidden, onPress, label }: { hidden: boolean; onPress: () => void; label: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={theme.spacing[4]}
+      accessibilityRole="button"
+      accessibilityState={{ checked: hidden }}
+      accessibilityLabel={`${hidden ? 'Show' : 'Hide'} ${label}`}
+    >
+      <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={theme.colors.textSecondary} />
+    </Pressable>
+  );
 }
 
 const PERIOD_KEY = 'dashboardPeriod';
+const HIDE_TOTAL_KEY = 'hideTotalBalance';
+const HIDE_CREDIT_KEY = 'hideCreditBalance';
+const HIDE_SAVINGS_KEY = 'hideSavingsBalance';
+const ORDER_KEY = 'accountOrder';
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: 'day', label: 'Today' },
   { value: 'week', label: 'This Week' },
@@ -42,9 +76,13 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [order, setOrder] = useState<string[]>([]);
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
-  const creditAccounts = accounts.filter((a) => a.allowsOverdraft);
-  const totalCredit = creditAccounts.reduce((s, a) => s + a.currentBalance, 0);
+  const ordered = sortByOrder(accounts, order);
+  const creditAccounts = ordered.filter(isCredit);
+  const savingsAccounts = ordered.filter(isSavings);
+  const totalCredit = sumBalance(creditAccounts);
+  const totalSavings = sumBalance(savingsAccounts);
   const [allTxns, setAllTxns] = useState<Transaction[]>([]);
   const [recentFilter, setRecentFilter] = useState<'day' | 'week' | 'all'>('all');
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
@@ -57,6 +95,9 @@ export default function DashboardScreen() {
   const [pendingUndo, setPendingUndo] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<Period>('month');
   const [periodOpen, setPeriodOpen] = useState(false);
+  const [hideTotal, setHideTotal] = useState(false);
+  const [hideCredit, setHideCredit] = useState(false);
+  const [hideSavings, setHideSavings] = useState(false);
 
   // Restore the persisted period once on mount so it survives app restarts.
   useEffect(() => {
@@ -73,7 +114,8 @@ export default function DashboardScreen() {
     const txns = await transactionRepo.list();
     const debtPayments = await debtPaymentRepo.list();
     setAccounts(accs);
-    setTotalBalance(accs.filter((a) => !a.allowsOverdraft).reduce((s, a) => s + a.currentBalance, 0));
+    setOrder(parseOrder(await getSetting(ORDER_KEY)));
+    setTotalBalance(sumBalance(accs.filter(isSpending)));
     setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
     setAllTxns(txns);
     const { from, to } = periodRangeIso(period);
@@ -84,6 +126,10 @@ export default function DashboardScreen() {
       periodTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0)
       + periodDebtPayments.reduce((s, p) => s + p.amount, 0),
     );
+    // ponytail: read inside load() so the loader covers it — no flash of a balance meant to stay hidden
+    setHideTotal((await getSetting(HIDE_TOTAL_KEY)) === '1');
+    setHideCredit((await getSetting(HIDE_CREDIT_KEY)) === '1');
+    setHideSavings((await getSetting(HIDE_SAVINGS_KEY)) === '1');
     setLoading(false);
   }, [period]);
 
@@ -100,6 +146,20 @@ export default function DashboardScreen() {
     setPeriod(p);
     setPeriodOpen(false);
     await setSetting(PERIOD_KEY, p);
+  }
+
+  async function toggleHidden(key: string, next: boolean, set: (v: boolean) => void) {
+    set(next);
+    await setSetting(key, next ? '1' : '0');
+  }
+
+  // `next` is one group's ids reordered — splice them back into the full order, leaving other groups put.
+  async function handleReorder(next: string[]) {
+    const group = new Set(next);
+    let i = 0;
+    const merged = ordered.map((a) => (group.has(a.id) ? next[i++] : a.id));
+    setOrder(merged);
+    await setSetting(ORDER_KEY, JSON.stringify(merged));
   }
 
   async function handleUndo() {
@@ -124,29 +184,65 @@ export default function DashboardScreen() {
 
           {/* Hero Balance Card */}
           <View style={styles.heroCard}>
-            <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
-              TOTAL BALANCE
-            </AppText>
+            <View style={styles.labelRow}>
+              <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
+                TOTAL BALANCE
+              </AppText>
+              <EyeToggle
+                hidden={hideTotal}
+                label="total balance"
+                onPress={() => toggleHidden(HIDE_TOTAL_KEY, !hideTotal, setHideTotal)}
+              />
+            </View>
             <View style={styles.heroAmount}>
               <AppText variant="amountMd" color="positive" style={styles.currencySymbol}>
                 {'\u20B1'}
               </AppText>
               <AppText variant="displayLg" color="positive">
-                {formatAmount(totalBalance)}
+                {hideTotal ? HIDDEN_AMOUNT : formatAmount(totalBalance)}
               </AppText>
             </View>
           </View>
 
+          {savingsAccounts.length > 0 && (
+            <View style={styles.savingsCard}>
+              <View style={styles.labelRow}>
+                <AppText variant="labelSm" color="textMuted" style={styles.heroLabel}>
+                  TOTAL SAVINGS
+                </AppText>
+                <EyeToggle
+                  hidden={hideSavings}
+                  label="savings balance"
+                  onPress={() => toggleHidden(HIDE_SAVINGS_KEY, !hideSavings, setHideSavings)}
+                />
+              </View>
+              <Amount value={totalSavings} variant="amountLg" color="info" semanticColor={false} hidden={hideSavings} />
+              {savingsAccounts.map((a) => (
+                <View key={a.id} style={styles.creditRow}>
+                  <AppText variant="bodySm" color="textMuted">{a.name}</AppText>
+                  <Amount value={a.currentBalance} variant="amountSm" color="info" semanticColor={false} hidden={hideSavings} />
+                </View>
+              ))}
+            </View>
+          )}
+
           {creditAccounts.length > 0 && (
             <View style={styles.creditCard}>
-              <AppText variant="labelSm" color="textMuted" style={styles.heroLabel}>
-                TOTAL CREDIT
-              </AppText>
-              <Amount value={totalCredit} variant="amountLg" color="accentPrimary" semanticColor={false} />
+              <View style={styles.labelRow}>
+                <AppText variant="labelSm" color="textMuted" style={styles.heroLabel}>
+                  TOTAL CREDIT
+                </AppText>
+                <EyeToggle
+                  hidden={hideCredit}
+                  label="credit balance"
+                  onPress={() => toggleHidden(HIDE_CREDIT_KEY, !hideCredit, setHideCredit)}
+                />
+              </View>
+              <Amount value={totalCredit} variant="amountLg" color="accentPrimary" semanticColor={false} hidden={hideCredit} />
               {creditAccounts.map((a) => (
                 <View key={a.id} style={styles.creditRow}>
                   <AppText variant="bodySm" color="textMuted">{a.name}</AppText>
-                  <Amount value={a.currentBalance} variant="amountSm" color="accentPrimary" semanticColor={false} />
+                  <Amount value={a.currentBalance} variant="amountSm" color="accentPrimary" semanticColor={false} hidden={hideCredit} />
                 </View>
               ))}
             </View>
@@ -180,36 +276,18 @@ export default function DashboardScreen() {
               No accounts found
             </AppText>
           ) : (
-            <FlatList
-              data={accounts}
-              keyExtractor={(a) => a.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.accountsList}
-              renderItem={({ item }) => (
-                <Pressable
+            groupAccounts(ordered).map((group) => (
+              <View key={group.label} style={styles.accountGroup}>
+                <AppText variant="labelSm" color="textMuted" style={styles.groupLabel}>
+                  {group.label.toUpperCase()}
+                </AppText>
+                <AccountCarousel
+                  accounts={group.accounts}
                   onPress={() => router.push('/accounts')}
-                  style={styles.accountCard}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.name}, ${item.typeName}, ${formatPHP(item.currentBalance)}`}
-                >
-                  <Feather
-                    name={accountIcon(item)}
-                    size={16}
-                    color={theme.colors.accentPrimary}
-                  />
-                  <AppText variant="bodySm" numberOfLines={1} style={styles.accountName}>
-                    {item.name}
-                  </AppText>
-                  <AppText
-                    variant="amountSm"
-                    color={item.currentBalance >= 0 ? 'textPrimary' : 'negative'}
-                  >
-                    {formatPHP(item.currentBalance)}
-                  </AppText>
-                </Pressable>
-              )}
-            />
+                  onReorder={handleReorder}
+                />
+              </View>
+            ))
           )}
 
           <Pressable
@@ -387,6 +465,11 @@ const styles = StyleSheet.create({
   },
   heroLabel: {
     letterSpacing: 1.2,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: theme.spacing[3],
   },
   creditCard: {
@@ -396,6 +479,16 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[4],
     gap: theme.spacing[2],
     ...theme.shadows.goldGlow,
+  },
+  savingsCard: {
+    backgroundColor: theme.colors.bgSurface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing[5],
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
+    borderWidth: 1,
+    borderColor: theme.colors.borderDefault,
+    ...theme.shadows.sm,
   },
   creditRow: {
     flexDirection: 'row',
@@ -412,21 +505,11 @@ const styles = StyleSheet.create({
   currencySymbol: {
     paddingBottom: theme.spacing[2],
   },
-  accountsList: {
-    paddingRight: theme.spacing[5],
-    gap: theme.spacing[4],
+  accountGroup: {
+    gap: theme.spacing[3],
   },
-  accountCard: {
-    width: 140,
-    height: 80,
-    backgroundColor: theme.colors.bgSurface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing[4],
-    justifyContent: 'space-between',
-    ...theme.shadows.sm,
-  },
-  accountName: {
-    color: theme.colors.textSecondary,
+  groupLabel: {
+    letterSpacing: 1.2,
   },
   emptyHint: {
     marginVertical: theme.spacing[4],

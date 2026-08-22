@@ -21,6 +21,7 @@ import { DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { getDatabase } from '../src/db/database';
 import { accountRepo } from '../src/repositories';
+import { CalculatorProvider } from '../src/components/calculator/CalculatorOverlay';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -99,13 +100,15 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider value={navTheme}>
           <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: theme.colors.bgPrimary },
-              animation: 'slide_from_right',
-            }}
-          />
+          <CalculatorProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: theme.colors.bgPrimary },
+                animation: 'slide_from_right',
+              }}
+            />
+          </CalculatorProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

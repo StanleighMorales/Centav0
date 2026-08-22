@@ -10,6 +10,9 @@ const PHP_FORMATTER_NO_SYMBOL = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 });
 
+// ponytail: fixed-width mask so a hidden balance doesn't leak its magnitude
+export const HIDDEN_AMOUNT = '••••••';
+
 export function formatPHP(amount: number): string {
   return PHP_FORMATTER.format(amount);
 }

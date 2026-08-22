@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
 import { Card } from '../../src/components/ui/Card';
+import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
@@ -14,12 +15,9 @@ import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
 import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, debtRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
+import { accountIcon, groupAccounts } from '../../src/utils/accounts';
 import { theme } from '../../src/theme';
 import type { Account } from '../../src/domain/types';
-
-function accountIcon(account: Account): React.ComponentProps<typeof Feather>['name'] {
-  return account.allowsOverdraft ? 'credit-card' : 'briefcase';
-}
 
 type RowProps = {
   account: Account;
@@ -188,14 +186,19 @@ export default function AccountsScreen() {
               subtitle="Tap + to add your first account"
             />
           ) : (
-            accounts.map((account) => (
-              <AccountRow
-                key={account.id}
-                account={account}
-                onEdit={setEditAccount}
-                onAddMoney={setAddMoneyAccount}
-                onDelete={handleDeletePress}
-              />
+            groupAccounts(accounts).map((group) => (
+              <View key={group.label} style={styles.group}>
+                <SectionHeader title={group.label} />
+                {group.accounts.map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    account={account}
+                    onEdit={setEditAccount}
+                    onAddMoney={setAddMoneyAccount}
+                    onDelete={handleDeletePress}
+                  />
+                ))}
+              </View>
             ))
           )}
         </ScrollView>
@@ -277,6 +280,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
     gap: theme.spacing[4],
   },
+  group: { gap: theme.spacing[4] },
   accountCard: { gap: theme.spacing[4] },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] },
   iconCircle: {

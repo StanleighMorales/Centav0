@@ -19,6 +19,7 @@ export function AccountTypeSheet({ visible, onClose, onSuccess, initial }: Props
   const isEdit = Boolean(initial);
   const [name, setName] = useState('');
   const [allowsOverdraft, setAllowsOverdraft] = useState(false);
+  const [isSavings, setIsSavings] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -26,6 +27,7 @@ export function AccountTypeSheet({ visible, onClose, onSuccess, initial }: Props
     if (visible) {
       setName(initial?.name ?? '');
       setAllowsOverdraft(initial?.allowsOverdraft ?? false);
+      setIsSavings(initial?.isSavings ?? false);
       setErrors({});
     }
   }, [visible]);
@@ -37,9 +39,9 @@ export function AccountTypeSheet({ visible, onClose, onSuccess, initial }: Props
     setSaving(true);
     try {
       if (isEdit && initial) {
-        await accountTypeRepo.update(initial.id, { name: name.trim(), allowsOverdraft });
+        await accountTypeRepo.update(initial.id, { name: name.trim(), allowsOverdraft, isSavings });
       } else {
-        await accountTypeRepo.create({ name: name.trim(), allowsOverdraft });
+        await accountTypeRepo.create({ name: name.trim(), allowsOverdraft, isSavings });
       }
       onSuccess();
       onClose();
@@ -72,10 +74,25 @@ export function AccountTypeSheet({ visible, onClose, onSuccess, initial }: Props
           </View>
           <Switch
             value={allowsOverdraft}
-            onValueChange={setAllowsOverdraft}
+            onValueChange={(v) => { setAllowsOverdraft(v); if (v) setIsSavings(false); }}
             accessibilityLabel="Allows overdraft"
             trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
             thumbColor={allowsOverdraft ? theme.colors.accentPrimary : theme.colors.textMuted}
+          />
+        </View>
+        <View style={styles.overdraftRow}>
+          <View style={styles.flex}>
+            <AppText variant="labelLg" color="textSecondary">Savings</AppText>
+            <AppText variant="bodySm" color="textMuted">
+              Money set aside — tallied under Total Savings instead of Total Balance
+            </AppText>
+          </View>
+          <Switch
+            value={isSavings}
+            onValueChange={(v) => { setIsSavings(v); if (v) setAllowsOverdraft(false); }}
+            accessibilityLabel="Savings"
+            trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
+            thumbColor={isSavings ? theme.colors.accentPrimary : theme.colors.textMuted}
           />
         </View>
         <Button label={isEdit ? 'Save Changes' : 'Add Type'} onPress={handleSave} loading={saving} />

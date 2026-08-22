@@ -27,8 +27,8 @@ export default function SetupAccountScreen() {
 
   useEffect(() => {
     accountTypeRepo.list().then((types) => {
-      // A first account shouldn't start as an overdraft-capable type (e.g. Credit Card).
-      const startTypes = types.filter((t) => !t.allowsOverdraft);
+      // A first account shouldn't start as an overdraft or savings type — both sit outside Total Balance.
+      const startTypes = types.filter((t) => !t.allowsOverdraft && !t.isSavings);
       setAccountTypes(startTypes);
       if (startTypes.length > 0) setAccountTypeId(startTypes[0].id);
     });

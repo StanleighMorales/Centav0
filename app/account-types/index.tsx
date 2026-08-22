@@ -100,6 +100,8 @@ export default function AccountTypesScreen() {
                   <AppText variant="body">{t.name}</AppText>
                   {t.allowsOverdraft ? (
                     <AppText variant="bodySm" color="textMuted">Allows overdraft</AppText>
+                  ) : t.isSavings ? (
+                    <AppText variant="bodySm" color="textMuted">Savings</AppText>
                   ) : null}
                 </View>
                 <Pressable

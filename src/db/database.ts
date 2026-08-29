@@ -18,3 +18,20 @@ export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   }
   return dbPromise;
 }
+
+// Every entity table with user data — add new tables here as they're introduced,
+// so reset-all-data never silently misses one.
+const RESETTABLE_TABLES = [
+  'debt_payments', 'lending_payments', 'transactions', 'lendings',
+  'allocations', 'debts', 'accounts', 'account_types', 'categories',
+  'lending_people', 'recurring_transactions', 'settings',
+];
+
+export async function resetAppData(): Promise<void> {
+  const db = await getDatabase();
+  await db.withTransactionAsync(async () => {
+    for (const table of RESETTABLE_TABLES) {
+      await db.execAsync(`DELETE FROM ${table};`);
+    }
+  });
+}

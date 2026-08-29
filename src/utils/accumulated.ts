@@ -1,4 +1,5 @@
 import { roundCentavos } from './currency';
+import { isSpending } from './accounts';
 import type { Account } from '../domain/types';
 
 /** Sentinel Select value for the virtual "Accumulated Balance" source. */
@@ -6,7 +7,7 @@ export const ACCUMULATED_ID = '__accumulated__';
 
 /** Accounts whose balance counts toward (and can be drawn from) the accumulated balance. */
 export function spendableAccounts(accounts: Account[]): Account[] {
-  return accounts.filter((a) => !a.allowsOverdraft && a.currentBalance > 0);
+  return accounts.filter((a) => isSpending(a) && a.currentBalance > 0);
 }
 
 export function accumulatedTotal(accounts: Account[]): number {

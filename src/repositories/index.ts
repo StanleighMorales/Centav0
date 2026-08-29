@@ -8,6 +8,7 @@ import { SqliteAllocationRepository } from './sqlite/SqliteAllocationRepository'
 import { SqliteLendingPersonRepository } from './sqlite/SqliteLendingPersonRepository';
 import { SqliteLendingRepository } from './sqlite/SqliteLendingRepository';
 import { SqliteLendingPaymentRepository } from './sqlite/SqliteLendingPaymentRepository';
+import { SqliteRecurringTransactionRepository } from './sqlite/SqliteRecurringTransactionRepository';
 import type { IAccountRepository } from './IAccountRepository';
 import type { IAccountTypeRepository } from './IAccountTypeRepository';
 import type { ICategoryRepository } from './ICategoryRepository';
@@ -18,6 +19,7 @@ import type { IAllocationRepository } from './IAllocationRepository';
 import type { ILendingPersonRepository } from './ILendingPersonRepository';
 import type { ILendingRepository } from './ILendingRepository';
 import type { ILendingPaymentRepository } from './ILendingPaymentRepository';
+import type { IRecurringTransactionRepository } from './IRecurringTransactionRepository';
 
 export const accountRepo: IAccountRepository = new SqliteAccountRepository();
 export const accountTypeRepo: IAccountTypeRepository = new SqliteAccountTypeRepository();
@@ -29,10 +31,11 @@ export const allocationRepo: IAllocationRepository = new SqliteAllocationReposit
 export const lendingPersonRepo: ILendingPersonRepository = new SqliteLendingPersonRepository();
 export const lendingRepo: ILendingRepository = new SqliteLendingRepository();
 export const lendingPaymentRepo: ILendingPaymentRepository = new SqliteLendingPaymentRepository();
+export const recurringTransactionRepo: IRecurringTransactionRepository = new SqliteRecurringTransactionRepository();
 
 export { getSetting, setSetting } from './settings';
 
 export type {
   IAccountRepository, IAccountTypeRepository, ICategoryRepository, ITransactionRepository, IDebtRepository, IDebtPaymentRepository, IAllocationRepository,
-  ILendingPersonRepository, ILendingRepository, ILendingPaymentRepository,
+  ILendingPersonRepository, ILendingRepository, ILendingPaymentRepository, IRecurringTransactionRepository,
 };

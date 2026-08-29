@@ -342,7 +342,27 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '016_recurring_transactions',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE recurring_transactions (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL,
+          amount REAL NOT NULL, type TEXT NOT NULL,
+          categoryId TEXT, accountId TEXT NOT NULL, note TEXT,
+          frequency TEXT NOT NULL,
+          dayOfMonth INTEGER, semiMonthDays TEXT, dayOfWeek INTEGER,
+          startDate TEXT NOT NULL, endDate TEXT, lastMaterializedDate TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT
+        );
+      `);
+    },
+  },
 ];
+
+/** Highest migration this app build knows how to run — stamped into backup filenames. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`

@@ -198,3 +198,29 @@ export interface LendingPayment extends AuditFields, LocalSyncFields {
   date: string; amount: number; accountId: string;
 }
 export interface CreateLendingPaymentInput { date: string; amount: number; accountId: string; }
+
+export type RecurringFrequency = 'weekly' | 'monthly' | 'semi-monthly';
+
+export interface RecurringTransaction extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'Expense' | 'Income';
+  categoryId: string | null;
+  accountId: string;
+  note: string | null;
+  frequency: RecurringFrequency;
+  dayOfMonth: number | null;
+  semiMonthDays: number[] | null;
+  dayOfWeek: number | null;
+  startDate: string;
+  endDate: string | null;
+  lastMaterializedDate: string | null;
+}
+export interface CreateRecurringTransactionInput {
+  amount: number; type: 'Expense' | 'Income'; categoryId?: string; accountId: string; note?: string;
+  frequency: RecurringFrequency;
+  dayOfMonth?: number | null; semiMonthDays?: number[] | null; dayOfWeek?: number | null;
+  startDate: string; endDate?: string | null;
+}
+export interface UpdateRecurringTransactionInput extends Partial<CreateRecurringTransactionInput> {}

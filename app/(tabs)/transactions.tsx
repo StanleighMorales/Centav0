@@ -127,16 +127,18 @@ export default function TransactionsScreen() {
 
       <View style={styles.summary}>
         <View style={styles.summaryCol}>
-          <AppText variant="labelSm" color="textMuted">IN</AppText>
-          <AppText variant="amountSm" color="positive">+{formatPHP(totals.income)}</AppText>
-        </View>
-        <View style={styles.summaryCol}>
-          <AppText variant="labelSm" color="textMuted">OUT</AppText>
-          <AppText variant="amountSm" color="negative">-{formatPHP(totals.expense)}</AppText>
-        </View>
-        <View style={styles.summaryCol}>
           <AppText variant="labelSm" color="textMuted">NET</AppText>
-          <AppText variant="amountSm">{totals.net < 0 ? '-' : '+'}{formatPHP(Math.abs(totals.net))}</AppText>
+          <AppText variant="amountLg">{totals.net < 0 ? '-' : '+'}{formatPHP(Math.abs(totals.net))}</AppText>
+        </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCol}>
+            <AppText variant="labelSm" color="textMuted">IN</AppText>
+            <AppText variant="amountMd" color="positive">+{formatPHP(totals.income)}</AppText>
+          </View>
+          <View style={styles.summaryCol}>
+            <AppText variant="labelSm" color="textMuted">OUT</AppText>
+            <AppText variant="amountMd" color="negative">-{formatPHP(totals.expense)}</AppText>
+          </View>
         </View>
       </View>
 
@@ -240,7 +242,7 @@ const useStyles = makeStyles((c) => ({
     marginBottom: theme.spacing[4],
   },
   summary: {
-    flexDirection: 'row',
+    gap: theme.spacing[4],
     marginHorizontal: theme.spacing[5],
     marginBottom: theme.spacing[2],
     padding: theme.spacing[5],
@@ -248,6 +250,12 @@ const useStyles = makeStyles((c) => ({
     borderWidth: 1,
     borderColor: c.borderDefault,
     backgroundColor: c.bgSurface,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    paddingTop: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: c.borderDefault,
   },
   summaryCol: { flex: 1, gap: theme.spacing[1] },
   loader: {

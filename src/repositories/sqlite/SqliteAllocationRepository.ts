@@ -3,7 +3,6 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IAllocationRepository } from '../IAllocationRepository';
 import type { Allocation, CreateAllocationInput, AllocationProgress } from '../../domain/types';
 
 function rowToAllocation(row: any): Allocation {
@@ -32,7 +31,7 @@ function currentPeriodWindow(period: string): [string, string] {
   return [mon.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)];
 }
 
-export class SqliteAllocationRepository implements IAllocationRepository {
+export class SqliteAllocationRepository {
   async list(): Promise<Allocation[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

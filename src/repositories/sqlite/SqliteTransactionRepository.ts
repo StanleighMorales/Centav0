@@ -4,7 +4,6 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { ITransactionRepository } from '../ITransactionRepository';
 import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter, CreateTransferInput } from '../../domain/types';
 
 function rowToTransaction(row: any): Transaction {
@@ -29,7 +28,7 @@ function delta(type: string, amount: number): number {
   return type === 'Income' ? amount : -amount;
 }
 
-export class SqliteTransactionRepository implements ITransactionRepository {
+export class SqliteTransactionRepository {
   async list(filter?: TransactionFilter): Promise<Transaction[]> {
     const db = await getDatabase();
     const conditions = ['userId = ?', 'deletedAt IS NULL'];

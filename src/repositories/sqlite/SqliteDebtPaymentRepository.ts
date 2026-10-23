@@ -4,8 +4,9 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { DebtPaymentFilter, IDebtPaymentRepository } from '../IDebtPaymentRepository';
 import type { DebtPayment, CreateDebtPaymentInput, SettleChargesInput } from '../../domain/types';
+
+type DebtPaymentFilter = { from?: string; to?: string };
 
 function rowToPayment(row: any): DebtPayment {
   return {
@@ -17,7 +18,7 @@ function rowToPayment(row: any): DebtPayment {
   };
 }
 
-export class SqliteDebtPaymentRepository implements IDebtPaymentRepository {
+export class SqliteDebtPaymentRepository {
   async list(filter?: DebtPaymentFilter): Promise<DebtPayment[]> {
     const db = await getDatabase();
     const conditions = ['userId = ?', 'deletedAt IS NULL'];

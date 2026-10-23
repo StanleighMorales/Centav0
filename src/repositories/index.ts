@@ -9,33 +9,17 @@ import { SqliteLendingPersonRepository } from './sqlite/SqliteLendingPersonRepos
 import { SqliteLendingRepository } from './sqlite/SqliteLendingRepository';
 import { SqliteLendingPaymentRepository } from './sqlite/SqliteLendingPaymentRepository';
 import { SqliteRecurringTransactionRepository } from './sqlite/SqliteRecurringTransactionRepository';
-import type { IAccountRepository } from './IAccountRepository';
-import type { IAccountTypeRepository } from './IAccountTypeRepository';
-import type { ICategoryRepository } from './ICategoryRepository';
-import type { ITransactionRepository } from './ITransactionRepository';
-import type { IDebtRepository } from './IDebtRepository';
-import type { IDebtPaymentRepository } from './IDebtPaymentRepository';
-import type { IAllocationRepository } from './IAllocationRepository';
-import type { ILendingPersonRepository } from './ILendingPersonRepository';
-import type { ILendingRepository } from './ILendingRepository';
-import type { ILendingPaymentRepository } from './ILendingPaymentRepository';
-import type { IRecurringTransactionRepository } from './IRecurringTransactionRepository';
 
-export const accountRepo: IAccountRepository = new SqliteAccountRepository();
-export const accountTypeRepo: IAccountTypeRepository = new SqliteAccountTypeRepository();
-export const categoryRepo: ICategoryRepository = new SqliteCategoryRepository();
-export const transactionRepo: ITransactionRepository = new SqliteTransactionRepository();
-export const debtRepo: IDebtRepository = new SqliteDebtRepository();
-export const debtPaymentRepo: IDebtPaymentRepository = new SqliteDebtPaymentRepository();
-export const allocationRepo: IAllocationRepository = new SqliteAllocationRepository();
-export const lendingPersonRepo: ILendingPersonRepository = new SqliteLendingPersonRepository();
-export const lendingRepo: ILendingRepository = new SqliteLendingRepository();
-export const lendingPaymentRepo: ILendingPaymentRepository = new SqliteLendingPaymentRepository();
-export const recurringTransactionRepo: IRecurringTransactionRepository = new SqliteRecurringTransactionRepository();
+export const accountRepo = new SqliteAccountRepository();
+export const accountTypeRepo = new SqliteAccountTypeRepository();
+export const categoryRepo = new SqliteCategoryRepository();
+export const transactionRepo = new SqliteTransactionRepository();
+export const debtRepo = new SqliteDebtRepository();
+export const debtPaymentRepo = new SqliteDebtPaymentRepository();
+export const allocationRepo = new SqliteAllocationRepository();
+export const lendingPersonRepo = new SqliteLendingPersonRepository();
+export const lendingRepo = new SqliteLendingRepository();
+export const lendingPaymentRepo = new SqliteLendingPaymentRepository();
+export const recurringTransactionRepo = new SqliteRecurringTransactionRepository();
 
 export { getSetting, setSetting } from './settings';
-
-export type {
-  IAccountRepository, IAccountTypeRepository, ICategoryRepository, ITransactionRepository, IDebtRepository, IDebtPaymentRepository, IAllocationRepository,
-  ILendingPersonRepository, ILendingRepository, ILendingPaymentRepository, IRecurringTransactionRepository,
-};

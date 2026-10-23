@@ -3,7 +3,6 @@ import { newId } from '../../utils/id';
 import { nowIso, nextDueDateIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IAccountRepository } from '../IAccountRepository';
 import type { Account, CreateAccountInput, UpdateAccountInput } from '../../domain/types';
 
 function rowToAccount(row: any): Account {
@@ -25,7 +24,7 @@ const SELECT_ACCOUNT = `
   JOIN account_types t ON t.id = a.accountTypeId
 `;
 
-export class SqliteAccountRepository implements IAccountRepository {
+export class SqliteAccountRepository {
   async list(): Promise<Account[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

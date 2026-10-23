@@ -3,7 +3,6 @@ import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IRecurringTransactionRepository } from '../IRecurringTransactionRepository';
 import type { RecurringTransaction, CreateRecurringTransactionInput, UpdateRecurringTransactionInput } from '../../domain/types';
 
 function rowToRecurring(row: any): RecurringTransaction {
@@ -22,7 +21,7 @@ function rowToRecurring(row: any): RecurringTransaction {
   };
 }
 
-export class SqliteRecurringTransactionRepository implements IRecurringTransactionRepository {
+export class SqliteRecurringTransactionRepository {
   async list(): Promise<RecurringTransaction[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

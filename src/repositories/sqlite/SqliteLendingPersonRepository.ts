@@ -2,7 +2,6 @@ import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { ILendingPersonRepository } from '../ILendingPersonRepository';
 import type { LendingPerson, CreateLendingPersonInput, UpdateLendingPersonInput } from '../../domain/types';
 
 function rowToPerson(row: any): LendingPerson {
@@ -14,7 +13,7 @@ function rowToPerson(row: any): LendingPerson {
   };
 }
 
-export class SqliteLendingPersonRepository implements ILendingPersonRepository {
+export class SqliteLendingPersonRepository {
   async list(): Promise<LendingPerson[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

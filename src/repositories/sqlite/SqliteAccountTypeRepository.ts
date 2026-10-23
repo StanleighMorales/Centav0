@@ -2,7 +2,6 @@ import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IAccountTypeRepository } from '../IAccountTypeRepository';
 import type { AccountType, CreateAccountTypeInput, UpdateAccountTypeInput } from '../../domain/types';
 
 function rowToAccountType(row: any): AccountType {
@@ -15,7 +14,7 @@ function rowToAccountType(row: any): AccountType {
   };
 }
 
-export class SqliteAccountTypeRepository implements IAccountTypeRepository {
+export class SqliteAccountTypeRepository {
   async list(): Promise<AccountType[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

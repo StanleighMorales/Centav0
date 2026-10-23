@@ -4,7 +4,6 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { IDebtRepository } from '../IDebtRepository';
 import type { Debt, CreateDebtInput, UpdateDebtInput, DebtStatus } from '../../domain/types';
 
 function rowToDebt(row: any): Debt {
@@ -51,7 +50,7 @@ async function getOrCreateLoanCategory(db: Awaited<ReturnType<typeof getDatabase
   return id;
 }
 
-export class SqliteDebtRepository implements IDebtRepository {
+export class SqliteDebtRepository {
   async list(): Promise<Debt[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

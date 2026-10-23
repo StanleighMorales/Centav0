@@ -2,7 +2,6 @@ import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { ICategoryRepository } from '../ICategoryRepository';
 import type { Category, CategoryType, CreateCategoryInput, UpdateCategoryInput } from '../../domain/types';
 
 function rowToCategory(row: any): Category {
@@ -14,7 +13,7 @@ function rowToCategory(row: any): Category {
   };
 }
 
-export class SqliteCategoryRepository implements ICategoryRepository {
+export class SqliteCategoryRepository {
   async list(type?: CategoryType): Promise<Category[]> {
     const db = await getDatabase();
     if (type) {

@@ -24,6 +24,16 @@ function monthLabel(d: Date): string {
   return d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
 }
 
+type DueTag = { label: string; color: 'negative' | 'warning' | 'textMuted'; icon: keyof typeof Feather.glyphMap };
+
+function dueTag(iso: string): DueTag {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date(iso)) - startOfDay(new Date())) / 86_400_000);
+  if (days < 0) return { label: `Overdue ${-days}d`, color: 'negative', icon: 'alert-circle' };
+  if (days === 0) return { label: 'Due today', color: 'warning', icon: 'clock' };
+  return { label: days === 1 ? 'Tomorrow' : `In ${days} days`, color: 'textMuted', icon: 'calendar' };
+}
+
 export function MonthlyDebtView({ debts, accounts }: Props) {
   const router = useRouter();
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
@@ -135,25 +145,38 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
       ) : (
         groups.map((group) => {
           const subtotal = group.reduce((sum, r) => sum + r.amount, 0);
+          const tag = dueTag(group[0].dueDate);
           return (
             <View key={group[0].dueDate} style={styles.group}>
-              <AppText variant="labelSm" color="textMuted">{displayDate(group[0].dueDate)}</AppText>
+              <View style={styles.groupHeader}>
+                <AppText variant="labelLg">{displayDate(group[0].dueDate)}</AppText>
+                <View style={styles.tag}>
+                  <Feather name={tag.icon} size={12} color={theme.colors[tag.color]} />
+                  <AppText variant="labelSm" color={tag.color}>{tag.label}</AppText>
+                </View>
+              </View>
               {group.map((row) => (
                 <Pressable
                   key={row.debt.id}
                   onPress={() => router.push(`/debts/${row.debt.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`View debt from ${row.debt.creditor}`}
+                  accessibilityLabel={`View debt from ${row.debt.creditor}, ${formatPHP(row.amount)} due`}
                   style={styles.debtRow}
                 >
-                  <AppText variant="body">{row.debt.creditor}</AppText>
+                  <View style={styles.debtInfo}>
+                    <AppText variant="body" numberOfLines={1}>{row.debt.creditor}</AppText>
+                    <AppText variant="labelSm" color="textMuted">{row.debt.debtType}</AppText>
+                  </View>
                   <Amount value={row.amount} variant="amountSm" semanticColor={false} />
+                  <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
                 </Pressable>
               ))}
-              <View style={styles.subtotalRow}>
-                <AppText variant="bodySm" color="textMuted">Subtotal</AppText>
-                <AppText variant="bodySm" color="textMuted">{formatPHP(subtotal)}</AppText>
-              </View>
+              {group.length > 1 ? (
+                <View style={styles.subtotalRow}>
+                  <AppText variant="bodySm" color="textMuted">Day total</AppText>
+                  <AppText variant="amountXs" color="textSecondary">{formatPHP(subtotal)}</AppText>
+                </View>
+              ) : null}
             </View>
           );
         })
@@ -190,16 +213,34 @@ const styles = StyleSheet.create({
   group: {
     backgroundColor: theme.colors.bgSurface,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing[4],
     marginBottom: theme.spacing[3],
-    gap: theme.spacing[2],
+    overflow: 'hidden',
   },
-  debtRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: theme.spacing[1] },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing[5],
+    paddingVertical: theme.spacing[3],
+    backgroundColor: theme.colors.bgElevated,
+  },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
+  debtRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3],
+    minHeight: 56,
+    paddingHorizontal: theme.spacing[5],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderDefault,
+  },
+  debtInfo: { flex: 1 },
   subtotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[5],
+    paddingVertical: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderDefault,
+    borderTopColor: theme.colors.borderStrong,
   },
 });

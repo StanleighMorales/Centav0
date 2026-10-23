@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -18,9 +18,11 @@ import type { Account, Debt } from '../../domain/types';
 type Props = { debts: Debt[]; accounts: Account[] };
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const CELL_WIDTH = 84;
-const NAME_WIDTH = 140;
-const TOTAL_WIDTH = 96;
+const CELL_WIDTH = 88;
+const NAME_WIDTH = 120;
+const TOTAL_WIDTH = 104;
+const HEADER_HEIGHT = 36;
+const ROW_HEIGHT = 56;
 
 type LoanRow = { debt: Debt; schedule: ScheduleMonth[] };
 
@@ -38,6 +40,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
   const [editingIncome, setEditingIncome] = useState(false);
   const [incomeInput, setIncomeInput] = useState('');
 
+  const scrollRef = useRef<ScrollView>(null);
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -72,6 +75,14 @@ export function InstallmentGridView({ debts, accounts }: Props) {
   }, 0);
   const availableFunds = spendableAccounts(accounts).reduce((sum, a) => sum + a.currentBalance, 0);
   const stillNeededAmount = stillNeeded(currentMonthTotal, availableFunds, expectedIncome);
+
+  const isCurrent = (monthIndex: number) => selectedYear === now.getFullYear() && monthIndex === now.getMonth();
+  const hasRows = rows.length > 0;
+  useEffect(() => {
+    if (!hasRows) return;
+    const x = selectedYear === new Date().getFullYear() ? Math.max(0, (new Date().getMonth() - 1) * CELL_WIDTH) : 0;
+    scrollRef.current?.scrollTo({ x, animated: false });
+  }, [hasRows, selectedYear]);
 
   return (
     <View style={styles.container}>
@@ -140,71 +151,92 @@ export function InstallmentGridView({ debts, accounts }: Props) {
       {rows.length === 0 ? (
         <EmptyState icon="grid" title={`No installment loans scheduled in ${selectedYear}`} />
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={styles.headerRow}>
-              <View style={[styles.nameCell, { width: NAME_WIDTH }]} />
-              {MONTH_LABELS.map((label) => (
-                <View key={label} style={[styles.monthCell, { width: CELL_WIDTH }]}>
-                  <AppText variant="labelSm" color="textMuted">{label}</AppText>
-                </View>
-              ))}
-              <View style={[styles.monthCell, { width: TOTAL_WIDTH }]}>
-                <AppText variant="labelSm" color="textMuted">Total</AppText>
-              </View>
+        <>
+          <View style={styles.table}>
+            <View style={[styles.nameColumn, { width: NAME_WIDTH }]}>
+              <View style={[styles.headerCell, { height: HEADER_HEIGHT }]} />
+              {rows.map(({ debt, schedule }) => {
+                const paid = schedule.filter((m) => m.status === 'paid').length;
+                return (
+                  <Pressable
+                    key={debt.id}
+                    style={styles.nameCell}
+                    onPress={() => router.push(`/debts/${debt.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View debt from ${debt.creditor}, ${paid} of ${schedule.length} paid`}
+                  >
+                    <AppText variant="labelLg" numberOfLines={1}>{debt.creditor}</AppText>
+                    <AppText variant="labelSm" color="textMuted">{paid}/{schedule.length} paid</AppText>
+                  </Pressable>
+                );
+              })}
             </View>
 
-            {rows.map(({ debt, schedule }) => (
-              <View key={debt.id} style={styles.row}>
-                <Pressable
-                  style={[styles.nameCell, { width: NAME_WIDTH }]}
-                  onPress={() => router.push(`/debts/${debt.id}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View debt from ${debt.creditor}`}
-                >
-                  <AppText variant="body" numberOfLines={1}>{debt.creditor}</AppText>
-                </Pressable>
-                {MONTH_LABELS.map((_, monthIndex) => {
-                  const cell = schedule.find((m) => {
-                    const d = new Date(m.dueDate);
-                    return d.getFullYear() === selectedYear && d.getMonth() === monthIndex;
-                  });
-                  return (
-                    <Pressable
-                      key={monthIndex}
-                      style={[styles.monthCell, { width: CELL_WIDTH }]}
-                      disabled={!cell}
-                      onPress={() => cell && setDetailCell({ debt, month: cell })}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        cell ? `${debt.creditor} ${MONTH_LABELS[monthIndex]} ${formatPHP(cell.amount)}, ${cell.status}` : 'No payment scheduled'
-                      }
-                    >
-                      {cell ? (
-                        <>
-                          <AppText variant="amountXs" color={statusColor(cell.status)}>
-                            {formatPHP(cell.amount)}
-                          </AppText>
-                          {cell.interest > 0 ? (
-                            <AppText variant="labelSm" color="textMuted">
-                              incl. {formatPHP(cell.interest)} int
-                            </AppText>
-                          ) : null}
-                        </>
-                      ) : (
-                        <AppText variant="bodySm" color="textMuted">—</AppText>
-                      )}
-                    </Pressable>
-                  );
-                })}
-                <View style={[styles.monthCell, { width: TOTAL_WIDTH }]}>
-                  <Amount value={wholeLoanTotal(debt)} variant="amountXs" semanticColor={false} />
+            <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false}>
+              <View>
+                <View style={[styles.headerRow, { height: HEADER_HEIGHT }]}>
+                  {MONTH_LABELS.map((label, monthIndex) => (
+                    <View key={label} style={[styles.monthCell, { width: CELL_WIDTH }, isCurrent(monthIndex) && styles.currentCell]}>
+                      <AppText variant="labelSm" color={isCurrent(monthIndex) ? 'accentPrimary' : 'textMuted'}>{label}</AppText>
+                    </View>
+                  ))}
+                  <View style={[styles.monthCell, { width: TOTAL_WIDTH }]}>
+                    <AppText variant="labelSm" color="textMuted">Whole loan</AppText>
+                  </View>
                 </View>
+
+                {rows.map(({ debt, schedule }) => (
+                  <View key={debt.id} style={styles.row}>
+                    {MONTH_LABELS.map((_, monthIndex) => {
+                      const cell = schedule.find((m) => {
+                        const d = new Date(m.dueDate);
+                        return d.getFullYear() === selectedYear && d.getMonth() === monthIndex;
+                      });
+                      return (
+                        <Pressable
+                          key={monthIndex}
+                          style={[styles.monthCell, { width: CELL_WIDTH }, isCurrent(monthIndex) && styles.currentCell]}
+                          disabled={!cell}
+                          onPress={() => cell && setDetailCell({ debt, month: cell })}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            cell ? `${debt.creditor} ${MONTH_LABELS[monthIndex]} ${formatPHP(cell.amount)}, ${cell.status}` : 'No payment scheduled'
+                          }
+                        >
+                          {cell ? (
+                            <>
+                              <AppText variant="amountXs" color={statusColor(cell.status)}>
+                                {formatPHP(cell.amount)}
+                              </AppText>
+                              {cell.status === 'paid' ? (
+                                <View style={styles.tag}>
+                                  <Feather name="check" size={10} color={theme.colors.positive} />
+                                  <AppText variant="labelSm" color="textMuted">Paid</AppText>
+                                </View>
+                              ) : cell.status === 'due' ? (
+                                <AppText variant="labelSm" color="accentPrimary">Due</AppText>
+                              ) : cell.interest > 0 ? (
+                                <AppText variant="labelSm" color="textMuted">{formatPHP(cell.interest)} int</AppText>
+                              ) : null}
+                            </>
+                          ) : (
+                            <AppText variant="bodySm" color="textDisabled">·</AppText>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                    <View style={[styles.monthCell, { width: TOTAL_WIDTH }]}>
+                      <Amount value={wholeLoanTotal(debt)} variant="amountXs" semanticColor={false} />
+                    </View>
+                  </View>
+                ))}
               </View>
-            ))}
+            </ScrollView>
           </View>
-        </ScrollView>
+          <AppText variant="labelSm" color="textMuted" style={styles.hint}>
+            Tap a month for the breakdown · swipe to see the rest of the year
+          </AppText>
+        </>
       )}
 
       <BottomSheet
@@ -273,24 +305,37 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     padding: 0,
   },
-  headerRow: { flexDirection: 'row' },
+  table: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.bgSurface,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.sm,
+  },
+  nameColumn: { borderRightWidth: 1, borderRightColor: theme.colors.borderStrong },
+  headerCell: { backgroundColor: theme.colors.bgElevated },
+  headerRow: { flexDirection: 'row', backgroundColor: theme.colors.bgElevated },
   row: {
     flexDirection: 'row',
+    height: ROW_HEIGHT,
     borderTopWidth: 1,
     borderTopColor: theme.colors.borderDefault,
   },
   nameCell: {
+    height: ROW_HEIGHT,
     justifyContent: 'center',
-    paddingVertical: theme.spacing[3],
-    paddingRight: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderDefault,
   },
   monthCell: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: theme.spacing[3],
-    minHeight: 44,
     gap: theme.spacing[1],
   },
+  currentCell: { backgroundColor: theme.colors.accentSubtle },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] },
+  hint: { textAlign: 'center', marginTop: theme.spacing[3] },
   detail: { gap: theme.spacing[3] },
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

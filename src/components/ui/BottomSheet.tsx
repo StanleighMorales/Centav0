@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Modal, View, Animated, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, View, Animated, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 
 type Props = {
   visible: boolean;
@@ -12,6 +12,7 @@ type Props = {
 };
 
 export function BottomSheet({ visible, onClose, title, children }: Props) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(300)).current;
 
@@ -28,9 +29,10 @@ export function BottomSheet({ visible, onClose, title, children }: Props) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close sheet" />
         <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + theme.spacing[5], transform: [{ translateY }] }]}>
+          <View style={styles.grab} />
           {title ? (
             <View style={styles.header}>
-              <AppText variant="h3">{title}</AppText>
+              <AppText variant="displaySm">{title}</AppText>
             </View>
           ) : null}
           {children}
@@ -40,23 +42,29 @@ export function BottomSheet({ visible, onClose, title, children }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   flex: { flex: 1 },
   backdrop: {
     flex: 1,
-    backgroundColor: theme.colors.scrim,
+    backgroundColor: c.scrim,
   },
   sheet: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderTopLeftRadius: theme.radius['2xl'],
     borderTopRightRadius: theme.radius['2xl'],
+    borderTopWidth: 1,
+    borderTopColor: c.borderDefault,
     padding: theme.spacing[5],
+    paddingTop: theme.spacing[3],
     ...theme.shadows.lg,
   },
-  header: {
-    marginBottom: theme.spacing[5],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
-    paddingBottom: theme.spacing[4],
+  grab: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.borderStrong,
+    marginBottom: theme.spacing[4],
   },
-});
+  header: { marginBottom: theme.spacing[5] },
+}));

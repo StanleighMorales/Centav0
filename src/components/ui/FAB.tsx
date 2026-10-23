@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { Pressable, StyleProp, ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   onPress: () => void;
@@ -12,6 +12,8 @@ type Props = {
 };
 
 export function FAB({ onPress, icon = 'plus', accessibilityLabel, style }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -26,25 +28,25 @@ export function FAB({ onPress, icon = 'plus', accessibilityLabel, style }: Props
         style,
       ]}
     >
-      <Feather name={icon} size={24} color={theme.colors.bgPrimary} />
+      <Feather name={icon} size={24} color={colors.onAccent} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   fab: {
     position: 'absolute',
     right: theme.spacing[5],
     width: 56,
     height: 56,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.md,
   },
   pressed: {
-    backgroundColor: theme.colors.accentDim,
+    backgroundColor: c.accentDim,
     transform: [{ scale: 0.96 }],
   },
-});
+}));

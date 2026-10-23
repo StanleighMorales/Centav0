@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { DatePicker } from '../../src/components/ui/DatePicker';
 import { transactionRepo, categoryRepo, debtPaymentRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { endOfDayManilaIso, periodRangeIso, startOfDayManilaIso, type Period } from '../../src/utils/date';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Category } from '../../src/domain/types';
 
 type CategoryRow = { categoryId: string; name: string; total: number; percent: number };
@@ -64,6 +64,8 @@ function periodLabel(period: ReportPeriod, date: Date, customStart: string, cust
 }
 
 export default function ReportsScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [periodOffset, setPeriodOffset] = useState(0);
@@ -147,7 +149,7 @@ export default function ReportsScreen() {
           hitSlop={12}
           style={{ opacity: canPage ? 1 : 0 }}
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textSecondary} />
+          <Feather name="chevron-left" size={22} color={colors.textSecondary} />
         </Pressable>
         <View style={styles.periodTitle}>
           <AppText variant="h4" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.periodTitleText}>
@@ -162,7 +164,7 @@ export default function ReportsScreen() {
           hitSlop={12}
           style={{ opacity: canPage ? (periodOffset >= 0 ? 0.3 : 1) : 0 }}
         >
-          <Feather name="chevron-right" size={22} color={theme.colors.textSecondary} />
+          <Feather name="chevron-right" size={22} color={colors.textSecondary} />
         </Pressable>
       </View>
 
@@ -259,7 +261,7 @@ export default function ReportsScreen() {
 
         {breakdown.length === 0 && (
           <View style={styles.empty}>
-            <Feather name="bar-chart-2" size={40} color={theme.colors.textMuted} />
+            <Feather name="bar-chart-2" size={40} color={colors.textMuted} />
             <AppText variant="bodySm" color="textMuted" style={styles.emptyText}>
               No transactions this {period === 'custom' ? 'range' : period}
             </AppText>
@@ -270,10 +272,10 @@ export default function ReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
     paddingHorizontal: theme.spacing[5],
   },
   title: { marginTop: theme.spacing[7], marginBottom: theme.spacing[5] },
@@ -287,7 +289,7 @@ const styles = StyleSheet.create({
   periodTitleText: { width: '100%', textAlign: 'center' },
   periodTabs: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.md,
     padding: 3,
     marginBottom: theme.spacing[5],
@@ -301,7 +303,7 @@ const styles = StyleSheet.create({
   },
   periodTabText: { width: '100%', textAlign: 'center' },
   periodTabSelected: {
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
   },
   customDates: {
     gap: theme.spacing[3],
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
   },
   scroll: { gap: theme.spacing[5] },
   summaryCard: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     gap: theme.spacing[3],
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: { letterSpacing: 0.8 },
   summaryValue: { flexShrink: 1, textAlign: 'right' },
-  summaryDivider: { height: 1, backgroundColor: theme.colors.borderDefault },
+  summaryDivider: { height: 1, backgroundColor: c.borderDefault },
   section: { gap: theme.spacing[4] },
   sectionLabel: { letterSpacing: 0.8 },
   catRow: { gap: theme.spacing[2] },
@@ -331,15 +333,15 @@ const styles = StyleSheet.create({
   catAmounts: { flexDirection: 'row', gap: theme.spacing[4], alignItems: 'center' },
   barTrack: {
     height: 4,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderRadius: theme.radius.full,
     overflow: 'hidden',
   },
   barFill: {
     height: 4,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     borderRadius: theme.radius.full,
   },
   empty: { alignItems: 'center', gap: theme.spacing[4], paddingTop: theme.spacing[10] },
   emptyText: { textAlign: 'center' },
-});
+}));

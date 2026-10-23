@@ -1,7 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
+import { Pressable, ActivityIndicator, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -16,6 +16,8 @@ type Props = {
 };
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled, accessibilityLabel, style }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
 
   return (
@@ -33,11 +35,11 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={variant === 'primary' ? theme.colors.bgPrimary : theme.colors.accentPrimary} />
+        <ActivityIndicator size="small" color={variant === 'primary' ? colors.onAccent : colors.accentPrimary} />
       ) : (
         <AppText
           variant="labelLg"
-          color={variant === 'primary' ? 'bgPrimary' : isDisabled ? 'textDisabled' : 'accentPrimary'}
+          color={variant === 'primary' ? 'onAccent' : isDisabled ? 'textDisabled' : 'accentPrimary'}
         >
           {label}
         </AppText>
@@ -46,7 +48,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   base: {
     height: 52,
     borderRadius: theme.radius.md,
@@ -55,26 +57,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
   },
   primary: {
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
   },
   primaryPressed: {
-    backgroundColor: theme.colors.accentDim,
+    backgroundColor: c.accentDim,
   },
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: theme.colors.accentPrimary,
+    borderColor: c.accentPrimary,
   },
   secondaryPressed: {
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   ghostPressed: {
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
   },
   disabled: {
     opacity: 0.4,
   },
-});
+}));

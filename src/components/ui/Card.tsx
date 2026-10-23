@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, ViewProps, StyleSheet } from 'react-native';
-import { theme } from '../../theme';
+import { View, ViewProps } from 'react-native';
+import { theme, makeStyles } from '../../theme';
 
 type Props = ViewProps & { elevated?: boolean; accent?: boolean };
 
 export function Card({ elevated = false, accent = false, style, children, ...rest }: Props) {
+  const styles = useStyles();
   return (
     <View style={[styles.card, elevated && styles.elevated, accent && styles.accent, style]} {...rest}>
       {children}
@@ -12,20 +13,20 @@ export function Card({ elevated = false, accent = false, style, children, ...res
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   card: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     ...theme.shadows.sm,
   },
   elevated: {
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     ...theme.shadows.md,
   },
   accent: {
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
   },
-});
+}));

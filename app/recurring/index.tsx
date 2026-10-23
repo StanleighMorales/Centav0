@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, FlatList, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { AppText } from '../../src/components/ui/AppText';
@@ -10,7 +10,7 @@ import { AddRecurringSheet } from '../../src/components/recurring/AddRecurringSh
 import { recurringTransactionRepo, accountRepo, categoryRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { displayDate } from '../../src/utils/date';
-import { theme } from '../../src/theme';
+import { theme, makeStyles } from '../../src/theme';
 import type { RecurringTransaction, Account, Category } from '../../src/domain/types';
 
 const FREQUENCY_LABEL: Record<RecurringTransaction['frequency'], string> = {
@@ -20,6 +20,7 @@ const FREQUENCY_LABEL: Record<RecurringTransaction['frequency'], string> = {
 };
 
 export default function RecurringScreen() {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [rules, setRules] = useState<RecurringTransaction[]>([]);
   const [accounts, setAccounts] = useState<Record<string, Account>>({});
@@ -117,17 +118,17 @@ export default function RecurringScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
     paddingHorizontal: theme.spacing[5],
   },
   title: { marginTop: theme.spacing[7], marginBottom: theme.spacing[5] },
   list: { gap: theme.spacing[4] },
   listEmpty: { flex: 1, justifyContent: 'center' },
   card: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     gap: theme.spacing[2],
@@ -136,4 +137,4 @@ const styles = StyleSheet.create({
   cardPressed: { opacity: 0.85 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   cardLeft: { gap: theme.spacing[1] },
-});
+}));

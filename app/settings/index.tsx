@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -9,9 +9,10 @@ import { AppTextInput } from '../../src/components/ui/AppTextInput';
 import { BottomSheet } from '../../src/components/ui/BottomSheet';
 import { Button } from '../../src/components/ui/Button';
 import { LoadingOverlay } from '../../src/components/ui/LoadingOverlay';
+import { Segmented } from '../../src/components/ui/Segmented';
 import { exportBackup, restoreBackup, InvalidBackupError } from '../../src/db/backup';
 import { resetAppData } from '../../src/db/database';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme, type ThemeMode } from '../../src/theme';
 
 type RowProps = {
   icon: React.ComponentProps<typeof Feather>['name'];
@@ -21,7 +22,9 @@ type RowProps = {
 };
 
 function Row({ icon, label, onPress, destructive }: RowProps) {
-  const color = destructive ? theme.colors.negative : theme.colors.textSecondary;
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const color = destructive ? colors.negative : colors.textSecondary;
   return (
     <Pressable
       onPress={onPress}
@@ -33,12 +36,17 @@ function Row({ icon, label, onPress, destructive }: RowProps) {
       <AppText variant="body" color={destructive ? 'negative' : 'textPrimary'} style={styles.rowLabel}>
         {label}
       </AppText>
-      <Feather name="chevron-right" size={18} color={theme.colors.textMuted} />
+      <Feather name="chevron-right" size={18} color={colors.textMuted} />
     </Pressable>
   );
 }
 
+const MODE_LABELS = ['System', 'Light', 'Dark'] as const;
+type ModeLabel = (typeof MODE_LABELS)[number];
+
 export default function SettingsScreen() {
+  const styles = useStyles();
+  const { mode, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -92,7 +100,16 @@ export default function SettingsScreen() {
     <View style={[styles.container, { paddingTop: insets.top + theme.spacing[5] }]}>
       <AppText variant="h2" style={styles.title}>Settings</AppText>
 
-      <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>DATA</AppText>
+      <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>APPEARANCE</AppText>
+      <View style={styles.appearance}>
+        <Segmented
+          options={MODE_LABELS}
+          value={(mode[0].toUpperCase() + mode.slice(1)) as ModeLabel}
+          onChange={(label) => setMode(label.toLowerCase() as ThemeMode)}
+        />
+      </View>
+
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA</AppText>
       <Row icon="upload" label="Back up now" onPress={handleBackup} />
       <Row icon="download" label="Restore from file" onPress={handleRestore} />
       <Row icon="trash-2" label="Remove all data" onPress={() => setResetVisible(true)} destructive />
@@ -139,8 +156,9 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.bgPrimary, paddingHorizontal: theme.spacing[5] },
+const useStyles = makeStyles((c) => ({
+  appearance: { marginBottom: theme.spacing[2] },
+  container: { flex: 1, backgroundColor: c.bgPrimary, paddingHorizontal: theme.spacing[5] },
   title: { marginBottom: theme.spacing[6] },
   sectionLabel: { letterSpacing: 0.8, marginBottom: theme.spacing[2] },
   sectionGap: { marginTop: theme.spacing[6] },
@@ -150,7 +168,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   rowPressed: { opacity: 0.6 },
   rowLabel: { flex: 1 },
@@ -160,10 +178,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   resetSheet: { gap: theme.spacing[5] },
   actions: { flexDirection: 'row', gap: theme.spacing[4] },
   action: { flex: 1 },
-  dangerButton: { borderColor: theme.colors.negative },
-});
+  dangerButton: { borderColor: c.negative },
+}));

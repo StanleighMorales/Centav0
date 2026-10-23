@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,10 +9,12 @@ import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AccountTypeSheet } from '../../src/components/accounts/AccountTypeSheet';
 import { accountTypeRepo, accountRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { AccountType } from '../../src/domain/types';
 
 export default function AccountTypesScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [types, setTypes] = useState<AccountType[]>([]);
@@ -68,14 +70,14 @@ export default function AccountTypesScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2">Account Types</AppText>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -94,7 +96,7 @@ export default function AccountTypesScreen() {
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               >
                 <View style={styles.iconCircle}>
-                  <Feather name="sliders" size={18} color={theme.colors.textSecondary} />
+                  <Feather name="sliders" size={18} color={colors.textSecondary} />
                 </View>
                 <View style={styles.rowMain}>
                   <AppText variant="body">{t.name}</AppText>
@@ -111,9 +113,9 @@ export default function AccountTypesScreen() {
                   hitSlop={8}
                   style={styles.deleteBtn}
                 >
-                  <Feather name="trash-2" size={16} color={theme.colors.textMuted} />
+                  <Feather name="trash-2" size={16} color={colors.textMuted} />
                 </Pressable>
-                <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+                <Feather name="chevron-right" size={16} color={colors.textMuted} />
               </Pressable>
             ))
           )}
@@ -146,8 +148,8 @@ export default function AccountTypesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -170,14 +172,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -188,4 +190,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

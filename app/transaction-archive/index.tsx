@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -9,10 +9,12 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { Amount } from '../../src/components/ui/Amount';
 import { transactionRepo, categoryRepo, accountRepo } from '../../src/repositories';
 import { displayDate, displayDateTime } from '../../src/utils/date';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Transaction } from '../../src/domain/types';
 
 export default function TransactionArchiveScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -46,14 +48,14 @@ export default function TransactionArchiveScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Transaction Archive</AppText>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <FlatList
@@ -77,8 +79,8 @@ export default function TransactionArchiveScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -95,4 +97,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
-});
+}));

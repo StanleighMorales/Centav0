@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, StyleSheet } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -10,7 +10,7 @@ import { AppText } from '../ui/AppText';
 import { accountRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Account } from '../../domain/types';
 
 type Props = {
@@ -20,6 +20,7 @@ type Props = {
 };
 
 export function TransferSheet({ visible, onClose, onSuccess }: Props) {
+  const styles = useStyles();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [amount, setAmount] = useState(0);
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -127,13 +128,13 @@ export function TransferSheet({ visible, onClose, onSuccess }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   preview: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.md,
     padding: theme.spacing[4],
     gap: theme.spacing[2],
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

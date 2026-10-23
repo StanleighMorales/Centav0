@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
 import { AmountInput } from '../ui/AmountInput';
@@ -7,7 +7,7 @@ import { DatePicker } from '../ui/DatePicker';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { lendingRepo, lendingPersonRepo, accountRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import { nowIso } from '../../utils/date';
 import type { Lending, LendingPerson, Account } from '../../domain/types';
 
@@ -21,6 +21,7 @@ type Props = {
 };
 
 export function AddLendingSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const styles = useStyles();
   const isEdit = !!initial;
   const [people, setPeople] = useState<LendingPerson[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -144,6 +145,6 @@ export function AddLendingSheet({ visible, onClose, onSuccess, initial }: Props)
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
-});
+}));

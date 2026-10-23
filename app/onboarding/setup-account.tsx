@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,9 +13,11 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { accountRepo, accountTypeRepo } from '../../src/repositories';
 import type { AccountType } from '../../src/domain/types';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 
 export default function SetupAccountScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const [name, setName] = useState('');
   const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
@@ -68,7 +69,7 @@ export default function SetupAccountScreen() {
           <TextInput
             style={styles.input}
             placeholder="e.g. GCash, BPI Savings, Wallet"
-            placeholderTextColor={theme.colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={name}
             onChangeText={setName}
             autoFocus
@@ -100,7 +101,7 @@ export default function SetupAccountScreen() {
             <TextInput
               style={styles.balanceInput}
               placeholder="0.00"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={balance}
               onChangeText={setBalance}
               keyboardType="decimal-pad"
@@ -119,7 +120,7 @@ export default function SetupAccountScreen() {
             accessibilityLabel="Create Account"
           >
             {saving
-              ? <ActivityIndicator color={theme.colors.bgPrimary} />
+              ? <ActivityIndicator color={colors.onAccent} />
               : <Text style={styles.btnText}>Create Account</Text>}
           </TouchableOpacity>
         </ScrollView>
@@ -128,25 +129,25 @@ export default function SetupAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  container: { flex: 1, backgroundColor: c.bgPrimary },
   flex: { flex: 1 },
   scroll: { padding: theme.spacing['6'], paddingTop: theme.spacing['10'] },
 
   heading: {
     ...theme.typography.displaySm,
-    color: theme.colors.textPrimary,
+    color: c.textPrimary,
     marginBottom: theme.spacing['3'],
   },
   sub: {
     ...theme.typography.bodySm,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginBottom: theme.spacing['9'],
   },
 
   label: {
     ...theme.typography.label,
-    color: theme.colors.textMuted,
+    color: c.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: theme.spacing['3'],
@@ -155,10 +156,10 @@ const styles = StyleSheet.create({
 
   input: {
     ...theme.typography.body,
-    color: theme.colors.textPrimary,
-    backgroundColor: theme.colors.bgInput,
+    color: c.textPrimary,
+    backgroundColor: c.bgInput,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing['5'],
     paddingVertical: theme.spacing['4'],
@@ -174,50 +175,50 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing['3'],
     borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgSurface,
+    borderColor: c.borderDefault,
+    backgroundColor: c.bgSurface,
   },
   chipActive: {
-    borderColor: theme.colors.accentPrimary,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentPrimary,
+    backgroundColor: c.accentSubtle,
   },
   chipText: {
     ...theme.typography.labelLg,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
   },
   chipTextActive: {
-    color: theme.colors.accentPrimary,
+    color: c.accentPrimary,
   },
 
   balanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.bgInput,
+    backgroundColor: c.bgInput,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.spacing['5'],
   },
   peso: {
     ...theme.typography.amountMd,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     marginRight: theme.spacing['2'],
   },
   balanceInput: {
     ...theme.typography.amountMd,
-    color: theme.colors.textPrimary,
+    color: c.textPrimary,
     flex: 1,
     paddingVertical: theme.spacing['4'],
   },
 
   error: {
     ...theme.typography.bodySm,
-    color: theme.colors.negative,
+    color: c.negative,
     marginTop: theme.spacing['5'],
   },
 
   btn: {
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     borderRadius: theme.radius.lg,
     paddingVertical: theme.spacing['5'],
     alignItems: 'center',
@@ -226,8 +227,8 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
   btnText: {
     ...theme.typography.labelLg,
-    color: theme.colors.bgPrimary,
+    color: c.onAccent,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-});
+}));

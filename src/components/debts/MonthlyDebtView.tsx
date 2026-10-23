@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Pressable, TextInput, StyleSheet } from 'react-native';
+import { View, Pressable, TextInput } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../ui/AppText';
 import { Amount } from '../ui/Amount';
 import { EmptyState } from '../ui/EmptyState';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { displayDate } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
@@ -35,6 +35,8 @@ function dueTag(iso: string): DueTag {
 }
 
 export function MonthlyDebtView({ debts, accounts }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const [selectedMonth, setSelectedMonth] = useState(() => new Date());
   const [expectedIncome, setExpectedIncome] = useState(0);
@@ -85,7 +87,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
           accessibilityLabel="Previous month"
           hitSlop={12}
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h3">{monthLabel(selectedMonth)}</AppText>
         <Pressable
@@ -94,7 +96,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
           accessibilityLabel="Next month"
           hitSlop={12}
         >
-          <Feather name="chevron-right" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-right" size={22} color={colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -151,7 +153,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
               <View style={styles.groupHeader}>
                 <AppText variant="labelLg">{displayDate(group[0].dueDate)}</AppText>
                 <View style={styles.tag}>
-                  <Feather name={tag.icon} size={12} color={theme.colors[tag.color]} />
+                  <Feather name={tag.icon} size={12} color={colors[tag.color]} />
                   <AppText variant="labelSm" color={tag.color}>{tag.label}</AppText>
                 </View>
               </View>
@@ -168,7 +170,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
                     <AppText variant="labelSm" color="textMuted">{row.debt.debtType}</AppText>
                   </View>
                   <Amount value={row.amount} variant="amountSm" semanticColor={false} />
-                  <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+                  <Feather name="chevron-right" size={16} color={colors.textMuted} />
                 </Pressable>
               ))}
               {group.length > 1 ? (
@@ -185,7 +187,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: { paddingHorizontal: theme.spacing[5] },
   nav: {
     flexDirection: 'row',
@@ -194,7 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
   summary: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     gap: theme.spacing[3],
@@ -202,16 +204,16 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryDivider: { height: 1, backgroundColor: theme.colors.borderDefault },
+  summaryDivider: { height: 1, backgroundColor: c.borderDefault },
   incomeInput: {
     ...theme.typography.amountSm,
-    color: theme.colors.accentPrimary,
+    color: c.accentPrimary,
     minWidth: 80,
     textAlign: 'right',
     padding: 0,
   },
   group: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     marginBottom: theme.spacing[3],
     overflow: 'hidden',
@@ -222,7 +224,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing[5],
     paddingVertical: theme.spacing[3],
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
   },
   tag: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   debtRow: {
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: theme.spacing[5],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderDefault,
+    borderTopColor: c.borderDefault,
   },
   debtInfo: { flex: 1 },
   subtotalRow: {
@@ -241,6 +243,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
     paddingVertical: theme.spacing[3],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderStrong,
+    borderTopColor: c.borderStrong,
   },
-});
+}));

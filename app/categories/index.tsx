@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -10,10 +10,12 @@ import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { CategorySheet } from '../../src/components/categories/CategorySheet';
 import { categoryRepo, transactionRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Category, CategoryType } from '../../src/domain/types';
 
 export default function CategoriesScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<CategoryType>('Expense');
@@ -75,7 +77,7 @@ export default function CategoriesScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2">Categories</AppText>
       </View>
@@ -99,7 +101,7 @@ export default function CategoriesScreen() {
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -121,7 +123,7 @@ export default function CategoriesScreen() {
                   <CategoryIcon
                     name={cat.icon ?? 'tag'}
                     size={18}
-                    color={theme.colors.bgPrimary}
+                    color={colors.onAccent}
                   />
                 </View>
                 <AppText variant="body" style={styles.catName}>{cat.name}</AppText>
@@ -132,9 +134,9 @@ export default function CategoriesScreen() {
                   hitSlop={8}
                   style={styles.deleteBtn}
                 >
-                  <Feather name="trash-2" size={16} color={theme.colors.textMuted} />
+                  <Feather name="trash-2" size={16} color={colors.textMuted} />
                 </Pressable>
-                <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+                <Feather name="chevron-right" size={16} color={colors.textMuted} />
               </Pressable>
             ))
           )}
@@ -168,8 +170,8 @@ export default function CategoriesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -197,7 +199,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabActive: { borderBottomColor: theme.colors.accentPrimary },
+  tabActive: { borderBottomColor: c.accentPrimary },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: theme.spacing[5] },
   row: {
@@ -206,14 +208,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -224,4 +226,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

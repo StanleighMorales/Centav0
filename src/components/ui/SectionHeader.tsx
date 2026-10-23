@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 
 type Props = { title: string; action?: React.ReactNode };
 
 export function SectionHeader({ title, action }: Props) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <AppText variant="label" color="textSecondary" style={styles.title}>
@@ -16,7 +17,7 @@ export function SectionHeader({ title, action }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -24,4 +25,4 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
   title: { letterSpacing: 1.2 },
-});
+}));

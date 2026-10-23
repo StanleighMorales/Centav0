@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Image } from 'react-native';
+import { View, ScrollView, Pressable, Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
+import { Segmented } from '../ui/Segmented';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -15,7 +16,7 @@ import { accountRepo, categoryRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import type { Account, Category, Transaction, TransactionType } from '../../domain/types';
 
 type Props = {
@@ -26,7 +27,11 @@ type Props = {
   lockAccountAndType?: boolean;
 };
 
+const TYPES = ['Expense', 'Income'] as const;
+
 export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [amount, setAmount] = useState(0);
   // AddTransactionSheet only ever toggles Expense/Income — Transfer has its own TransferSheet.
   const [type, setType] = useState<'Expense' | 'Income'>('Expense');
@@ -151,25 +156,15 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         showsVerticalScrollIndicator={false}
       >
         {lockAccountAndType ? null : (
-          <View style={styles.typeRow}>
-            {(['Expense', 'Income'] as const).map((t) => (
-              <Pressable
-                key={t}
-                onPress={() => {
-                  setType(t);
-                  setCategoryId(null);
-                  if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t}
-                style={[styles.typeBtn, type === t && styles.typeBtnActive]}
-              >
-                <AppText variant="labelLg" color={type === t ? 'bgPrimary' : 'textSecondary'}>
-                  {t}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
+          <Segmented
+            options={TYPES}
+            value={type}
+            onChange={(t) => {
+              setType(t);
+              setCategoryId(null);
+              if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+            }}
+          />
         )}
 
         <AmountInput label="Amount" value={amount} onChange={setAmount} error={errors.amount} />
@@ -190,7 +185,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
             accessibilityLabel="Add new category"
             style={styles.plusBtn}
           >
-            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+            <Feather name="plus" size={20} color={colors.accentPrimary} />
           </Pressable>
         </View>
         {lockAccountAndType ? null : (
@@ -215,7 +210,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
               accessibilityLabel="Add new account"
               style={styles.plusBtn}
             >
-              <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+              <Feather name="plus" size={20} color={colors.accentPrimary} />
             </Pressable>
           </View>
         )}
@@ -238,7 +233,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
                   accessibilityLabel="Remove receipt"
                   style={styles.receiptRemove}
                 >
-                  <Feather name="x" size={16} color={theme.colors.textPrimary} />
+                  <Feather name="x" size={16} color={colors.textPrimary} />
                 </Pressable>
               </View>
             ) : (
@@ -248,7 +243,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
                 accessibilityLabel="Attach receipt image"
                 style={styles.receiptAttach}
               >
-                <Feather name="paperclip" size={18} color={theme.colors.accentPrimary} />
+                <Feather name="paperclip" size={18} color={colors.accentPrimary} />
                 <AppText variant="body" color="accentPrimary">Attach image</AppText>
               </Pressable>
             )}
@@ -273,7 +268,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   pickerRow: {
     flexDirection: 'row',
@@ -290,15 +285,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
   },
   receiptPreview: { position: 'relative' },
   receiptImage: {
     width: '100%',
     height: 160,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
   },
   receiptRemove: {
     position: 'absolute',
@@ -307,7 +302,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.scrim,
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -316,27 +311,10 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typeRow: {
-    flexDirection: 'row',
-    gap: theme.spacing[3],
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: theme.spacing[3],
-    alignItems: 'center',
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
-    borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-  },
-  typeBtnActive: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderColor: theme.colors.accentPrimary,
-  },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

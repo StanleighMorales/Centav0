@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -9,7 +9,7 @@ import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { accountRepo, categoryRepo, recurringTransactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Account, Category, RecurringTransaction, RecurringFrequency } from '../../domain/types';
 
 type Props = {
@@ -32,6 +32,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SEMI_MONTH_DAYS = [15, 30];
 
 export function AddRecurringSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const styles = useStyles();
   const isEdit = Boolean(initial);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -187,7 +188,7 @@ export function AddRecurringSheet({ visible, onClose, onSuccess, initial }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   sectionLabel: { marginBottom: theme.spacing[3] },
   toggleRow: { flexDirection: 'row', gap: theme.spacing[3] },
@@ -196,13 +197,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     alignItems: 'center',
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
   },
   toggleBtnActive: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
+    borderColor: c.accentPrimary,
   },
   weekRow: { flexDirection: 'row', gap: theme.spacing[2] },
   dayBtn: {
@@ -210,9 +211,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     alignItems: 'center',
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, SectionList, Pressable, ActivityIndicator, StyleSheet,
-} from 'react-native';
+  View, SectionList, Pressable, ActivityIndicator, } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../../src/components/ui/AppText';
+import { Chip } from '../../src/components/ui/Chip';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
@@ -14,7 +14,9 @@ import { TransactionDetailSheet } from '../../src/components/transactions/Transa
 import { transactionRepo, categoryRepo, accountRepo } from '../../src/repositories';
 import { displayDate, periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
+import { TAB_BAR_SPACE } from '../../src/components/nav/FloatingTabBar';
+import { onDataChanged } from '../../src/utils/dataEvents';
 import type { Transaction, TransactionType } from '../../src/domain/types';
 
 type Filter = 'All' | TransactionType;
@@ -41,6 +43,8 @@ function groupByDate(txns: Transaction[]): { title: string; data: Transaction[] 
 }
 
 export default function TransactionsScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('All');
@@ -73,6 +77,19 @@ export default function TransactionsScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(filter, dateFilter); }, [filter, dateFilter, load]));
+  useEffect(() => onDataChanged(() => { load(filter, dateFilter); }), [filter, dateFilter, load]);
+
+  const totals = sections.reduce(
+    (acc, sec) => {
+      for (const t of sec.data) {
+        if (t.type === 'Income') acc.income += t.amount;
+        else if (t.type === 'Expense') acc.expense += t.amount;
+      }
+      acc.net = acc.income - acc.expense;
+      return acc;
+    },
+    { income: 0, expense: 0, net: 0 },
+  );
 
   const handleFilter = (f: Filter) => {
     setFilter(f);
@@ -94,51 +111,38 @@ export default function TransactionsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <ScreenHeader title="Transactions" />
+      <ScreenHeader title="Activity" />
 
       <View style={styles.chips}>
         {FILTERS.map((f) => (
-          <Pressable
-            key={f}
-            onPress={() => handleFilter(f)}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${f}`}
-            accessibilityState={{ selected: filter === f }}
-            style={[styles.chip, filter === f && styles.chipActive]}
-          >
-            <AppText
-              variant="labelLg"
-              color={filter === f ? 'accentPrimary' : 'textSecondary'}
-            >
-              {f}
-            </AppText>
-          </Pressable>
+          <Chip key={f} label={f} selected={filter === f} onPress={() => handleFilter(f)} accessibilityLabel={`Filter by ${f}`} />
         ))}
       </View>
 
       <View style={styles.chips}>
         {DATE_FILTERS.map((f) => (
-          <Pressable
-            key={f.key}
-            onPress={() => handleDateFilter(f.key)}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${f.label}`}
-            accessibilityState={{ selected: dateFilter === f.key }}
-            style={[styles.chip, dateFilter === f.key && styles.chipActive]}
-          >
-            <AppText
-              variant="labelLg"
-              color={dateFilter === f.key ? 'accentPrimary' : 'textSecondary'}
-            >
-              {f.label}
-            </AppText>
-          </Pressable>
+          <Chip key={f.key} label={f.label} selected={dateFilter === f.key} onPress={() => handleDateFilter(f.key)} accessibilityLabel={`Filter by ${f.label}`} />
         ))}
+      </View>
+
+      <View style={styles.summary}>
+        <View style={styles.summaryCol}>
+          <AppText variant="labelSm" color="textMuted">IN</AppText>
+          <AppText variant="amountSm" color="positive">+{formatPHP(totals.income)}</AppText>
+        </View>
+        <View style={styles.summaryCol}>
+          <AppText variant="labelSm" color="textMuted">OUT</AppText>
+          <AppText variant="amountSm" color="negative">-{formatPHP(totals.expense)}</AppText>
+        </View>
+        <View style={styles.summaryCol}>
+          <AppText variant="labelSm" color="textMuted">NET</AppText>
+          <AppText variant="amountSm">{totals.net < 0 ? '-' : '+'}{formatPHP(Math.abs(totals.net))}</AppText>
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <SectionList
@@ -146,7 +150,7 @@ export default function TransactionsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: theme.spacing[7] + insets.bottom },
+            { paddingBottom: TAB_BAR_SPACE + insets.bottom },
           ]}
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => (
@@ -171,7 +175,7 @@ export default function TransactionsScreen() {
               title="No transactions"
               subtitle={
                 filter === 'All'
-                  ? 'Tap + on the Dashboard to add one'
+                  ? 'Tap + to add one'
                   : `No ${filter.toLowerCase()} transactions found`
               }
             />
@@ -219,10 +223,10 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
   },
   header: {
     paddingHorizontal: theme.spacing[5],
@@ -232,20 +236,20 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],
-    gap: theme.spacing[3],
-    marginBottom: theme.spacing[5],
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[4],
   },
-  chip: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.radius.full,
+  summary: {
+    flexDirection: 'row',
+    marginHorizontal: theme.spacing[5],
+    marginBottom: theme.spacing[2],
+    padding: theme.spacing[5],
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
+    backgroundColor: c.bgSurface,
   },
-  chipActive: {
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
-  },
+  summaryCol: { flex: 1, gap: theme.spacing[1] },
   loader: {
     flex: 1,
     alignItems: 'center',
@@ -259,4 +263,4 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing[5],
     marginBottom: theme.spacing[3],
   },
-});
+}));

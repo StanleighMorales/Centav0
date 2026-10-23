@@ -1,73 +1,40 @@
+import React, { useState } from 'react';
 import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { Receipt } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../../src/theme';
+import { FloatingTabBar } from '../../src/components/nav/FloatingTabBar';
+import { MoreMenuSheet } from '../../src/components/menu/MoreMenuSheet';
+import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { emitDataChanged } from '../../src/utils/dataEvents';
+import { useTheme } from '../../src/theme';
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const [addOpen, setAddOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        animation: 'fade',
-        sceneStyle: { backgroundColor: theme.colors.bgPrimary },
-        tabBarStyle: {
-          backgroundColor: theme.colors.bgSurface,
-          borderTopColor: theme.colors.borderDefault,
-          borderTopWidth: 1,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
-        },
-        tabBarActiveTintColor: theme.colors.accentPrimary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarLabelStyle: {
-          ...theme.typography.labelSm,
-          marginBottom: 4,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarAccessibilityLabel: 'Home tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size ?? 20} color={color} />
-          ),
+    <>
+      <Tabs
+        tabBar={(props) => (
+          <FloatingTabBar
+            state={props.state}
+            navigation={props.navigation}
+            onAdd={() => setAddOpen(true)}
+            onMore={() => setMoreOpen(true)}
+          />
+        )}
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          sceneStyle: { backgroundColor: colors.bgPrimary },
         }}
-      />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: 'Transactions',
-          tabBarAccessibilityLabel: 'Transactions tab',
-          tabBarIcon: ({ color, size }) => (
-            <Receipt size={size ?? 20} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="debts"
-        options={{
-          title: 'Debts',
-          tabBarAccessibilityLabel: 'Debts tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="credit-card" size={size ?? 20} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="lent"
-        options={{
-          title: 'Lent',
-          tabBarAccessibilityLabel: 'Lent tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="users" size={size ?? 20} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="transactions" options={{ title: 'Activity' }} />
+        <Tabs.Screen name="ledger" options={{ title: 'Ledger' }} />
+      </Tabs>
+
+      <AddTransactionSheet visible={addOpen} onClose={() => setAddOpen(false)} onSuccess={emitDataChanged} />
+      <MoreMenuSheet visible={moreOpen} onClose={() => setMoreOpen(false)} />
+    </>
   );
 }

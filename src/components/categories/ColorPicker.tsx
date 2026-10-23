@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../ui/AppText';
 import { AppTextInput } from '../ui/AppTextInput';
 import { Button } from '../ui/Button';
 import { HsvPicker } from './HsvPicker';
 import { CATEGORY_COLORS } from '../../constants/categoryColors';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   value: string | null;
@@ -21,6 +21,8 @@ function normalizeHex(input: string): string {
 }
 
 export function ColorPicker({ value, onChange }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [customOpen, setCustomOpen] = useState(false);
   const [hexInput, setHexInput] = useState(value ?? '');
   const isCustom = value !== null && !(CATEGORY_COLORS as readonly string[]).includes(value);
@@ -44,7 +46,7 @@ export function ColorPicker({ value, onChange }: Props) {
             accessibilityState={{ selected: true }}
             style={[styles.swatch, { backgroundColor: value as string }, styles.swatchSelected]}
           >
-            <Feather name="check" size={14} color={theme.colors.bgPrimary} />
+            <Feather name="check" size={14} color={colors.bgPrimary} />
           </Pressable>
         )}
         {CATEGORY_COLORS.map((color) => (
@@ -57,7 +59,7 @@ export function ColorPicker({ value, onChange }: Props) {
             style={[styles.swatch, { backgroundColor: color }, value === color && styles.swatchSelected]}
           >
             {value === color && (
-              <Feather name="check" size={14} color={theme.colors.bgPrimary} />
+              <Feather name="check" size={14} color={colors.bgPrimary} />
             )}
           </Pressable>
         ))}
@@ -68,7 +70,7 @@ export function ColorPicker({ value, onChange }: Props) {
           accessibilityState={{ selected: customOpen }}
           style={[styles.swatch, styles.customBtn, customOpen && styles.swatchSelected]}
         >
-          <Feather name="plus" size={16} color={theme.colors.textSecondary} />
+          <Feather name="plus" size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
       {customOpen && (
@@ -78,7 +80,7 @@ export function ColorPicker({ value, onChange }: Props) {
             onChange={setHexInput}
           />
           <View style={styles.customRow}>
-            <View style={[styles.customPreview, { backgroundColor: HEX_RE.test(normalizeHex(hexInput)) ? normalizeHex(hexInput) : theme.colors.bgElevated }]} />
+            <View style={[styles.customPreview, { backgroundColor: HEX_RE.test(normalizeHex(hexInput)) ? normalizeHex(hexInput) : colors.bgElevated }]} />
             <View style={styles.customInput}>
               <AppTextInput
                 label="Hex"
@@ -96,7 +98,7 @@ export function ColorPicker({ value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   label: { marginBottom: theme.spacing[3] },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] },
   swatch: {
@@ -109,11 +111,11 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   swatchSelected: {
-    borderColor: theme.colors.textPrimary,
+    borderColor: c.textPrimary,
   },
   customBtn: {
-    backgroundColor: theme.colors.bgElevated,
-    borderColor: theme.colors.borderDefault,
+    backgroundColor: c.bgElevated,
+    borderColor: c.borderDefault,
     borderStyle: 'dashed',
   },
   customPanel: {
@@ -130,8 +132,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     marginBottom: theme.spacing[1],
   },
   customInput: { flex: 1 },
-});
+}));

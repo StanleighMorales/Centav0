@@ -1,24 +1,24 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, FlatList, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, FlatList, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { AppText } from '../../src/components/ui/AppText';
-import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
-import { Amount } from '../../src/components/ui/Amount';
-import { EmptyState } from '../../src/components/ui/EmptyState';
-import { FAB } from '../../src/components/ui/FAB';
-import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
-import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
-import { MonthlyDebtView } from '../../src/components/debts/MonthlyDebtView';
-import { InstallmentGridView } from '../../src/components/debts/InstallmentGridView';
-import { debtRepo, debtPaymentRepo, accountRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
-import { displayDate, monthRangeIso } from '../../src/utils/date';
-import { formatPHP } from '../../src/utils/currency';
-import { spendableAccounts } from '../../src/utils/accumulated';
-import type { Account, Debt, DebtStatus, DebtType } from '../../src/domain/types';
+import { AppText } from '../ui/AppText';
+import { Chip } from '../ui/Chip';
+import { Amount } from '../ui/Amount';
+import { EmptyState } from '../ui/EmptyState';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { AddDebtSheet } from '../debts/AddDebtSheet';
+import { MonthlyDebtView } from '../debts/MonthlyDebtView';
+import { InstallmentGridView } from '../debts/InstallmentGridView';
+import { debtRepo, debtPaymentRepo, accountRepo } from '../../repositories';
+import { TAB_BAR_SPACE } from '../nav/FloatingTabBar';
+import { theme, makeStyles, useTheme } from '../../theme';
+import { displayDate, monthRangeIso } from '../../utils/date';
+import { formatPHP } from '../../utils/currency';
+import { spendableAccounts } from '../../utils/accumulated';
+import type { Account, Debt, DebtStatus, DebtType } from '../../domain/types';
 
 const TYPE_TABS: DebtType[] = ['Credit', 'Loan', 'Custom'];
 const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
@@ -35,12 +35,15 @@ type DebtRowProps = {
 };
 
 function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: DebtRowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
 
   return (
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
+      containerStyle={styles.card}
       renderRightActions={debt.linkedAccountId ? undefined : () => (
         <View style={styles.actions}>
           <Pressable
@@ -49,7 +52,7 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
             accessibilityLabel={`Edit debt from ${debt.creditor}`}
             style={styles.editAction}
           >
-            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="edit-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Edit</AppText>
           </Pressable>
           <Pressable
@@ -58,7 +61,7 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
             accessibilityLabel={`Delete debt from ${debt.creditor}`}
             style={styles.deleteAction}
           >
-            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="trash-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Delete</AppText>
           </Pressable>
         </View>
@@ -76,10 +79,10 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
             size={18}
             color={
               debt.status === 'Overdue'
-                ? theme.colors.negative
+                ? colors.negative
                 : debt.status === 'Paid'
-                ? theme.colors.positive
-                : theme.colors.accentPrimary
+                ? colors.positive
+                : colors.accentPrimary
             }
           />
         </View>
@@ -115,14 +118,16 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
           ) : (
             <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} />
           )}
-          <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+          <Feather name="chevron-right" size={16} color={colors.textMuted} />
         </View>
       </Pressable>
     </Swipeable>
   );
 }
 
-export default function DebtsScreen() {
+export function DebtsView({ addSignal }: { addSignal: number }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('List');
@@ -154,6 +159,12 @@ export default function DebtsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Ledger header's + bumps addSignal; the first value is just the initial mount.
+  const firstSignal = useRef(addSignal);
+  useEffect(() => {
+    if (addSignal !== firstSignal.current) setSheetVisible(true);
+  }, [addSignal]);
+
   async function handleDelete() {
     if (!deleteTarget) return;
     await debtRepo.softDelete(deleteTarget.id);
@@ -180,39 +191,24 @@ export default function DebtsScreen() {
   const remainingAfterFunds = Math.max(0, totalDebt - availableFunds);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.title}>
-        <ScreenHeader title="Debts" />
-      </View>
-
+    <View style={styles.root}>
       <View style={styles.viewModeRow}>
         {VIEW_MODES.map((mode) => (
-          <Pressable
-            key={mode}
-            onPress={() => setViewMode(mode)}
-            accessibilityRole="tab"
-            accessibilityLabel={mode}
-            accessibilityState={{ selected: viewMode === mode }}
-            style={[styles.viewModeChip, viewMode === mode && styles.viewModeChipActive]}
-          >
-            <AppText variant="labelSm" color={viewMode === mode ? 'accentPrimary' : 'textSecondary'}>
-              {mode}
-            </AppText>
-          </Pressable>
+          <Chip key={mode} label={mode} selected={viewMode === mode} onPress={() => setViewMode(mode)} />
         ))}
       </View>
 
       {viewMode === 'Monthly' ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 80 + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE + insets.bottom }}
         >
           <MonthlyDebtView debts={debts} accounts={accounts} />
         </ScrollView>
       ) : viewMode === 'Grid' ? (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 80 + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE + insets.bottom }}
         >
           <InstallmentGridView debts={debts} accounts={accounts} />
         </ScrollView>
@@ -237,30 +233,19 @@ export default function DebtsScreen() {
 
       <View style={styles.statusTabRow}>
         {STATUS_TABS.map((tab) => (
-          <Pressable
-            key={tab}
-            onPress={() => setActiveStatus(tab)}
-            accessibilityRole="tab"
-            accessibilityLabel={tab}
-            accessibilityState={{ selected: activeStatus === tab }}
-            style={[styles.statusChip, activeStatus === tab && styles.statusChipActive]}
-          >
-            <AppText variant="labelSm" color={activeStatus === tab ? 'accentPrimary' : 'textSecondary'}>
-              {tab}
-            </AppText>
-          </Pressable>
+          <Chip key={tab} label={tab} selected={activeStatus === tab} onPress={() => setActiveStatus(tab)} />
         ))}
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: 80 + insets.bottom }]}
+          contentContainerStyle={[styles.list, { paddingBottom: TAB_BAR_SPACE + insets.bottom }]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.summary}>
@@ -318,8 +303,6 @@ export default function DebtsScreen() {
         </>
       )}
 
-      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add debt" />
-
       <AddDebtSheet
         visible={sheetVisible}
         debtType={activeType}
@@ -348,26 +331,14 @@ export default function DebtsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
-  title: {
-    paddingHorizontal: theme.spacing[5],
-    marginTop: theme.spacing[5],
-    marginBottom: theme.spacing[4],
-  },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   viewModeRow: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],
     gap: theme.spacing[2],
     marginBottom: theme.spacing[4],
   },
-  viewModeChip: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgSurface,
-  },
-  viewModeChipActive: { backgroundColor: theme.colors.accentSubtle },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],
@@ -381,24 +352,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabActive: { borderBottomColor: theme.colors.accentPrimary },
+  tabActive: { borderBottomColor: c.accentPrimary },
   statusTabRow: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],
     gap: theme.spacing[2],
     marginBottom: theme.spacing[4],
   },
-  statusChip: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgSurface,
-  },
-  statusChipActive: { backgroundColor: theme.colors.accentSubtle },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
   summary: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     flexDirection: 'row',
@@ -407,15 +371,20 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   summaryCol: { flex: 1, gap: theme.spacing[2] },
-  summaryDivider: { width: 1, backgroundColor: theme.colors.borderDefault, marginHorizontal: theme.spacing[1] },
+  summaryDivider: { width: 1, backgroundColor: c.borderDefault, marginHorizontal: theme.spacing[1] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgPrimary,
+    padding: theme.spacing[4],
+    backgroundColor: c.bgSurface,
+  },
+  card: {
+    marginBottom: theme.spacing[3],
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+    overflow: 'hidden',
   },
   actions: { flexDirection: 'row', alignItems: 'stretch' },
   editAction: {
@@ -423,21 +392,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
   },
   deleteAction: {
     width: 76,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.negative,
+    backgroundColor: c.negative,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: theme.spacing[4],
@@ -446,4 +415,4 @@ const styles = StyleSheet.create({
   creditor: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
-});
+}));

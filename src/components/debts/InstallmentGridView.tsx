@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, TextInput } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../ui/AppText';
 import { Amount } from '../ui/Amount';
 import { EmptyState } from '../ui/EmptyState';
 import { BottomSheet } from '../ui/BottomSheet';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { displayDate } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
@@ -33,6 +33,8 @@ function statusColor(status: ScheduleMonth['status']): keyof typeof theme.colors
 }
 
 export function InstallmentGridView({ debts, accounts }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [detailCell, setDetailCell] = useState<{ debt: Debt; month: ScheduleMonth } | null>(null);
@@ -93,7 +95,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
           accessibilityLabel="Previous year"
           hitSlop={12}
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h3">{selectedYear}</AppText>
         <Pressable
@@ -102,7 +104,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
           accessibilityLabel="Next year"
           hitSlop={12}
         >
-          <Feather name="chevron-right" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-right" size={22} color={colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -210,7 +212,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
                               </AppText>
                               {cell.status === 'paid' ? (
                                 <View style={styles.tag}>
-                                  <Feather name="check" size={10} color={theme.colors.positive} />
+                                  <Feather name="check" size={10} color={colors.positive} />
                                   <AppText variant="labelSm" color="textMuted">Paid</AppText>
                                 </View>
                               ) : cell.status === 'due' ? (
@@ -280,7 +282,7 @@ export function InstallmentGridView({ debts, accounts }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: { paddingHorizontal: theme.spacing[5] },
   nav: {
     flexDirection: 'row',
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[4],
   },
   summary: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     gap: theme.spacing[3],
@@ -297,45 +299,45 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryDivider: { height: 1, backgroundColor: theme.colors.borderDefault },
+  summaryDivider: { height: 1, backgroundColor: c.borderDefault },
   incomeInput: {
     ...theme.typography.amountSm,
-    color: theme.colors.accentPrimary,
+    color: c.accentPrimary,
     minWidth: 80,
     textAlign: 'right',
     padding: 0,
   },
   table: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     overflow: 'hidden',
     ...theme.shadows.sm,
   },
-  nameColumn: { borderRightWidth: 1, borderRightColor: theme.colors.borderStrong },
-  headerCell: { backgroundColor: theme.colors.bgElevated },
-  headerRow: { flexDirection: 'row', backgroundColor: theme.colors.bgElevated },
+  nameColumn: { borderRightWidth: 1, borderRightColor: c.borderStrong },
+  headerCell: { backgroundColor: c.bgElevated },
+  headerRow: { flexDirection: 'row', backgroundColor: c.bgElevated },
   row: {
     flexDirection: 'row',
     height: ROW_HEIGHT,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderDefault,
+    borderTopColor: c.borderDefault,
   },
   nameCell: {
     height: ROW_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing[4],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderDefault,
+    borderTopColor: c.borderDefault,
   },
   monthCell: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[1],
   },
-  currentCell: { backgroundColor: theme.colors.accentSubtle },
+  currentCell: { backgroundColor: c.accentSubtle },
   tag: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] },
   hint: { textAlign: 'center', marginTop: theme.spacing[3] },
   detail: { gap: theme.spacing[3] },
   detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-});
+}));

@@ -6,7 +6,7 @@
     "scheme": "centav0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#111111",
     "androidStatusBar": {
       "barStyle": "light-content",

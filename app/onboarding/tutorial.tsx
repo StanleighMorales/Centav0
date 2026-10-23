@@ -3,7 +3,6 @@ import {
   View,
   ScrollView,
   FlatList,
-  StyleSheet,
   Pressable,
   useWindowDimensions,
   type ViewToken,
@@ -13,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText, Button } from '../../src/components/ui';
 import { setSetting } from '../../src/repositories/settings';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 
 type Slide = {
   icon: keyof typeof Feather.glyphMap;
@@ -173,6 +172,8 @@ const SLIDES: Slide[] = [
 ];
 
 export default function TutorialScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const { replay } = useLocalSearchParams<{ replay?: string }>();
   const { width } = useWindowDimensions();
@@ -233,7 +234,7 @@ export default function TutorialScreen() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.iconCircle}>
-                <Feather name={item.icon} size={36} color={theme.colors.accentPrimary} />
+                <Feather name={item.icon} size={36} color={colors.accentPrimary} />
               </View>
               <AppText variant="h1" color="textPrimary" style={styles.title}>
                 {item.title}
@@ -246,7 +247,7 @@ export default function TutorialScreen() {
                   {item.steps.map((step, i) => (
                     <View key={step} style={styles.step}>
                       <View style={styles.stepNum}>
-                        <AppText variant="labelSm" color="bgPrimary">{String(i + 1)}</AppText>
+                        <AppText variant="labelSm" color="onAccent">{String(i + 1)}</AppText>
                       </View>
                       <AppText variant="body" color="textPrimary" style={styles.stepText}>
                         {step}
@@ -277,10 +278,10 @@ export default function TutorialScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
   },
   skipRow: {
     alignItems: 'flex-end',
@@ -303,9 +304,9 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -350,14 +351,14 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.borderStrong,
+    backgroundColor: c.borderStrong,
   },
   dotActive: {
     width: 20,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
   },
   footer: {
     paddingHorizontal: theme.spacing['6'],
     paddingBottom: theme.spacing['8'],
   },
-});
+}));

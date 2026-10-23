@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet, Switch } from 'react-native';
+import { ScrollView, View, Pressable, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -9,7 +9,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { debtRepo, accountRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { nowIso } from '../../utils/date';
 import type { Account, Debt, DebtType } from '../../domain/types';
 
@@ -22,6 +22,8 @@ type Props = {
 };
 
 export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isEdit = !!initial;
   const [creditor, setCreditor] = useState('');
   const [originalAmount, setOriginalAmount] = useState(0);
@@ -175,7 +177,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
             >
               <AppText variant="labelLg" color="textSecondary">Due Date (optional)</AppText>
               <View style={styles.setDateRow}>
-                <Feather name="calendar" size={14} color={theme.colors.accentPrimary} />
+                <Feather name="calendar" size={14} color={colors.accentPrimary} />
                 <AppText variant="bodySm" color="accentPrimary">Set due date</AppText>
               </View>
             </Pressable>
@@ -196,8 +198,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
               if (on && !dueDateEnabled) { setDueDateEnabled(true); setDueDate(nowIso()); }
             }}
             accessibilityLabel="Installment plan"
-            trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
-            thumbColor={isInstallment ? theme.colors.accentPrimary : theme.colors.textMuted}
+            trackColor={{ false: colors.borderStrong, true: colors.accentDim }}
+            thumbColor={isInstallment ? colors.accentPrimary : colors.textMuted}
           />
         </View>
         {isInstallment && (
@@ -248,7 +250,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   dateWrapper: {},
   clearDate: { paddingTop: theme.spacing[2] },
@@ -257,4 +259,4 @@ const styles = StyleSheet.create({
   installmentRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] },
   flex: { flex: 1, gap: theme.spacing[1] },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

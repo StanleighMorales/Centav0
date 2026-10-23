@@ -1,15 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+  View, ScrollView, Pressable, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppText } from '../../src/components/ui/AppText';
 import { Amount } from '../../src/components/ui/Amount';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
-import { FAB } from '../../src/components/ui/FAB';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { AddAccountSheet } from '../../src/components/accounts/AddAccountSheet';
@@ -22,7 +22,9 @@ import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting
 import { periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount, HIDDEN_AMOUNT } from '../../src/utils/currency';
 import { groupAccounts, isCredit, isSavings, isSpending, sumBalance } from '../../src/utils/accounts';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
+import { TAB_BAR_SPACE } from '../../src/components/nav/FloatingTabBar';
+import { onDataChanged } from '../../src/utils/dataEvents';
 import type { Account, Transaction } from '../../src/domain/types';
 
 function parseOrder(raw: string | null): string[] {
@@ -44,6 +46,7 @@ function sortByOrder(accounts: Account[], order: string[]): Account[] {
 }
 
 function EyeToggle({ hidden, onPress, label }: { hidden: boolean; onPress: () => void; label: string }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -52,7 +55,7 @@ function EyeToggle({ hidden, onPress, label }: { hidden: boolean; onPress: () =>
       accessibilityState={{ checked: hidden }}
       accessibilityLabel={`${hidden ? 'Show' : 'Hide'} ${label}`}
     >
-      <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={theme.colors.textSecondary} />
+      <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />
     </Pressable>
   );
 }
@@ -71,6 +74,8 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
 const periodLabel = (p: Period) => PERIOD_OPTIONS.find((o) => o.value === p)?.label ?? 'This Month';
 
 export default function DashboardScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -88,7 +93,6 @@ export default function DashboardScreen() {
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [monthIncome, setMonthIncome] = useState(0);
   const [monthExpense, setMonthExpense] = useState(0);
-  const [sheetVisible, setSheetVisible] = useState(false);
   const [addAccountVisible, setAddAccountVisible] = useState(false);
   const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
@@ -134,6 +138,7 @@ export default function DashboardScreen() {
   }, [period]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  useEffect(() => onDataChanged(load), [load]);
 
   const recentTxns = (
     recentFilter === 'all' ? allTxns : allTxns.filter((t) => {
@@ -173,17 +178,17 @@ export default function DashboardScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: 80 + insets.bottom }]}
+          contentContainerStyle={[styles.scroll, { paddingBottom: TAB_BAR_SPACE + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <ScreenHeader title="Dashboard" />
+          <ScreenHeader title="Home" />
 
           {/* Hero Balance Card */}
-          <View style={styles.heroCard}>
+          <LinearGradient colors={[colors.heroFrom, colors.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
             <View style={styles.labelRow}>
               <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
                 TOTAL BALANCE
@@ -195,14 +200,14 @@ export default function DashboardScreen() {
               />
             </View>
             <View style={styles.heroAmount}>
-              <AppText variant="amountMd" color="positive" style={styles.currencySymbol}>
-                {'\u20B1'}
+              <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
+                {'₱'}
               </AppText>
-              <AppText variant="displayLg" color="positive">
+              <AppText variant="displayLg" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {hideTotal ? HIDDEN_AMOUNT : formatAmount(totalBalance)}
               </AppText>
             </View>
-          </View>
+          </LinearGradient>
 
           {savingsAccounts.length > 0 && (
             <View style={styles.savingsCard}>
@@ -258,7 +263,7 @@ export default function DashboardScreen() {
                   accessibilityLabel="Transfer between accounts"
                   style={styles.transferBtn}
                 >
-                  <Feather name="repeat" size={14} color={theme.colors.accentPrimary} />
+                  <Feather name="repeat" size={14} color={colors.accentPrimary} />
                 </Pressable>
                 <Pressable
                   onPress={() => setAddAccountVisible(true)}
@@ -266,7 +271,7 @@ export default function DashboardScreen() {
                   accessibilityLabel="Add account"
                   style={styles.addAccountBtn}
                 >
-                  <Feather name="plus" size={14} color={theme.colors.bgPrimary} />
+                  <Feather name="plus" size={14} color={colors.onAccent} />
                 </Pressable>
               </View>
             }
@@ -297,7 +302,7 @@ export default function DashboardScreen() {
             style={styles.periodHeader}
           >
             <AppText variant="label" color="textMuted">{periodLabel(period).toUpperCase()}</AppText>
-            <Feather name="chevron-down" size={16} color={theme.colors.textMuted} />
+            <Feather name="chevron-down" size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.monthCard}>
             <View style={styles.monthCol}>
@@ -351,14 +356,6 @@ export default function DashboardScreen() {
         </ScrollView>
       )}
 
-      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add transaction" />
-
-      <AddTransactionSheet
-        visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        onSuccess={load}
-      />
-
       <AddTransactionSheet
         visible={editTransaction !== null}
         initial={editTransaction}
@@ -405,7 +402,7 @@ export default function DashboardScreen() {
               {opt.label}
             </AppText>
             {opt.value === period ? (
-              <Feather name="check" size={18} color={theme.colors.accentPrimary} />
+              <Feather name="check" size={18} color={colors.accentPrimary} />
             ) : null}
           </Pressable>
         ))}
@@ -414,10 +411,10 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
   },
   loader: {
     flex: 1,
@@ -445,7 +442,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -453,13 +450,14 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroCard: {
-    backgroundColor: theme.colors.bgElevated,
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: c.accentBorder,
     padding: theme.spacing[6],
     ...theme.shadows.md,
   },
@@ -473,7 +471,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing[3],
   },
   creditCard: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     marginTop: theme.spacing[4],
@@ -481,13 +479,13 @@ const styles = StyleSheet.create({
     ...theme.shadows.goldGlow,
   },
   savingsCard: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     marginTop: theme.spacing[4],
     gap: theme.spacing[2],
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     ...theme.shadows.sm,
   },
   creditRow: {
@@ -495,7 +493,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: theme.spacing[2],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.borderDefault,
+    borderTopColor: c.borderDefault,
   },
   heroAmount: {
     flexDirection: 'row',
@@ -525,10 +523,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   monthCard: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     flexDirection: 'row',
@@ -540,7 +538,7 @@ const styles = StyleSheet.create({
   },
   monthDivider: {
     width: 1,
-    backgroundColor: theme.colors.borderDefault,
+    backgroundColor: c.borderDefault,
     marginHorizontal: theme.spacing[4],
   },
   recentHeader: {
@@ -555,10 +553,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
   },
   recentChipActive: {
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
   },
-});
+}));

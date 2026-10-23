@@ -1,12 +1,12 @@
 import React, { useRef } from 'react';
-import { View, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, Pressable, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Feather } from '@expo/vector-icons';
 import { ListItem } from '../ui/ListItem';
 import { AppText } from '../ui/AppText';
 import { displayDate } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import type { Transaction } from '../../domain/types';
 
 type Props = {
@@ -23,6 +23,8 @@ const ACTION_WIDTH = 76;
 const ACTIONS_WIDTH = ACTION_WIDTH * 2;
 
 export function TransactionRow({ transaction, categoryName, subtitle, toAccountName, onEdit, onUndo, onOpenDetail }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -50,7 +52,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
             accessibilityLabel={`Edit ${transaction.type.toLowerCase()} transaction`}
             style={[styles.action, styles.editAction]}
           >
-            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="edit-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Edit</AppText>
           </Pressable>
           <Pressable
@@ -59,7 +61,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
             accessibilityLabel={`Undo ${transaction.type.toLowerCase()} transaction`}
             style={[styles.action, styles.undoAction]}
           >
-            <Feather name="rotate-ccw" size={18} color={theme.colors.textPrimary} />
+            <Feather name="rotate-ccw" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Undo</AppText>
           </Pressable>
         </Animated.View>
@@ -73,8 +75,8 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
         }
         iconColor={
           transaction.type === 'Transfer'
-            ? theme.colors.info
-            : transaction.type === 'Income' ? theme.colors.positive : theme.colors.negative
+            ? colors.info
+            : transaction.type === 'Income' ? colors.positive : colors.negative
         }
         title={transaction.type === 'Transfer' ? `${categoryName} → ${toAccountName ?? 'Unknown'}` : categoryName}
         subtitle={subtitle ?? displayDate(transaction.date)}
@@ -83,7 +85,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
         trailing={
           <View style={styles.trailing}>
             {transaction.receiptUri ? (
-              <Feather name="paperclip" size={14} color={theme.colors.textMuted} />
+              <Feather name="paperclip" size={14} color={colors.textMuted} />
             ) : null}
             <AppText
               variant="amountSm"
@@ -102,7 +104,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   actions: { flexDirection: 'row', alignItems: 'stretch' },
   action: {
@@ -111,6 +113,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing[2],
   },
-  editAction: { backgroundColor: theme.colors.bgElevated },
-  undoAction: { backgroundColor: theme.colors.warning },
-});
+  editAction: { backgroundColor: c.bgElevated },
+  undoAction: { backgroundColor: c.warning },
+}));

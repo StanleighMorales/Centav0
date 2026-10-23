@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
 import { Button } from '../ui/Button';
@@ -8,7 +8,7 @@ import { IconPicker } from './IconPicker';
 import { ColorPicker } from './ColorPicker';
 import { categoryRepo } from '../../repositories';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../../constants/categoryColors';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Category, CategoryType } from '../../domain/types';
 
 type Props = {
@@ -20,6 +20,7 @@ type Props = {
 };
 
 export function CategorySheet({ visible, onClose, onSuccess, initial, defaultType = 'Expense' }: Props) {
+  const styles = useStyles();
   const isEdit = Boolean(initial);
   const [name, setName] = useState('');
   const [type, setType] = useState<CategoryType>(defaultType);
@@ -108,7 +109,7 @@ export function CategorySheet({ visible, onClose, onSuccess, initial, defaultTyp
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   typeLabel: { marginBottom: theme.spacing[3] },
   typeRow: { flexDirection: 'row', gap: theme.spacing[3] },
@@ -117,13 +118,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     alignItems: 'center',
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
   },
   typeBtnActive: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
+    borderColor: c.accentPrimary,
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

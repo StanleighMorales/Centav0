@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -12,12 +12,14 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddLendingSheet } from '../../src/components/lending/AddLendingSheet';
 import { AddLendingPaymentSheet } from '../../src/components/lending/AddLendingPaymentSheet';
 import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
 import type { Lending, LendingPayment, Account } from '../../src/domain/types';
 
 export default function LendingDetailScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -60,7 +62,7 @@ export default function LendingDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+        <ActivityIndicator color={colors.accentPrimary} size="large" />
       </View>
     );
   }
@@ -84,7 +86,7 @@ export default function LendingDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Lending Detail</AppText>
         <Pressable
@@ -93,7 +95,7 @@ export default function LendingDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Edit lending"
         >
-          <Feather name="edit-2" size={18} color={theme.colors.accentPrimary} />
+          <Feather name="edit-2" size={18} color={colors.accentPrimary} />
         </Pressable>
       </View>
 
@@ -122,7 +124,7 @@ export default function LendingDetailScreen() {
             </>
           )}
           <View style={styles.metaRow}>
-            <Feather name="calendar" size={14} color={theme.colors.textMuted} />
+            <Feather name="calendar" size={14} color={colors.textMuted} />
             <AppText variant="bodySm" color="textMuted">Lent {displayDate(lending.date)}</AppText>
           </View>
           {lending.note ? (
@@ -148,7 +150,7 @@ export default function LendingDetailScreen() {
           payments.map((p) => (
             <View key={p.id} style={styles.paymentRow}>
               <View style={styles.paymentIconCircle}>
-                <Feather name="dollar-sign" size={18} color={theme.colors.positive} />
+                <Feather name="dollar-sign" size={18} color={colors.positive} />
               </View>
               <View style={styles.paymentInfo}>
                 <AppText variant="body">{displayDate(p.date)}</AppText>
@@ -167,7 +169,7 @@ export default function LendingDetailScreen() {
           accessibilityLabel="Delete lending"
           style={styles.deleteBtn}
         >
-          <Feather name="trash-2" size={16} color={theme.colors.negative} />
+          <Feather name="trash-2" size={16} color={colors.negative} />
           <AppText variant="body" color="negative">Delete Lending</AppText>
         </Pressable>
       </ScrollView>
@@ -201,8 +203,8 @@ export default function LendingDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
@@ -237,13 +239,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   paymentIconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: theme.spacing[4],
@@ -257,4 +259,4 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[5],
     marginTop: theme.spacing[3],
   },
-});
+}));

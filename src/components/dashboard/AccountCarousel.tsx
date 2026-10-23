@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle, useSharedValue, withTiming, runOnJS,
@@ -8,7 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import { AppText } from '../ui/AppText';
 import { accountIcon } from '../../utils/accounts';
 import { formatPHP } from '../../utils/currency';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import type { Account } from '../../domain/types';
 
 const CARD_WIDTH = 140;
@@ -25,6 +25,7 @@ type Props = {
 };
 
 export function AccountCarousel({ accounts, onPress, onReorder }: Props) {
+  const styles = useStyles();
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   function move(from: number, to: number) {
@@ -71,6 +72,8 @@ type CardProps = {
 function DraggableCard({
   account, index, count, dragging, onDragChange, onMove, onPress,
 }: CardProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const offsetX = useSharedValue(0);
   const lift = useSharedValue(0);
 
@@ -109,7 +112,7 @@ function DraggableCard({
         accessibilityLabel={`${account.name}, ${account.typeName}, ${formatPHP(account.currentBalance)}. Long press to reorder.`}
         style={[styles.card, dragging && styles.cardDragging, animatedStyle]}
       >
-        <Feather name={accountIcon(account)} size={16} color={theme.colors.accentPrimary} />
+        <Feather name={accountIcon(account)} size={16} color={colors.accentPrimary} />
         <AppText variant="bodySm" numberOfLines={1} style={styles.name}>
           {account.name}
         </AppText>
@@ -124,7 +127,7 @@ function DraggableCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   list: {
     paddingRight: theme.spacing[5],
     gap: CARD_GAP,
@@ -132,7 +135,7 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: 80,
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[4],
     justifyContent: 'space-between',
@@ -142,9 +145,9 @@ const styles = StyleSheet.create({
     zIndex: 1,
     elevation: 8,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
   },
   name: {
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
   },
-});
+}));

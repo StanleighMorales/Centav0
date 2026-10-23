@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { allocationRepo, categoryRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import { nowIso } from '../../utils/date';
 import type { Category, AllocationPeriod, Allocation } from '../../domain/types';
 
@@ -18,6 +18,7 @@ type Props = {
 };
 
 export function AddBudgetSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const styles = useStyles();
   const isEdit = Boolean(initial);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -103,7 +104,7 @@ export function AddBudgetSheet({ visible, onClose, onSuccess, initial }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   periodLabel: { marginBottom: theme.spacing[3] },
   periodRow: { flexDirection: 'row', gap: theme.spacing[3] },
@@ -112,13 +113,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[3],
     alignItems: 'center',
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
   },
   periodBtnActive: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
+    borderColor: c.accentPrimary,
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, TextInput, StyleSheet, KeyboardTypeOptions } from 'react-native';
+import { View, TextInput, KeyboardTypeOptions } from 'react-native';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   label: string;
@@ -17,6 +17,8 @@ type Props = {
 };
 
 export function AppTextInput({ label, value, onChangeText, placeholder, error, numeric, secureTextEntry, autoFocus, editable = true, onBlur }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const keyboardType: KeyboardTypeOptions = numeric ? 'decimal-pad' : 'default';
 
   return (
@@ -28,7 +30,7 @@ export function AppTextInput({ label, value, onChangeText, placeholder, error, n
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={theme.colors.textMuted}
+        placeholderTextColor={colors.textMuted}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         autoFocus={autoFocus}
@@ -45,20 +47,20 @@ export function AppTextInput({ label, value, onChangeText, placeholder, error, n
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrapper: { gap: theme.spacing[2] },
   label: { marginBottom: theme.spacing[1] },
   input: {
-    backgroundColor: theme.colors.bgInput,
+    backgroundColor: c.bgInput,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     paddingHorizontal: theme.spacing[5],
     paddingVertical: theme.spacing[4],
-    color: theme.colors.textPrimary,
+    color: c.textPrimary,
     ...theme.typography.body,
   },
-  inputError: { borderColor: theme.colors.negative },
+  inputError: { borderColor: c.negative },
   inputDisabled: { opacity: 0.5 },
   error: { marginTop: theme.spacing[1] },
-});
+}));

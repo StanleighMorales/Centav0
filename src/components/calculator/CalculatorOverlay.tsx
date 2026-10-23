@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../ui/AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { initialCalc, press, type CalcKey } from '../../utils/calc';
 
 // ponytail: the context carries the stable setState fn, so no provider memoisation is needed
@@ -43,10 +43,12 @@ const A11Y: Partial<Record<CalcKey, string>> = {
   back: 'Backspace',
 };
 
-// matches tabBarStyle.height in app/(tabs)/_layout.tsx
-const TAB_BAR_HEIGHT = 56;
+// floating tab bar: 70px pill + bottom margin (src/components/nav/FloatingTabBar.tsx)
+const TAB_BAR_HEIGHT = 82;
 
 function Calculator({ onClose }: { onClose: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [minimized, setMinimized] = useState(false);
   const [calc, setCalc] = useState(initialCalc);
@@ -62,8 +64,8 @@ function Calculator({ onClose }: { onClose: () => void }) {
         accessibilityLabel={`Calculator, ${calc.display}. Expand`}
         style={({ pressed }) => [styles.bubble, { bottom }, pressed && styles.bubblePressed]}
       >
-        <Feather name="maximize-2" size={14} color={theme.colors.bgPrimary} />
-        <AppText variant="amountSm" color="bgPrimary" numberOfLines={1} style={styles.bubbleValue}>
+        <Feather name="maximize-2" size={14} color={colors.onAccent} />
+        <AppText variant="amountSm" color="onAccent" numberOfLines={1} style={styles.bubbleValue}>
           {calc.display}
         </AppText>
       </Pressable>
@@ -113,6 +115,8 @@ function IconButton({
   label: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -121,12 +125,14 @@ function IconButton({
       hitSlop={theme.spacing[4]}
       style={({ pressed }) => (pressed ? styles.pressed : null)}
     >
-      <Feather name={icon} size={18} color={theme.colors.textSecondary} />
+      <Feather name={icon} size={18} color={colors.textSecondary} />
     </Pressable>
   );
 }
 
 function Key({ value, onPress }: { value: CalcKey; onPress: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isOperator = value === '+' || value === '-' || value === '*' || value === '/';
   const isEquals = value === '=';
 
@@ -144,7 +150,7 @@ function Key({ value, onPress }: { value: CalcKey; onPress: () => void }) {
       ]}
     >
       {value === 'back' ? (
-        <Feather name="delete" size={18} color={theme.colors.textPrimary} />
+        <Feather name="delete" size={18} color={colors.textPrimary} />
       ) : (
         <AppText variant="h3" color={isEquals ? 'bgPrimary' : 'textPrimary'}>
           {GLYPH[value] ?? value}
@@ -154,15 +160,15 @@ function Key({ value, onPress }: { value: CalcKey; onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   panel: {
     position: 'absolute',
     left: theme.spacing[5],
     right: theme.spacing[5],
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.xl,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     padding: theme.spacing[4],
     gap: theme.spacing[3],
     ...theme.shadows.lg,
@@ -186,13 +192,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: theme.spacing[10],
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgInput,
+    backgroundColor: c.bgInput,
     alignItems: 'center',
     justifyContent: 'center',
   },
   keyWide: { flex: 3 },
-  keyOperator: { backgroundColor: theme.colors.bgElevated },
-  keyEquals: { backgroundColor: theme.colors.accentPrimary },
+  keyOperator: { backgroundColor: c.bgElevated },
+  keyEquals: { backgroundColor: c.accentPrimary },
   pressed: { opacity: 0.6 },
   bubble: {
     position: 'absolute',
@@ -204,9 +210,9 @@ const styles = StyleSheet.create({
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[5],
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     ...theme.shadows.md,
   },
-  bubblePressed: { backgroundColor: theme.colors.accentDim },
+  bubblePressed: { backgroundColor: c.accentDim },
   bubbleValue: { flexShrink: 1 },
-});
+}));

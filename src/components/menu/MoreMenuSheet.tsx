@@ -1,18 +1,16 @@
 import React from 'react';
-import { StyleSheet, Pressable } from 'react-native';
+import { View, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppText } from '../ui/AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
-type MenuItemProps = {
-  icon: React.ComponentProps<typeof Feather>['name'];
-  label: string;
-  onPress: () => void;
-};
+type Icon = React.ComponentProps<typeof Feather>['name'];
 
-function MenuItem({ icon, label, onPress }: MenuItemProps) {
+function MenuRow({ icon, label, hint, onPress }: { icon: Icon; label: string; hint?: string; onPress: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -20,9 +18,30 @@ function MenuItem({ icon, label, onPress }: MenuItemProps) {
       accessibilityLabel={label}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <Feather name={icon} size={20} color={theme.colors.textSecondary} />
-      <AppText variant="body" style={styles.rowLabel}>{label}</AppText>
-      <Feather name="chevron-right" size={18} color={theme.colors.textMuted} />
+      <View style={styles.iconTile}>
+        <Feather name={icon} size={18} color={colors.accentText} />
+      </View>
+      <View style={styles.rowText}>
+        <AppText variant="h4">{label}</AppText>
+        {hint ? <AppText variant="bodySm" color="textMuted">{hint}</AppText> : null}
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+function PlanTile({ icon, label, onPress }: { icon: Icon; label: string; onPress: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+    >
+      <Feather name={icon} size={22} color={colors.accentText} />
+      <AppText variant="h4">{label}</AppText>
     </Pressable>
   );
 }
@@ -30,7 +49,9 @@ function MenuItem({ icon, label, onPress }: MenuItemProps) {
 type Props = { visible: boolean; onClose: () => void };
 
 export function MoreMenuSheet({ visible, onClose }: Props) {
+  const styles = useStyles();
   const router = useRouter();
+  const { height } = useWindowDimensions();
 
   function go(path: string) {
     onClose();
@@ -39,37 +60,71 @@ export function MoreMenuSheet({ visible, onClose }: Props) {
 
   return (
     <BottomSheet visible={visible} onClose={onClose} title="More">
-      <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>ACCOUNTS & CATEGORIES</AppText>
-      <MenuItem icon="layers" label="Accounts" onPress={() => go('/accounts')} />
-      <MenuItem icon="sliders" label="Account Types" onPress={() => go('/account-types')} />
-      <MenuItem icon="tag" label="Categories" onPress={() => go('/categories')} />
+      <ScrollView style={{ maxHeight: height * 0.68 }} showsVerticalScrollIndicator={false}>
+        <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>SETUP</AppText>
+        <View style={styles.group}>
+          <MenuRow icon="layers" label="Accounts" onPress={() => go('/accounts')} />
+          <MenuRow icon="sliders" label="Account Types" onPress={() => go('/account-types')} />
+          <MenuRow icon="tag" label="Categories" onPress={() => go('/categories')} />
+        </View>
 
-      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>ANALYTICS</AppText>
-      <MenuItem icon="pie-chart" label="Budgets" onPress={() => go('/budgets')} />
-      <MenuItem icon="repeat" label="Recurring" onPress={() => go('/recurring')} />
-      <MenuItem icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
+        <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>PLAN &amp; ANALYSE</AppText>
+        <View style={styles.tiles}>
+          <PlanTile icon="pie-chart" label="Budgets" onPress={() => go('/budgets')} />
+          <PlanTile icon="repeat" label="Recurring" onPress={() => go('/recurring')} />
+          <PlanTile icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
+        </View>
 
-      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>SETTINGS</AppText>
-      <MenuItem icon="archive" label="Transaction Archive" onPress={() => go('/transaction-archive')} />
-      <MenuItem icon="settings" label="Settings" onPress={() => go('/settings')} />
-
-      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>HELP</AppText>
-      <MenuItem icon="help-circle" label="How to use Centav0" onPress={() => go('/onboarding/tutorial?replay=1')} />
+        <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA &amp; APP</AppText>
+        <View style={styles.group}>
+          <MenuRow icon="archive" label="Transaction Archive" hint="Deleted items" onPress={() => go('/transaction-archive')} />
+          <MenuRow icon="settings" label="Settings" hint="Appearance, backup, reset" onPress={() => go('/settings')} />
+          <MenuRow icon="help-circle" label="How to use Centav0" onPress={() => go('/onboarding/tutorial?replay=1')} />
+        </View>
+      </ScrollView>
     </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  sectionLabel: { letterSpacing: 0.8, marginBottom: theme.spacing[2] },
+const useStyles = makeStyles((c) => ({
+  sectionLabel: { letterSpacing: 1.2, marginBottom: theme.spacing[3] },
   sectionGap: { marginTop: theme.spacing[6] },
+  group: {
+    backgroundColor: c.bgElevated,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+    paddingHorizontal: theme.spacing[4],
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing[4],
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    minHeight: 56,
+    paddingVertical: theme.spacing[3],
+  },
+  rowText: { flex: 1 },
+  iconTile: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.radius.md,
+    backgroundColor: c.bgSurface,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: { opacity: 0.6 },
-  rowLabel: { flex: 1 },
-});
+  tiles: { flexDirection: 'row', gap: theme.spacing[3] },
+  tile: {
+    flex: 1,
+    minHeight: 88,
+    gap: theme.spacing[3],
+    justifyContent: 'space-between',
+    padding: theme.spacing[4],
+    backgroundColor: c.bgElevated,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+  },
+}));

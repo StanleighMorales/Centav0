@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, Image } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppText } from '../ui/AppText';
 import { Amount } from '../ui/Amount';
 import { displayDateTime } from '../../utils/date';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Transaction } from '../../domain/types';
 
 type Props = {
@@ -16,6 +16,7 @@ type Props = {
 };
 
 export function TransactionDetailSheet({ transaction, categoryName, accountName, toAccountName, onClose }: Props) {
+  const styles = useStyles();
   if (!transaction) {
     return <BottomSheet visible={false} onClose={onClose}><View /></BottomSheet>;
   }
@@ -72,7 +73,7 @@ export function TransactionDetailSheet({ transaction, categoryName, accountName,
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   body: { gap: theme.spacing[4] },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   noteBlock: { gap: theme.spacing[1] },
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 220,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     marginTop: theme.spacing[2],
   },
-});
+}));

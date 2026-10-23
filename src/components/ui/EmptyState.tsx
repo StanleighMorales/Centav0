@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { Button } from './Button';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   icon: React.ComponentProps<typeof Feather>['name'];
@@ -14,10 +14,12 @@ type Props = {
 };
 
 export function EmptyState({ icon, title, subtitle, ctaLabel, onCta }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
-        <Feather name={icon} size={32} color={theme.colors.textMuted} />
+        <Feather name={icon} size={32} color={colors.textMuted} />
       </View>
       <AppText variant="h3" style={styles.title}>{title}</AppText>
       {subtitle ? (
@@ -30,7 +32,7 @@ export function EmptyState({ icon, title, subtitle, ctaLabel, onCta }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -41,7 +43,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing[5],
@@ -49,4 +51,4 @@ const styles = StyleSheet.create({
   title: { textAlign: 'center', marginBottom: theme.spacing[2] },
   subtitle: { textAlign: 'center', marginBottom: theme.spacing[5] },
   cta: { minWidth: 160 },
-});
+}));

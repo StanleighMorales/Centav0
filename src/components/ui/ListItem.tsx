@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   title: string;
@@ -15,15 +15,17 @@ type Props = {
 };
 
 export function ListItem({ title, subtitle, icon, iconColor, trailing, onPress, accessibilityLabel }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const content = (
     <View style={styles.row}>
       {icon ? (
         <View style={styles.iconWrap}>
-          <Feather name={icon} size={18} color={iconColor ?? theme.colors.textSecondary} />
+          <Feather name={icon} size={18} color={iconColor ?? colors.textSecondary} />
         </View>
       ) : null}
       <View style={styles.text}>
-        <AppText variant="body">{title}</AppText>
+        <AppText variant="h4" numberOfLines={1}>{title}</AppText>
         {subtitle ? (
           <AppText variant="bodySm" color="textSecondary">{subtitle}</AppText>
         ) : null}
@@ -48,23 +50,25 @@ export function ListItem({ title, subtitle, icon, iconColor, trailing, onPress, 
   return <View style={styles.item}>{content}</View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   item: {
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
     paddingVertical: theme.spacing[4],
   },
   pressed: { opacity: 0.6 },
   row: { flexDirection: 'row', alignItems: 'center' },
   iconWrap: {
-    width: 36,
-    height: 36,
+    width: 42,
+    height: 42,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: theme.spacing[4],
   },
   text: { flex: 1, gap: theme.spacing[1] },
   trailing: { marginLeft: theme.spacing[4] },
-});
+}));

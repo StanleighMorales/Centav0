@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, debtRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
 import { accountIcon, groupAccounts } from '../../src/utils/accounts';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Account } from '../../src/domain/types';
 
 type RowProps = {
@@ -27,6 +27,8 @@ type RowProps = {
 };
 
 function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -42,7 +44,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             accessibilityLabel={`Edit ${account.name}`}
             style={[styles.action, styles.editAction]}
           >
-            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="edit-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Edit</AppText>
           </Pressable>
           <Pressable
@@ -51,7 +53,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             accessibilityLabel={`Delete ${account.name}`}
             style={[styles.action, styles.deleteAction]}
           >
-            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="trash-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Delete</AppText>
           </Pressable>
         </View>
@@ -60,7 +62,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
       <Card accent style={styles.accountCard}>
         <View style={styles.cardRow}>
           <View style={styles.iconCircle}>
-            <Feather name={accountIcon(account)} size={18} color={theme.colors.accentPrimary} />
+            <Feather name={accountIcon(account)} size={18} color={colors.accentPrimary} />
           </View>
           <View style={styles.cardInfo}>
             <AppText variant="h3">{account.name}</AppText>
@@ -83,7 +85,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             hitSlop={8}
             style={styles.addMoneyBtn}
           >
-            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+            <Feather name="plus" size={20} color={colors.accentPrimary} />
           </Pressable>
         </View>
         <AppText
@@ -99,6 +101,8 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
 }
 
 export default function AccountsScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -157,7 +161,7 @@ export default function AccountsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Accounts</AppText>
         <Pressable
@@ -166,13 +170,13 @@ export default function AccountsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Transfer between accounts"
         >
-          <Feather name="repeat" size={20} color={theme.colors.accentPrimary} />
+          <Feather name="repeat" size={20} color={colors.accentPrimary} />
         </Pressable>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -251,8 +255,8 @@ export default function AccountsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,7 +291,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -296,9 +300,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -310,6 +314,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing[2],
   },
-  editAction: { backgroundColor: theme.colors.bgElevated },
-  deleteAction: { backgroundColor: theme.colors.negative },
-});
+  editAction: { backgroundColor: c.bgElevated },
+  deleteAction: { backgroundColor: c.negative },
+}));

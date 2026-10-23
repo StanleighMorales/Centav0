@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { BottomSheet } from './BottomSheet';
 import { AppText } from './AppText';
 import { Button } from './Button';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 
 type Props = {
   visible: boolean;
@@ -17,6 +17,7 @@ type Props = {
 };
 
 export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, destructive }: Props) {
+  const styles = useStyles();
   return (
     <BottomSheet visible={visible} onClose={onCancel} title={title}>
       <AppText variant="body" color="textSecondary" style={styles.message}>
@@ -36,9 +37,9 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   message: { marginBottom: theme.spacing[6] },
   actions: { flexDirection: 'row', gap: theme.spacing[4] },
   btn: { flex: 1 },
-  destructiveBtn: { borderColor: theme.colors.negative },
-});
+  destructiveBtn: { borderColor: c.negative },
+}));

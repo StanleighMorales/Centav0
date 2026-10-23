@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, PanResponder, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import { hsvToHex, hexToHsv, type Hsv } from '../../utils/color';
 
 type Props = {
@@ -17,6 +17,7 @@ const SV_HEIGHT = 160;
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(n, min), max);
 
 export function HsvPicker({ value, onChange }: Props) {
+  const styles = useStyles();
   const hsvRef = useRef<Hsv>(hexToHsv(value));
   const lastEmitted = useRef<string | null>(null);
   const svSize = useRef({ width: 0, height: SV_HEIGHT });
@@ -117,7 +118,7 @@ export function HsvPicker({ value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   sv: {
     height: SV_HEIGHT,
     borderRadius: theme.radius.md,
@@ -143,4 +144,4 @@ const styles = StyleSheet.create({
     top: (HUE_HEIGHT - THUMB) / 2,
     backgroundColor: 'transparent',
   },
-});
+}));

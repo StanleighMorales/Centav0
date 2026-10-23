@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePicker } from '../ui/DatePicker';
@@ -7,7 +7,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { debtPaymentRepo, accountRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
@@ -29,6 +29,7 @@ type Props = {
 type PayMode = 'full' | 'monthly' | 'custom';
 
 export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor, outstandingBalance, monthlyPayment, settle }: Props) {
+  const styles = useStyles();
   const hasMonthly = monthlyPayment != null && monthlyPayment > 0;
   const [mode, setMode] = useState<PayMode>(hasMonthly ? 'monthly' : 'full');
   const [customAmount, setCustomAmount] = useState(0);
@@ -239,7 +240,7 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   modeBlock: { gap: theme.spacing[3] },
   modeRow: { flexDirection: 'row', gap: theme.spacing[3] },
@@ -250,18 +251,18 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[4],
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgInput,
+    borderColor: c.borderDefault,
+    backgroundColor: c.bgInput,
   },
   modeChipActive: {
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
   },
   preview: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.md,
     padding: theme.spacing[4],
     gap: theme.spacing[2],
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

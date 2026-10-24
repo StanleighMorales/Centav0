@@ -1,5 +1,6 @@
-import React from 'react';
-import { Pressable, ActivityIndicator, ViewStyle } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, ViewStyle } from 'react-native';
+import { AnimatedPressable, usePressScale } from './usePressScale';
 import { AppText } from './AppText';
 import { theme, makeStyles, useTheme } from '../../theme';
 
@@ -20,18 +21,24 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
   const { colors } = useTheme();
   const isDisabled = disabled || loading;
 
+  const [pressed, setPressed] = useState(false);
+  const press = usePressScale();
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={() => { setPressed(true); press.onPressIn(); }}
+      onPressOut={() => { setPressed(false); press.onPressOut(); }}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         styles[variant],
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles[`${variant}Pressed` as keyof typeof styles],
         style,
+        press.style,
       ]}
     >
       {loading ? (
@@ -44,7 +51,7 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
           {label}
         </AppText>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, Switch } from 'react-native';
+import { View, Pressable, Switch } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';

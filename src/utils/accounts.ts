@@ -27,3 +27,11 @@ export function groupAccounts(accounts: Account[]): AccountGroup[] {
     { label: 'Credit', accounts: accounts.filter(isCredit) },
   ].filter((g) => g.accounts.length > 0);
 }
+
+/** Income/Expense pair that moves an account from `from` to `to`. Null when equal. */
+export function balanceAdjustment(from: number, to: number):
+  { type: 'Income' | 'Expense'; amount: number } | null {
+  const diff = Math.round((to - from) * 100) / 100; // roundCentavos, inlined so the self-check runs standalone
+  if (diff === 0) return null;
+  return { type: diff > 0 ? 'Income' : 'Expense', amount: Math.abs(diff) };
+}

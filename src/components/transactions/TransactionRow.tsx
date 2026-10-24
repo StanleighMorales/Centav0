@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Pressable, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { ListItem } from '../ui/ListItem';
 import { AppText } from '../ui/AppText';
@@ -29,6 +30,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
   const close = () => swipeRef.current?.close();
 
   return (
+    <Reanimated.View entering={FadeInDown.duration(theme.motion.standard.duration)}>
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
@@ -101,6 +103,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
         }
       />
     </Swipeable>
+    </Reanimated.View>
   );
 }
 

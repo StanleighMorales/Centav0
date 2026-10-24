@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import Reanimated, { ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../ui/AppText';
 import { theme, makeStyles, useTheme } from '../../theme';
@@ -13,22 +14,21 @@ type Props = {
   state: TabBarState;
   navigation: any;
   onAdd: () => void;
-  onMore: () => void;
 };
 
-type Slot = { route: string | null; label: string; icon: React.ComponentProps<typeof Feather>['name'] };
+type Slot = { route: string; label: string; icon: React.ComponentProps<typeof Feather>['name'] };
 
-// Five slots: Home · Activity · (+) · Ledger · More. `route: null` = opens a sheet instead of a screen.
+// Five slots: Home · Activity · (+) · Ledger · More.
 const LEFT: Slot[] = [
   { route: 'index', label: 'Home', icon: 'home' },
   { route: 'transactions', label: 'Activity', icon: 'list' },
 ];
 const RIGHT: Slot[] = [
   { route: 'ledger', label: 'Ledger', icon: 'book-open' },
-  { route: null, label: 'More', icon: 'grid' },
+  { route: 'more', label: 'More', icon: 'grid' },
 ];
 
-export function FloatingTabBar({ state, navigation, onAdd, onMore }: Props) {
+export function FloatingTabBar({ state, navigation, onAdd }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -42,12 +42,12 @@ export function FloatingTabBar({ state, navigation, onAdd, onMore }: Props) {
   }
 
   function renderSlot(slot: Slot) {
-    const active = slot.route !== null && slot.route === activeName;
+    const active = slot.route === activeName;
     const tint = active ? colors.accentText : colors.textMuted;
     return (
       <Pressable
         key={slot.label}
-        onPress={() => (slot.route ? go(slot.route) : onMore())}
+        onPress={() => go(slot.route)}
         accessibilityRole="tab"
         accessibilityLabel={`${slot.label} tab`}
         accessibilityState={{ selected: active }}
@@ -55,7 +55,7 @@ export function FloatingTabBar({ state, navigation, onAdd, onMore }: Props) {
       >
         <Feather name={slot.icon} size={22} color={tint} />
         <AppText variant="labelSm" style={{ color: tint, letterSpacing: 0.2 }}>{slot.label}</AppText>
-        {active ? <View style={styles.dot} /> : null}
+        {active ? <Reanimated.View entering={ZoomIn.duration(theme.motion.micro.duration)} style={styles.dot} /> : null}
       </Pressable>
     );
   }

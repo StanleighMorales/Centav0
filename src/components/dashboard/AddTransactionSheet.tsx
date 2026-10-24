@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, Image } from 'react-native';
+import { View, Pressable, Image } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { Segmented } from '../ui/Segmented';

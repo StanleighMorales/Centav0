@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';

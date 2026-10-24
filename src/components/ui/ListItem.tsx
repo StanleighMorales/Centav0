@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import { AnimatedPressable, usePressScale } from './usePressScale';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { theme, makeStyles, useTheme } from '../../theme';
@@ -17,6 +18,8 @@ type Props = {
 export function ListItem({ title, subtitle, icon, iconColor, trailing, onPress, accessibilityLabel }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const [pressed, setPressed] = useState(false);
+  const press = usePressScale(0.98);
   const content = (
     <View style={styles.row}>
       {icon ? (
@@ -36,14 +39,16 @@ export function ListItem({ title, subtitle, icon, iconColor, trailing, onPress, 
 
   if (onPress) {
     return (
-      <Pressable
+      <AnimatedPressable
         onPress={onPress}
+        onPressIn={() => { setPressed(true); press.onPressIn(); }}
+        onPressOut={() => { setPressed(false); press.onPressOut(); }}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? title}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+        style={[styles.item, pressed && styles.pressed, press.style]}
       >
         {content}
-      </Pressable>
+      </AnimatedPressable>
     );
   }
 

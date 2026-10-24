@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { useRouter } from 'expo-router';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -7,14 +8,28 @@ import { AppText } from '../ui/AppText';
 import { Select } from '../ui/Select';
 import { AmountInput } from '../ui/AmountInput';
 import { Button } from '../ui/Button';
-import { accountRepo, accountTypeRepo } from '../../repositories';
-import { theme } from '../../theme';
-import type { Account, AccountType as AccountTypeEntity } from '../../domain/types';
+import { accountRepo, accountTypeRepo, categoryRepo, transactionRepo } from '../../repositories';
+import { balanceAdjustment } from '../../utils/accounts';
+import { nowIso } from '../../utils/date';
+import { theme, makeStyles } from '../../theme';
+import type { Account, AccountType as AccountTypeEntity, CategoryType } from '../../domain/types';
 
 function parseDay(value: string): number | undefined {
   const day = parseInt(value, 10);
   return Number.isInteger(day) && day >= 1 && day <= 31 ? day : undefined;
 }
+
+// ponytail: same lazy get-or-create as the Loan category in SqliteDebtRepository.
+async function adjustmentCategoryId(type: CategoryType): Promise<string> {
+  const existing = (await categoryRepo.list(type)).find((c) => c.name === ADJUSTMENT_CATEGORY);
+  if (existing) return existing.id;
+  const created = await categoryRepo.create({
+    name: ADJUSTMENT_CATEGORY, type, icon: 'sliders', color: '#64748b',
+  });
+  return created.id;
+}
+
+const ADJUSTMENT_CATEGORY = 'Balance Adjustment';
 
 type Props = {
   visible: boolean;
@@ -24,6 +39,7 @@ type Props = {
 };
 
 export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props) {
+  const styles = useStyles();
   const router = useRouter();
   const isEdit = Boolean(initial);
   const [name, setName] = useState('');
@@ -40,7 +56,7 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
     if (visible) {
       setName(initial?.name ?? '');
       setAccountTypeId(initial?.accountTypeId ?? '');
-      setBalance(initial?.initialBalance ?? 0);
+      setBalance(initial ? initial.currentBalance : 0);
       setBillDay(initial?.billDay != null ? String(initial.billDay) : '');
       setDueDay(initial?.dueDay != null ? String(initial.dueDay) : '');
       setCreditLimit(initial?.creditLimit ?? 0);
@@ -70,13 +86,26 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
         creditLimit: allowsOverdraft && creditLimit > 0 ? creditLimit : undefined,
       };
       if (initial) {
-        // Balance is computed from transactions, so edit only name + type.
         await accountRepo.update(initial.id, { name: name.trim(), accountTypeId, ...cardFields });
+        // Balance is computed from transactions, so correct it with one, not a direct write.
+        const adjustment = balanceAdjustment(initial.currentBalance, balance);
+        if (adjustment) {
+          await transactionRepo.create({
+            date: nowIso(),
+            amount: adjustment.amount,
+            type: adjustment.type,
+            categoryId: await adjustmentCategoryId(adjustment.type),
+            accountId: initial.id,
+            note: ADJUSTMENT_CATEGORY,
+          });
+        }
       } else {
         await accountRepo.create({ name: name.trim(), accountTypeId, initialBalance: balance, ...cardFields });
       }
       onSuccess();
       onClose();
+    } catch (e) {
+      setErrors({ balance: e instanceof Error ? e.message : 'Could not save account' });
     } finally {
       setSaving(false);
     }
@@ -139,7 +168,19 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
             )}
           </>
         )}
-        {isEdit || allowsOverdraft ? null : (
+        {isEdit ? (
+          <>
+            <AmountInput
+              label={allowsOverdraft ? 'Available Balance' : 'Current Balance'}
+              value={balance}
+              onChange={setBalance}
+              error={errors.balance}
+            />
+            <AppText variant="bodySm" color="textMuted">
+              Changing this records a "{ADJUSTMENT_CATEGORY}" transaction so the change stays traceable.
+            </AppText>
+          </>
+        ) : allowsOverdraft ? null : (
           <AmountInput label="Initial Balance" value={balance} onChange={setBalance} />
         )}
         <Button label={isEdit ? 'Save Changes' : 'Add Account'} onPress={handleSave} loading={saving} />
@@ -149,8 +190,8 @@ export function AddAccountSheet({ visible, onClose, onSuccess, initial }: Props)
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   manageTypesBtn: { alignSelf: 'flex-start' },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

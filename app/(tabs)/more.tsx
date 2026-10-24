@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BottomSheet } from '../ui/BottomSheet';
-import { AppText } from '../ui/AppText';
-import { theme, makeStyles, useTheme } from '../../theme';
+import { AppText } from '../../src/components/ui/AppText';
+import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
+import { TAB_BAR_SPACE } from '../../src/components/nav/FloatingTabBar';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 
 type Icon = React.ComponentProps<typeof Feather>['name'];
 
@@ -46,47 +48,49 @@ function PlanTile({ icon, label, onPress }: { icon: Icon; label: string; onPress
   );
 }
 
-type Props = { visible: boolean; onClose: () => void };
-
-export function MoreMenuSheet({ visible, onClose }: Props) {
+export default function MoreScreen() {
   const styles = useStyles();
   const router = useRouter();
-  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   function go(path: string) {
-    onClose();
     router.push(path as any);
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="More">
-      <ScrollView style={{ maxHeight: height * 0.68 }} showsVerticalScrollIndicator={false}>
-        <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>SETUP</AppText>
-        <View style={styles.group}>
-          <MenuRow icon="layers" label="Accounts" onPress={() => go('/accounts')} />
-          <MenuRow icon="sliders" label="Account Types" onPress={() => go('/account-types')} />
-          <MenuRow icon="tag" label="Categories" onPress={() => go('/categories')} />
-        </View>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{ paddingTop: insets.top + theme.spacing[4], paddingHorizontal: theme.spacing[5], paddingBottom: TAB_BAR_SPACE + insets.bottom }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}><ScreenHeader title="More" /></View>
+<AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>SETUP</AppText>
+      <View style={styles.group}>
+        <MenuRow icon="layers" label="Accounts" onPress={() => go('/accounts')} />
+        <MenuRow icon="sliders" label="Account Types" onPress={() => go('/account-types')} />
+        <MenuRow icon="tag" label="Categories" onPress={() => go('/categories')} />
+      </View>
 
-        <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>PLAN &amp; ANALYSE</AppText>
-        <View style={styles.tiles}>
-          <PlanTile icon="pie-chart" label="Budgets" onPress={() => go('/budgets')} />
-          <PlanTile icon="repeat" label="Recurring" onPress={() => go('/recurring')} />
-          <PlanTile icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
-        </View>
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>PLAN &amp; ANALYSE</AppText>
+      <View style={styles.tiles}>
+        <PlanTile icon="pie-chart" label="Budgets" onPress={() => go('/budgets')} />
+        <PlanTile icon="repeat" label="Recurring" onPress={() => go('/recurring')} />
+        <PlanTile icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
+      </View>
 
-        <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA &amp; APP</AppText>
-        <View style={styles.group}>
-          <MenuRow icon="archive" label="Transaction Archive" hint="Deleted items" onPress={() => go('/transaction-archive')} />
-          <MenuRow icon="settings" label="Settings" hint="Appearance, backup, reset" onPress={() => go('/settings')} />
-          <MenuRow icon="help-circle" label="How to use Centav0" onPress={() => go('/onboarding/tutorial?replay=1')} />
-        </View>
-      </ScrollView>
-    </BottomSheet>
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA &amp; APP</AppText>
+      <View style={styles.group}>
+        <MenuRow icon="archive" label="Transaction Archive" hint="Deleted items" onPress={() => go('/transaction-archive')} />
+        <MenuRow icon="settings" label="Settings" hint="Appearance, backup, reset" onPress={() => go('/settings')} />
+        <MenuRow icon="help-circle" label="How to use Centav0" onPress={() => go('/onboarding/tutorial?replay=1')} />
+      </View>
+    </ScrollView>
   );
 }
 
 const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
+  header: { marginBottom: theme.spacing[5] },
   sectionLabel: { letterSpacing: 1.2, marginBottom: theme.spacing[3] },
   sectionGap: { marginTop: theme.spacing[6] },
   group: {

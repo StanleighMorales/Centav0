@@ -77,6 +77,9 @@ export default function MoreScreen() {
         <PlanTile icon="repeat" label="Recurring" onPress={() => go('/recurring')} />
         <PlanTile icon="bar-chart-2" label="Reports" onPress={() => go('/reports')} />
       </View>
+      <View style={[styles.group, styles.sectionGap]}>
+        <MenuRow icon="trending-up" label="Investments" hint="Stakes, contracts and returns" onPress={() => go('/investments')} />
+      </View>
 
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA &amp; APP</AppText>
       <View style={styles.group}>

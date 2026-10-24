@@ -112,6 +112,9 @@ export default function SettingsScreen() {
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA</AppText>
       <Row icon="upload" label="Back up now" onPress={handleBackup} />
       <Row icon="download" label="Restore from file" onPress={handleRestore} />
+      <AppText variant="bodySm" color="textMuted" style={styles.error}>
+        Backups include investment records but not their contract PDFs.
+      </AppText>
       <Row icon="trash-2" label="Remove all data" onPress={() => setResetVisible(true)} destructive />
 
       {error ? (

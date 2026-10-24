@@ -9,7 +9,9 @@ import { SqliteLendingPersonRepository } from './sqlite/SqliteLendingPersonRepos
 import { SqliteLendingRepository } from './sqlite/SqliteLendingRepository';
 import { SqliteLendingPaymentRepository } from './sqlite/SqliteLendingPaymentRepository';
 import { SqliteRecurringTransactionRepository } from './sqlite/SqliteRecurringTransactionRepository';
+import { SqliteInvestmentRepository } from './sqlite/SqliteInvestmentRepository';
 
+export const investmentRepo = new SqliteInvestmentRepository();
 export const accountRepo = new SqliteAccountRepository();
 export const accountTypeRepo = new SqliteAccountTypeRepository();
 export const categoryRepo = new SqliteCategoryRepository();

@@ -359,6 +359,38 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '017_investments',
+    up: async (db) => {
+      // amountPaid 0 = a stake that cost nothing. ROI % is never stored; it is derived from updates.
+      await db.execAsync(`
+        CREATE TABLE investments (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL,
+          name TEXT NOT NULL, amountPaid REAL NOT NULL DEFAULT 0,
+          stakePct REAL, expectedReturnPct REAL,
+          startDate TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Active', note TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT
+        );
+        CREATE TABLE investment_updates (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, investmentId TEXT NOT NULL,
+          date TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, stakePct REAL, note TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (investmentId) REFERENCES investments(id)
+        );
+        CREATE INDEX idx_inv_upd_inv ON investment_updates(investmentId);
+        CREATE TABLE investment_documents (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, investmentId TEXT NOT NULL,
+          name TEXT NOT NULL, uri TEXT NOT NULL, size INTEGER,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (investmentId) REFERENCES investments(id)
+        );
+        CREATE INDEX idx_inv_doc_inv ON investment_documents(investmentId);
+      `);
+    },
+  },
 ];
 
 /** Highest migration this app build knows how to run — stamped into backup filenames. */

@@ -1,21 +1,21 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, FlatList, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, FlatList, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { AppText } from '../../src/components/ui/AppText';
-import { Amount } from '../../src/components/ui/Amount';
-import { EmptyState } from '../../src/components/ui/EmptyState';
-import { FAB } from '../../src/components/ui/FAB';
-import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
-import { AddLendingSheet } from '../../src/components/lending/AddLendingSheet';
-import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
-import { displayDate, monthRangeIso } from '../../src/utils/date';
-import { formatPHP } from '../../src/utils/currency';
-import { spendableAccounts } from '../../src/utils/accumulated';
-import type { Account, Lending, LendingPerson, LendingStatus } from '../../src/domain/types';
+import { AppText } from '../ui/AppText';
+import { Chip } from '../ui/Chip';
+import { Amount } from '../ui/Amount';
+import { EmptyState } from '../ui/EmptyState';
+import { AddLendingSheet } from '../lending/AddLendingSheet';
+import { lendingRepo, lendingPaymentRepo, lendingPersonRepo, accountRepo } from '../../repositories';
+import { TAB_BAR_SPACE } from '../nav/FloatingTabBar';
+import { theme, makeStyles, useTheme } from '../../theme';
+import { displayDate, monthRangeIso } from '../../utils/date';
+import { formatPHP } from '../../utils/currency';
+import { spendableAccounts } from '../../utils/accumulated';
+import type { Account, Lending, LendingPerson, LendingStatus } from '../../domain/types';
 
 const TABS: LendingStatus[] = ['Active', 'Paid'];
 const ALL_PEOPLE = '__all__';
@@ -29,12 +29,15 @@ type LendingRowProps = {
 };
 
 function LendingRow({ lending, personName, paidTotal, onPress, onEdit }: LendingRowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
 
   return (
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
+      containerStyle={styles.card}
       renderRightActions={() => (
         <Pressable
           onPress={() => { swipeRef.current?.close(); onEdit(lending); }}
@@ -42,7 +45,7 @@ function LendingRow({ lending, personName, paidTotal, onPress, onEdit }: Lending
           accessibilityLabel={`Edit lending to ${personName}`}
           style={styles.editAction}
         >
-          <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+          <Feather name="edit-2" size={18} color={colors.textPrimary} />
           <AppText variant="labelSm" color="textPrimary">Edit</AppText>
         </Pressable>
       )}
@@ -57,7 +60,7 @@ function LendingRow({ lending, personName, paidTotal, onPress, onEdit }: Lending
           <Feather
             name="user"
             size={18}
-            color={lending.status === 'Paid' ? theme.colors.positive : theme.colors.accentPrimary}
+            color={lending.status === 'Paid' ? colors.positive : colors.accentPrimary}
           />
         </View>
         <View style={styles.rowMain}>
@@ -73,14 +76,16 @@ function LendingRow({ lending, personName, paidTotal, onPress, onEdit }: Lending
           ) : (
             <Amount value={lending.outstandingBalance} variant="amountSm" semanticColor={false} />
           )}
-          <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+          <Feather name="chevron-right" size={16} color={colors.textMuted} />
         </View>
       </Pressable>
     </Swipeable>
   );
 }
 
-export default function LentScreen() {
+export function LentView({ addSignal }: { addSignal: number }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<LendingStatus>('Active');
@@ -116,6 +121,11 @@ export default function LentScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const firstSignal = useRef(addSignal);
+  useEffect(() => {
+    if (addSignal !== firstSignal.current) setSheetVisible(true);
+  }, [addSignal]);
+
   const personMap = Object.fromEntries(people.map((p) => [p.id, p.name]));
   const byStatus = lendings.filter((l) => l.status === activeTab);
   const filtered = personFilter === ALL_PEOPLE ? byStatus : byStatus.filter((l) => l.personId === personFilter);
@@ -125,11 +135,7 @@ export default function LentScreen() {
     .reduce((sum, a) => sum + a.currentBalance, 0);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.headerWrap}>
-        <ScreenHeader title="Lent" />
-      </View>
-
+    <View style={styles.root}>
       <View style={styles.tabRow}>
         {TABS.map((tab) => (
           <Pressable
@@ -154,33 +160,21 @@ export default function LentScreen() {
           style={styles.chipsScroll}
           contentContainerStyle={styles.chips}
         >
-          {[{ id: ALL_PEOPLE, name: 'All' }, ...people].map((p) => {
-            const active = personFilter === p.id;
-            return (
-              <Pressable
-                key={p.id}
-                onPress={() => setPersonFilter(p.id)}
-                accessibilityRole="button"
-                accessibilityLabel={p.name}
-                accessibilityState={{ selected: active }}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <AppText variant="labelSm" color={active ? 'accentPrimary' : 'textSecondary'}>{p.name}</AppText>
-              </Pressable>
-            );
-          })}
+          {[{ id: ALL_PEOPLE, name: 'All' }, ...people].map((p) => (
+            <Chip key={p.id} label={p.name} selected={personFilter === p.id} onPress={() => setPersonFilter(p.id)} />
+          ))}
         </ScrollView>
       )}
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: 80 + insets.bottom }]}
+          contentContainerStyle={[styles.list, { paddingBottom: TAB_BAR_SPACE + insets.bottom }]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.summary}>
@@ -226,8 +220,6 @@ export default function LentScreen() {
         />
       )}
 
-      <FAB onPress={() => setSheetVisible(true)} accessibilityLabel="Add lending" />
-
       <AddLendingSheet
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
@@ -244,13 +236,8 @@ export default function LentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
-  headerWrap: {
-    paddingHorizontal: theme.spacing[5],
-    marginTop: theme.spacing[5],
-    marginBottom: theme.spacing[4],
-  },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing[5],
@@ -264,22 +251,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabActive: { borderBottomColor: theme.colors.accentPrimary },
+  tabActive: { borderBottomColor: c.accentPrimary },
   chipsScroll: { flexGrow: 0, marginBottom: theme.spacing[4] },
   chips: { paddingHorizontal: theme.spacing[5], gap: theme.spacing[2] },
-  chip: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgInput,
-  },
-  chipActive: { borderColor: theme.colors.accentBorder, backgroundColor: theme.colors.accentSubtle },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: theme.spacing[5] },
   summary: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     flexDirection: 'row',
@@ -288,29 +266,34 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   summaryCol: { flex: 1, gap: theme.spacing[2] },
-  summaryDivider: { width: 1, backgroundColor: theme.colors.borderDefault, marginHorizontal: theme.spacing[1] },
+  summaryDivider: { width: 1, backgroundColor: c.borderDefault, marginHorizontal: theme.spacing[1] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgPrimary,
+    padding: theme.spacing[4],
+    backgroundColor: c.bgSurface,
+  },
+  card: {
+    marginBottom: theme.spacing[3],
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+    overflow: 'hidden',
   },
   editAction: {
     width: 76,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing[2],
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
   },
   rowPressed: { opacity: 0.6 },
   iconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: theme.spacing[4],
@@ -319,4 +302,4 @@ const styles = StyleSheet.create({
   person: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
-});
+}));

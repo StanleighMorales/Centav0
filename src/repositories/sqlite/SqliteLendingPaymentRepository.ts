@@ -4,7 +4,6 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { ILendingPaymentRepository } from '../ILendingPaymentRepository';
 import type { LendingPayment, CreateLendingPaymentInput } from '../../domain/types';
 
 function rowToPayment(row: any): LendingPayment {
@@ -17,7 +16,7 @@ function rowToPayment(row: any): LendingPayment {
   };
 }
 
-export class SqliteLendingPaymentRepository implements ILendingPaymentRepository {
+export class SqliteLendingPaymentRepository {
   async list(): Promise<LendingPayment[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

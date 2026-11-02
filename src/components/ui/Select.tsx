@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Pressable, FlatList, StyleSheet } from 'react-native';
+import { View, Pressable, FlatList } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from './BottomSheet';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 export type SelectOption = { label: string; value: string };
 
@@ -17,6 +17,8 @@ type Props = {
 };
 
 export function Select({ label, options, value, onChange, placeholder = 'Selectâ€¦', error }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
@@ -34,7 +36,7 @@ export function Select({ label, options, value, onChange, placeholder = 'Selectâ
         <AppText variant="body" color={selected ? 'textPrimary' : 'textMuted'}>
           {selected?.label ?? placeholder}
         </AppText>
-        <Feather name="chevron-down" size={18} color={theme.colors.textSecondary} />
+        <Feather name="chevron-down" size={18} color={colors.textSecondary} />
       </Pressable>
       {error ? (
         <AppText variant="bodySm" color="negative">
@@ -56,7 +58,7 @@ export function Select({ label, options, value, onChange, placeholder = 'Selectâ
                 {item.label}
               </AppText>
               {item.value === value ? (
-                <Feather name="check" size={18} color={theme.colors.accentPrimary} />
+                <Feather name="check" size={18} color={colors.accentPrimary} />
               ) : null}
             </Pressable>
           )}
@@ -66,27 +68,27 @@ export function Select({ label, options, value, onChange, placeholder = 'Selectâ
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrapper: { gap: theme.spacing[2] },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.bgInput,
+    backgroundColor: c.bgInput,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     paddingHorizontal: theme.spacing[5],
     paddingVertical: theme.spacing[4],
   },
-  triggerError: { borderColor: theme.colors.negative },
+  triggerError: { borderColor: c.negative },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
-  optionSelected: { backgroundColor: theme.colors.accentSubtle },
-});
+  optionSelected: { backgroundColor: c.accentSubtle },
+}));

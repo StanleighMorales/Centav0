@@ -1,42 +1,48 @@
-import React, { useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import React from 'react';
+import { View, Pressable } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppText } from './AppText';
-import { MoreMenuSheet } from '../menu/MoreMenuSheet';
-import { theme } from '../../theme';
+import { useCalculator } from '../calculator/CalculatorOverlay';
+import { makeStyles, useTheme } from '../../theme';
 
 type Props = { title: string };
 
+// Screen title + calculator. The old "more" menu now lives in the tab bar's More slot.
 export function ScreenHeader({ title }: Props) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const showCalculator = useCalculator();
+  const styles = useStyles();
+  const { colors } = useTheme();
 
   return (
     <View style={styles.row}>
-      <AppText variant="h2">{title}</AppText>
+      <AppText variant="h1">{title}</AppText>
       <Pressable
-        onPress={() => setMenuOpen(true)}
+        onPress={() => showCalculator(true)}
         accessibilityRole="button"
-        accessibilityLabel="More options"
-        style={styles.menuBtn}
+        accessibilityLabel="Calculator"
+        style={styles.iconBtn}
       >
-        <Feather name="more-vertical" size={22} color={theme.colors.textPrimary} />
+        {/* Feather has no calculator glyph — same MaterialCommunityIcons fallback CategoryIcon uses. */}
+        <MaterialCommunityIcons name="calculator" size={22} color={colors.textSecondary} />
       </Pressable>
-      <MoreMenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  menuBtn: {
+  iconBtn: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: c.borderDefault,
+    backgroundColor: c.bgSurface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -theme.spacing[2],
   },
-});
+}));

@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '../../src/theme';
+import { theme, makeStyles } from '../../src/theme';
 
 export default function WelcomeScreen() {
+  const styles = useStyles();
   const router = useRouter();
 
   return (
@@ -26,10 +27,10 @@ export default function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
   },
   hero: {
     flex: 1,
@@ -39,12 +40,12 @@ const styles = StyleSheet.create({
   },
   logo: {
     ...theme.typography.displayLg,
-    color: theme.colors.accentPrimary,
+    color: c.accentPrimary,
     marginBottom: theme.spacing['5'],
   },
   tagline: {
     ...theme.typography.bodyLg,
-    color: theme.colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     lineHeight: 32,
   },
@@ -53,15 +54,15 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing['8'],
   },
   btn: {
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
     borderRadius: theme.radius.lg,
     paddingVertical: theme.spacing['5'],
     alignItems: 'center',
   },
   btnText: {
     ...theme.typography.labelLg,
-    color: theme.colors.bgPrimary,
+    color: c.onAccent,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-});
+}));

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator, Animated } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import { displayDate } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
@@ -32,6 +32,8 @@ type ChargeRowProps = {
 };
 
 function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -59,7 +61,7 @@ function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
             accessibilityLabel={`Edit charge ${charge.label}`}
             style={[styles.chargeAction, styles.chargeEditAction]}
           >
-            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="edit-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Edit</AppText>
           </Pressable>
           <Pressable
@@ -68,7 +70,7 @@ function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
             accessibilityLabel={`Delete charge ${charge.label}`}
             style={[styles.chargeAction, styles.chargeDeleteAction]}
           >
-            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="trash-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Delete</AppText>
           </Pressable>
         </Animated.View>
@@ -85,13 +87,15 @@ function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
           <AppText variant="bodySm" color="textMuted">{displayDate(charge.date)}</AppText>
         </View>
         <Amount value={charge.amount} variant="amountSm" semanticColor={false} />
-        <Feather name="chevron-right" size={16} color={theme.colors.textMuted} />
+        <Feather name="chevron-right" size={16} color={colors.textMuted} />
       </Pressable>
     </Swipeable>
   );
 }
 
 export default function DebtDetailScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -158,7 +162,7 @@ export default function DebtDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+        <ActivityIndicator color={colors.accentPrimary} size="large" />
       </View>
     );
   }
@@ -185,7 +189,7 @@ export default function DebtDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Debt Detail</AppText>
         {debt.linkedAccountId ? (
@@ -197,7 +201,7 @@ export default function DebtDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Edit debt"
           >
-            <Feather name="edit-2" size={18} color={theme.colors.accentPrimary} />
+            <Feather name="edit-2" size={18} color={colors.accentPrimary} />
           </Pressable>
         )}
       </View>
@@ -238,7 +242,7 @@ export default function DebtDetailScreen() {
           )}
           {debt.dueDate ? (
             <View style={styles.metaRow}>
-              <Feather name="calendar" size={14} color={theme.colors.textMuted} />
+              <Feather name="calendar" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}>
                 Due {displayDate(debt.dueDate)}
               </AppText>
@@ -246,7 +250,7 @@ export default function DebtDetailScreen() {
           ) : null}
           {debt.isInstallment && debt.monthlyPayment != null ? (
             <View style={styles.metaRow}>
-              <Feather name="repeat" size={14} color={theme.colors.textMuted} />
+              <Feather name="repeat" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color="textMuted">
                 {formatPHP(debt.monthlyPayment)}/month installment
                 {debt.installmentFee != null ? ` + ${formatPHP(debt.installmentFee)} fees` : ''}
@@ -255,7 +259,7 @@ export default function DebtDetailScreen() {
           ) : null}
           {debt.interestRate != null ? (
             <View style={styles.metaRow}>
-              <Feather name="percent" size={14} color={theme.colors.textMuted} />
+              <Feather name="percent" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color="textMuted">{debt.interestRate}% interest</AppText>
             </View>
           ) : null}
@@ -307,7 +311,7 @@ export default function DebtDetailScreen() {
           payments.map((p) => (
             <View key={p.id} style={styles.paymentRow}>
               <View style={styles.paymentIconCircle}>
-                <Feather name="dollar-sign" size={18} color={theme.colors.positive} />
+                <Feather name="dollar-sign" size={18} color={colors.positive} />
               </View>
               <View style={styles.paymentInfo}>
                 <AppText variant="body">{displayDate(p.date)}</AppText>
@@ -327,7 +331,7 @@ export default function DebtDetailScreen() {
             accessibilityLabel="Delete debt"
             style={styles.deleteBtn}
           >
-            <Feather name="trash-2" size={16} color={theme.colors.negative} />
+            <Feather name="trash-2" size={16} color={colors.negative} />
             <AppText variant="body" color="negative">Delete Debt</AppText>
           </Pressable>
         )}
@@ -401,8 +405,8 @@ export default function DebtDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   center: { alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
@@ -437,13 +441,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   paymentIconCircle: {
     width: 36,
     height: 36,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: theme.spacing[4],
@@ -455,7 +459,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing[3],
     paddingVertical: theme.spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderDefault,
+    borderBottomColor: c.borderDefault,
   },
   chargeInfo: { flex: 1, gap: theme.spacing[1] },
   rowPressed: { opacity: 0.6 },
@@ -466,8 +470,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing[2],
   },
-  chargeEditAction: { backgroundColor: theme.colors.bgElevated },
-  chargeDeleteAction: { backgroundColor: theme.colors.negative },
+  chargeEditAction: { backgroundColor: c.bgElevated },
+  chargeDeleteAction: { backgroundColor: c.negative },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -476,4 +480,4 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[5],
     marginTop: theme.spacing[3],
   },
-});
+}));

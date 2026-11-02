@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet, Switch } from 'react-native';
+import { View, Pressable, Switch } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -9,7 +10,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { debtRepo, accountRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { nowIso } from '../../utils/date';
 import type { Account, Debt, DebtType } from '../../domain/types';
 
@@ -22,6 +23,8 @@ type Props = {
 };
 
 export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isEdit = !!initial;
   const [creditor, setCreditor] = useState('');
   const [originalAmount, setOriginalAmount] = useState(0);
@@ -32,6 +35,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   const [isInstallment, setIsInstallment] = useState(false);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [installmentFee, setInstallmentFee] = useState(0);
+  const [termMonths, setTermMonths] = useState('');
+  const [monthlyInterest, setMonthlyInterest] = useState(0);
   const [accountId, setAccountId] = useState('');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
@@ -52,6 +57,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
       setIsInstallment(initial?.isInstallment ?? false);
       setMonthlyPayment(initial?.monthlyPayment ?? 0);
       setInstallmentFee(initial?.installmentFee ?? 0);
+      setTermMonths(initial?.termMonths != null ? String(initial.termMonths) : '');
+      setMonthlyInterest(initial?.monthlyInterest ?? 0);
       setAccountId('');
       setErrors({});
       if (isLoan) accountRepo.list().then(setAccounts);
@@ -63,6 +70,13 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
     if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
+    let parsedTermMonths: number | undefined;
+    if (isInstallment) {
+      parsedTermMonths = parseInt(termMonths, 10);
+      if (!termMonths.trim() || Number.isNaN(parsedTermMonths) || parsedTermMonths <= 0) {
+        errs.termMonths = 'Enter the number of months';
+      }
+    }
     if (!isEdit && isLoan && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
@@ -72,6 +86,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         isInstallment,
         monthlyPayment: isInstallment ? monthlyPayment : undefined,
         installmentFee: isInstallment && installmentFee > 0 ? installmentFee : undefined,
+        termMonths: isInstallment ? parsedTermMonths : undefined,
+        monthlyInterest: isInstallment && monthlyInterest > 0 ? monthlyInterest : undefined,
       };
       if (isEdit && initial) {
         await debtRepo.update(initial.id, {
@@ -142,14 +158,16 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           {dueDateEnabled ? (
             <View>
               <DatePicker label="Due Date" value={dueDate || nowIso()} onChange={setDueDate} />
-              <Pressable
-                onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
-                accessibilityRole="button"
-                accessibilityLabel="Remove due date"
-                style={styles.clearDate}
-              >
-                <AppText variant="bodySm" color="textMuted">Remove due date</AppText>
-              </Pressable>
+              {!isInstallment && (
+                <Pressable
+                  onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove due date"
+                  style={styles.clearDate}
+                >
+                  <AppText variant="bodySm" color="textMuted">Remove due date</AppText>
+                </Pressable>
+              )}
             </View>
           ) : (
             <Pressable
@@ -160,7 +178,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
             >
               <AppText variant="labelLg" color="textSecondary">Due Date (optional)</AppText>
               <View style={styles.setDateRow}>
-                <Feather name="calendar" size={14} color={theme.colors.accentPrimary} />
+                <Feather name="calendar" size={14} color={colors.accentPrimary} />
                 <AppText variant="bodySm" color="accentPrimary">Set due date</AppText>
               </View>
             </Pressable>
@@ -173,10 +191,16 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           </View>
           <Switch
             value={isInstallment}
-            onValueChange={setIsInstallment}
+            onValueChange={(on) => {
+              setIsInstallment(on);
+              // An installment plan schedules from the due date; without one
+              // buildSchedule() returns [] and the loan silently vanishes from
+              // the Monthly and Grid views.
+              if (on && !dueDateEnabled) { setDueDateEnabled(true); setDueDate(nowIso()); }
+            }}
             accessibilityLabel="Installment plan"
-            trackColor={{ false: theme.colors.borderStrong, true: theme.colors.accentDim }}
-            thumbColor={isInstallment ? theme.colors.accentPrimary : theme.colors.textMuted}
+            trackColor={{ false: colors.borderStrong, true: colors.accentDim }}
+            thumbColor={isInstallment ? colors.accentPrimary : colors.textMuted}
           />
         </View>
         {isInstallment && (
@@ -186,6 +210,19 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
               value={monthlyPayment}
               onChange={setMonthlyPayment}
               error={errors.monthlyPayment}
+            />
+            <AppTextInput
+              label="Term (months)"
+              value={termMonths}
+              onChangeText={setTermMonths}
+              placeholder="e.g. 12"
+              error={errors.termMonths}
+              numeric
+            />
+            <AmountInput
+              label="Monthly Interest (optional)"
+              value={monthlyInterest}
+              onChange={setMonthlyInterest}
             />
             <AmountInput
               label="Other Fees (optional)"
@@ -214,7 +251,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   dateWrapper: {},
   clearDate: { paddingTop: theme.spacing[2] },
@@ -223,4 +260,4 @@ const styles = StyleSheet.create({
   installmentRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] },
   flex: { flex: 1, gap: theme.spacing[1] },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

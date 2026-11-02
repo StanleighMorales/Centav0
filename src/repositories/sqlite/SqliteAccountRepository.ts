@@ -3,14 +3,13 @@ import { newId } from '../../utils/id';
 import { nowIso, nextDueDateIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IAccountRepository } from '../IAccountRepository';
 import type { Account, CreateAccountInput, UpdateAccountInput } from '../../domain/types';
 
 function rowToAccount(row: any): Account {
   return {
     id: row.id, userId: row.userId, name: row.name,
     accountTypeId: row.accountTypeId, allowsOverdraft: row.allowsOverdraft === 1,
-    typeName: row.typeName,
+    typeName: row.typeName, isSavings: row.isSavings === 1,
     initialBalance: row.initialBalance, currentBalance: row.currentBalance,
     billDay: row.billDay ?? null, dueDay: row.dueDay ?? null,
     creditLimit: row.creditLimit ?? null,
@@ -20,12 +19,12 @@ function rowToAccount(row: any): Account {
 }
 
 const SELECT_ACCOUNT = `
-  SELECT a.*, t.name AS typeName
+  SELECT a.*, t.name AS typeName, t.isSavings AS isSavings
   FROM accounts a
   JOIN account_types t ON t.id = a.accountTypeId
 `;
 
-export class SqliteAccountRepository implements IAccountRepository {
+export class SqliteAccountRepository {
   async list(): Promise<Account[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(

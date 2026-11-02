@@ -2,19 +2,19 @@ import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
 import { FIXED_USER_ID } from '../../constants/user';
-import type { IAccountTypeRepository } from '../IAccountTypeRepository';
 import type { AccountType, CreateAccountTypeInput, UpdateAccountTypeInput } from '../../domain/types';
 
 function rowToAccountType(row: any): AccountType {
   return {
     id: row.id, userId: row.userId, name: row.name,
     allowsOverdraft: row.allowsOverdraft === 1,
+    isSavings: row.isSavings === 1,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null, isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
   };
 }
 
-export class SqliteAccountTypeRepository implements IAccountTypeRepository {
+export class SqliteAccountTypeRepository {
   async list(): Promise<AccountType[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(
@@ -38,9 +38,9 @@ export class SqliteAccountTypeRepository implements IAccountTypeRepository {
     const id = newId();
     const now = nowIso();
     await db.runAsync(
-      `INSERT INTO account_types (id, userId, name, allowsOverdraft, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
-      [id, FIXED_USER_ID, input.name, input.allowsOverdraft ? 1 : 0, now, now],
+      `INSERT INTO account_types (id, userId, name, allowsOverdraft, isSavings, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+      [id, FIXED_USER_ID, input.name, input.allowsOverdraft ? 1 : 0, input.isSavings ? 1 : 0, now, now],
     );
     const created = await this.getById(id);
     if (!created) throw new Error('AccountType creation failed silently');
@@ -53,10 +53,11 @@ export class SqliteAccountTypeRepository implements IAccountTypeRepository {
     const db = await getDatabase();
     const updatedAt = nowIso();
     await db.runAsync(
-      `UPDATE account_types SET name = ?, allowsOverdraft = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      `UPDATE account_types SET name = ?, allowsOverdraft = ?, isSavings = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
       [
         input.name ?? existing.name,
         ('allowsOverdraft' in input ? !!input.allowsOverdraft : existing.allowsOverdraft) ? 1 : 0,
+        ('isSavings' in input ? !!input.isSavings : existing.isSavings) ? 1 : 0,
         updatedAt, id, FIXED_USER_ID,
       ],
     );

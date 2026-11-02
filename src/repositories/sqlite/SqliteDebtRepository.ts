@@ -4,7 +4,6 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { IDebtRepository } from '../IDebtRepository';
 import type { Debt, CreateDebtInput, UpdateDebtInput, DebtStatus } from '../../domain/types';
 
 function rowToDebt(row: any): Debt {
@@ -19,6 +18,8 @@ function rowToDebt(row: any): Debt {
     isInstallment: row.isInstallment === 1,
     monthlyPayment: row.monthlyPayment ?? null,
     installmentFee: row.installmentFee ?? null,
+    termMonths: row.termMonths ?? null,
+    monthlyInterest: row.monthlyInterest ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -49,7 +50,7 @@ async function getOrCreateLoanCategory(db: Awaited<ReturnType<typeof getDatabase
   return id;
 }
 
-export class SqliteDebtRepository implements IDebtRepository {
+export class SqliteDebtRepository {
   async list(): Promise<Debt[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(
@@ -81,13 +82,14 @@ export class SqliteDebtRepository implements IDebtRepository {
     const disbursementTransactionId = isLoan ? newId() : null;
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, termMonths, monthlyInterest, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
         [
           id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
           input.debtType, disbursementAccountId, disbursementTransactionId,
           input.interestRate ?? null, input.note ?? null,
           input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
+          input.termMonths ?? null, input.monthlyInterest ?? null,
           now, now,
         ],
       );
@@ -118,7 +120,7 @@ export class SqliteDebtRepository implements IDebtRepository {
     const dueDate = 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate;
     const status = computeStatus(existing.outstandingBalance, dueDate);
     await db.runAsync(
-      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, updatedAt = ?, isDirty = 1
+      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, termMonths = ?, monthlyInterest = ?, updatedAt = ?, isDirty = 1
        WHERE id = ? AND userId = ?`,
       [
         input.creditor ?? existing.creditor, dueDate, status,
@@ -127,6 +129,8 @@ export class SqliteDebtRepository implements IDebtRepository {
         ('isInstallment' in input ? !!input.isInstallment : existing.isInstallment) ? 1 : 0,
         'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
         'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
+        'termMonths' in input ? (input.termMonths ?? null) : existing.termMonths,
+        'monthlyInterest' in input ? (input.monthlyInterest ?? null) : existing.monthlyInterest,
         now, id, FIXED_USER_ID,
       ],
     );

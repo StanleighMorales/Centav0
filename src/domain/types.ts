@@ -14,9 +14,11 @@ export interface AccountType extends AuditFields, LocalSyncFields {
   userId: string;
   name: string;
   allowsOverdraft: boolean;
+  /** Held separately from Total Balance, like overdraft types. Never both. */
+  isSavings: boolean;
 }
-export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; }
-export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; }
+export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; isSavings?: boolean; }
+export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; isSavings?: boolean; }
 
 export interface Account extends AuditFields, LocalSyncFields {
   id: string;
@@ -27,6 +29,8 @@ export interface Account extends AuditFields, LocalSyncFields {
   allowsOverdraft: boolean;
   /** Joined from account_types for display. */
   typeName: string;
+  /** Joined from account_types. Excluded from Total Balance. */
+  isSavings: boolean;
   initialBalance: number;
   currentBalance: number;
   /** Day of month (1–31) the statement is generated. Overdraft-capable types only. */
@@ -118,6 +122,10 @@ export interface Debt extends AuditFields, LocalSyncFields {
   isInstallment: boolean;
   monthlyPayment: number | null;
   installmentFee: number | null;
+  /** Total number of scheduled months for the installment plan. Installment loans only. */
+  termMonths: number | null;
+  /** Flat interest amount added on top of monthlyPayment each scheduled month. Installment loans only. */
+  monthlyInterest: number | null;
 }
 
 export interface CreateDebtInput {
@@ -126,10 +134,12 @@ export interface CreateDebtInput {
   accountId?: string;
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
 }
 export interface UpdateDebtInput {
   creditor?: string; dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
 }
 
 export interface DebtPayment extends AuditFields, LocalSyncFields {
@@ -188,3 +198,69 @@ export interface LendingPayment extends AuditFields, LocalSyncFields {
   date: string; amount: number; accountId: string;
 }
 export interface CreateLendingPaymentInput { date: string; amount: number; accountId: string; }
+
+export type InvestmentStatus = 'Active' | 'Exited';
+
+export interface Investment extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  name: string;
+  /** 0 = a stake that cost nothing. */
+  amountPaid: number;
+  stakePct: number | null;
+  expectedReturnPct: number | null;
+  startDate: string;
+  status: InvestmentStatus;
+  note: string | null;
+}
+export interface CreateInvestmentInput {
+  name: string; amountPaid: number; stakePct?: number | null; expectedReturnPct?: number | null;
+  startDate: string; note?: string;
+}
+export interface UpdateInvestmentInput {
+  name?: string; stakePct?: number | null; expectedReturnPct?: number | null; note?: string | null; status?: InvestmentStatus;
+}
+
+export interface InvestmentUpdate extends AuditFields, LocalSyncFields {
+  id: string; userId: string; investmentId: string;
+  date: string;
+  /** Cash received. 0 for a stake-only update. */
+  amount: number;
+  stakePct: number | null;
+  note: string | null;
+}
+export interface CreateInvestmentUpdateInput {
+  date: string; amount: number; stakePct?: number | null; note?: string;
+}
+
+export interface InvestmentDocument extends AuditFields, LocalSyncFields {
+  id: string; userId: string; investmentId: string;
+  name: string; uri: string; size: number | null;
+}
+export interface CreateInvestmentDocumentInput { name: string; uri: string; size?: number | null; }
+
+export type RecurringFrequency = 'weekly' | 'monthly' | 'semi-monthly';
+
+export interface RecurringTransaction extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'Expense' | 'Income';
+  categoryId: string | null;
+  accountId: string;
+  note: string | null;
+  frequency: RecurringFrequency;
+  dayOfMonth: number | null;
+  semiMonthDays: number[] | null;
+  dayOfWeek: number | null;
+  startDate: string;
+  endDate: string | null;
+  lastMaterializedDate: string | null;
+}
+export interface CreateRecurringTransactionInput {
+  amount: number; type: 'Expense' | 'Income'; categoryId?: string; accountId: string; note?: string;
+  frequency: RecurringFrequency;
+  dayOfMonth?: number | null; semiMonthDays?: number[] | null; dayOfWeek?: number | null;
+  startDate: string; endDate?: string | null;
+}
+export interface UpdateRecurringTransactionInput extends Partial<CreateRecurringTransactionInput> {}

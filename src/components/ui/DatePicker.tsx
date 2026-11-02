@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
 import { BottomSheet } from './BottomSheet';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import { displayDate } from '../../utils/date';
 
 type Props = {
@@ -15,6 +15,8 @@ type Props = {
 };
 
 export function DatePicker({ label, value, onChange, error }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const date = value ? new Date(value) : new Date();
 
@@ -35,7 +37,7 @@ export function DatePicker({ label, value, onChange, error }: Props) {
         <AppText variant="body" color={value ? 'textPrimary' : 'textMuted'}>
           {value ? displayDate(value) : 'Select date'}
         </AppText>
-        <Feather name="calendar" size={18} color={theme.colors.textSecondary} />
+        <Feather name="calendar" size={18} color={colors.textSecondary} />
       </Pressable>
       {error ? <AppText variant="bodySm" color="negative">{error}</AppText> : null}
 
@@ -46,7 +48,7 @@ export function DatePicker({ label, value, onChange, error }: Props) {
             mode="date"
             display="spinner"
             onChange={handleChange}
-            textColor={theme.colors.textPrimary}
+            textColor={colors.textPrimary}
             style={styles.picker}
           />
         </BottomSheet>
@@ -59,19 +61,19 @@ export function DatePicker({ label, value, onChange, error }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrapper: { gap: theme.spacing[2] },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.bgInput,
+    backgroundColor: c.bgInput,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
+    borderColor: c.borderDefault,
     paddingHorizontal: theme.spacing[5],
     paddingVertical: theme.spacing[4],
   },
-  triggerError: { borderColor: theme.colors.negative },
-  picker: { backgroundColor: theme.colors.bgSurface },
-});
+  triggerError: { borderColor: c.negative },
+  picker: { backgroundColor: c.bgSurface },
+}));

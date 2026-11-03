@@ -91,6 +91,9 @@ export default function SettingsScreen() {
       await resetAppData();
       closeReset();
       router.replace('/onboarding');
+    } catch (e) {
+      closeReset();
+      setError(`Reset failed: ${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -131,7 +134,8 @@ export default function SettingsScreen() {
         <View style={styles.resetSheet}>
           <AppText variant="body" color="textSecondary">
             This deletes every account, category, transaction, budget, debt, payment, and lending
-            record. Back up first if you want to keep it. Type CONFIRM to continue.
+            record, plus receipt photos and contract PDFs. Back up first if you want to keep it.
+            Type CONFIRM to continue.
           </AppText>
           <AppTextInput
             label="Confirmation"

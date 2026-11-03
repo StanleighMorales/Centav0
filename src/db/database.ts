@@ -1,5 +1,7 @@
 import * as SQLite from 'expo-sqlite';
+import { Directory, Paths } from 'expo-file-system';
 import { runMigrations } from './migrations';
+import { ATTACHMENT_FOLDERS } from '../utils/backupRules';
 
 const DB_NAME = 'centav0.db';
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -23,7 +25,7 @@ export function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 // so reset-all-data never silently misses one.
 const RESETTABLE_TABLES = [
   'investment_documents', 'investment_updates', 'investments',
-  'debt_payments', 'lending_payments', 'transactions', 'lendings',
+  'debt_payments', 'lending_payments', 'transaction_items', 'transactions', 'lendings',
   'allocations', 'debts', 'accounts', 'account_types', 'categories',
   'lending_people', 'recurring_transactions', 'settings',
 ];
@@ -35,4 +37,9 @@ export async function resetAppData(): Promise<void> {
       await db.execAsync(`DELETE FROM ${table};`);
     }
   });
+  // After the rows: a failed reset must not leave links to files that are gone.
+  for (const folder of ATTACHMENT_FOLDERS) {
+    const dir = new Directory(Paths.document, folder);
+    if (dir.exists) dir.delete();
+  }
 }

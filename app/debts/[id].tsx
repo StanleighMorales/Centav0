@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator, Animated } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -13,7 +12,7 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
-import { CreditStatementsView } from '../../src/components/debts/CreditStatementsView';
+import { CreditStatementsView, PurchaseLine } from '../../src/components/debts/CreditStatementsView';
 import { EarlierBalanceSheet } from '../../src/components/debts/EarlierBalanceSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme, makeStyles, useTheme } from '../../src/theme';
@@ -24,87 +23,12 @@ import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/t
 
 type Charge = Transaction & { label: string };
 
-const CHARGE_ACTION_WIDTH = 76;
-
-type ChargeRowProps = {
-  charge: Charge;
-  onEdit: (c: Charge) => void;
-  onDelete: (c: Charge) => void;
-};
-
-function ChargeRow({ charge, onEdit, onDelete }: ChargeRowProps) {
-  const styles = useStyles();
-  const { colors } = useTheme();
-  const swipeRef = useRef<Swipeable>(null);
-  const close = () => swipeRef.current?.close();
-
-  return (
-    <Swipeable
-      ref={swipeRef}
-      overshootRight={false}
-      renderRightActions={(progress) => (
-        <Animated.View
-          style={[
-            styles.chargeActions,
-            {
-              transform: [{
-                translateX: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [CHARGE_ACTION_WIDTH * 2, 0],
-                }),
-              }],
-            },
-          ]}
-        >
-          <Pressable
-            onPress={() => { close(); onEdit(charge); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Edit charge ${charge.label}`}
-            style={[styles.chargeAction, styles.chargeEditAction]}
-          >
-            <Feather name="edit-2" size={18} color={colors.textPrimary} />
-            <AppText variant="labelSm" color="textPrimary">Edit</AppText>
-          </Pressable>
-          <Pressable
-            onPress={() => { close(); onDelete(charge); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Delete charge ${charge.label}`}
-            style={[styles.chargeAction, styles.chargeDeleteAction]}
-          >
-            <Feather name="trash-2" size={18} color={colors.textPrimary} />
-            <AppText variant="labelSm" color="textPrimary">Delete</AppText>
-          </Pressable>
-        </Animated.View>
-      )}
-    >
-      <Pressable
-        onPress={() => onEdit(charge)}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit charge ${charge.label}, ${formatPHP(charge.amount)}`}
-        style={({ pressed }) => [styles.chargeRow, pressed && styles.rowPressed]}
-      >
-        <View style={styles.chargeInfo}>
-          <AppText variant="body">{charge.label}</AppText>
-          <AppText variant="bodySm" color="textMuted">
-            {displayDate(charge.date)}
-            {charge.installmentMonths && charge.installmentMonths > 1
-              ? ` · ${charge.installmentMonths} months · ${formatPHP(Math.round((charge.amount / charge.installmentMonths) * 100) / 100)}/mo`
-              : ''}
-          </AppText>
-        </View>
-        <Amount value={charge.amount} variant="amountSm" semanticColor={false} />
-        <Feather name="chevron-right" size={16} color={colors.textMuted} />
-      </Pressable>
-    </Swipeable>
-  );
-}
-
 type MonthHeaderProps = {
   label: string;
   count: number;
   noun: string;
   total: number;
-  color: 'positive' | 'textPrimary';
+  color: 'positive';
   open: boolean;
   onPress: () => void;
 };
@@ -156,7 +80,7 @@ export default function DebtDetailScreen() {
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
   const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
   const [earlierVisible, setEarlierVisible] = useState(false);
-  // Expanded months, as "payments:2026-11" / "purchases:2026-11"; every month starts collapsed to its total.
+  // Expanded payment-history months; every month starts collapsed to its total.
   const [openMonths, setOpenMonths] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -191,7 +115,6 @@ export default function DebtDetailScreen() {
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const paymentMonths = groupByMonth(payments);
-  const purchaseMonths = groupByMonth(charges);
   const toggleMonth = (key: string) =>
     setOpenMonths((open) => (open.includes(key) ? open.filter((k) => k !== key) : [...open, key]));
 
@@ -348,35 +271,27 @@ export default function DebtDetailScreen() {
             earlierMonths={creditAccount.earlierBalanceMonths}
             earlierFirstBill={creditAccount.earlierBalanceFirstBill}
             onChangeEarlier={() => setEarlierVisible(true)}
+            purchases={charges}
+            onEditPurchase={(cid) => setEditCharge(charges.find((c) => c.id === cid) ?? null)}
+            onDeletePurchase={(cid) => setDeleteCharge(charges.find((c) => c.id === cid) ?? null)}
           />
         ) : null}
 
-        {debt.linkedAccountId && charges.length > 0 && (
+        {/* Without a bill date there are no bills to hold purchases, so list them plainly. */}
+        {creditAccount && !credit && charges.length > 0 && (
           <>
             <AppText variant="h3" style={styles.sectionTitle}>Purchases</AppText>
-            {purchaseMonths.map((m) => {
-              const open = openMonths.includes(`purchases:${m.key}`);
-              return (
-                <View key={m.key}>
-                  <MonthHeader
-                    label={m.label}
-                    count={m.items.length}
-                    noun="purchase"
-                    total={m.total}
-                    color="textPrimary"
-                    open={open}
-                    onPress={() => toggleMonth(`purchases:${m.key}`)}
-                  />
-                  {open
-                    ? m.items.map((c) => (
-                      <View key={c.id} style={styles.monthDetail}>
-                        <ChargeRow charge={c} onEdit={setEditCharge} onDelete={setDeleteCharge} />
-                      </View>
-                    ))
-                    : null}
-                </View>
-              );
-            })}
+            {charges.map((c) => (
+              <PurchaseLine
+                key={c.id}
+                title={c.label}
+                subtitle={`Bought ${displayDate(c.date)}`}
+                amount={c.amount}
+                onPress={() => setEditCharge(c)}
+                onLongPress={() => setDeleteCharge(c)}
+                accessibilityHint="Tap to edit, hold to delete"
+              />
+            ))}
           </>
         )}
 
@@ -386,7 +301,7 @@ export default function DebtDetailScreen() {
           <EmptyState icon="dollar-sign" title="No payments yet" subtitle="Record a payment above" />
         ) : (
           paymentMonths.map((m) => {
-            const open = openMonths.includes(`payments:${m.key}`);
+            const open = openMonths.includes(m.key);
             return (
               <View key={m.key}>
                 <MonthHeader
@@ -396,7 +311,7 @@ export default function DebtDetailScreen() {
                   total={m.total}
                   color="positive"
                   open={open}
-                  onPress={() => toggleMonth(`payments:${m.key}`)}
+                  onPress={() => toggleMonth(m.key)}
                 />
                 {open
                   ? m.items.map((p) => (
@@ -554,27 +469,7 @@ const useStyles = makeStyles((c) => ({
     marginRight: theme.spacing[4],
   },
   paymentInfo: { flex: 1, gap: theme.spacing[1] },
-  // Indented under its month, lined up with the month's text rather than its chevron.
-  monthDetail: { paddingLeft: 36 + theme.spacing[4] },
-  chargeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderDefault,
-  },
-  chargeInfo: { flex: 1, gap: theme.spacing[1] },
   rowPressed: { opacity: 0.6 },
-  chargeActions: { flexDirection: 'row', alignItems: 'stretch' },
-  chargeAction: {
-    width: CHARGE_ACTION_WIDTH,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing[2],
-  },
-  chargeEditAction: { backgroundColor: c.bgElevated },
-  chargeDeleteAction: { backgroundColor: c.negative },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -583,4 +478,6 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: theme.spacing[5],
     marginTop: theme.spacing[3],
   },
+  // Indented under its month, lined up with the month's text rather than its chevron.
+  monthDetail: { paddingLeft: 36 + theme.spacing[4] },
 }));

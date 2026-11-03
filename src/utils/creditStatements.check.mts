@@ -106,6 +106,21 @@ const owedOf = (charges: { amount: number }[]) => charges.reduce((s, c) => s + c
   assert.strictEqual(roomy[0].status, 'due');
 }
 {
+  // Each bill lists what it's made of: which purchase, which installment, and any earlier balance.
+  const charges = [
+    { id: 'shoes', amount: 1000, date: at('2026-11-09'), months: 3 },
+    { id: 'food', amount: 50, date: at('2026-11-20'), months: null },
+  ];
+  const { statements } = buildStatements({ ...base, charges, owed: 1150 });
+  assert.deepStrictEqual(statements.map((s) => s.pieces), [
+    [{ chargeId: null, index: 1, of: 1, amount: 100 }],
+    [{ chargeId: 'shoes', index: 1, of: 3, amount: 333.33 }, { chargeId: 'food', index: 1, of: 1, amount: 50 }],
+    [{ chargeId: 'shoes', index: 2, of: 3, amount: 333.33 }],
+    [{ chargeId: 'shoes', index: 3, of: 3, amount: 333.34 }],
+  ]);
+  assert.deepStrictEqual(statements.map((s) => s.amount), [100, 383.33, 333.33, 333.34], 'bill = sum of its pieces');
+}
+{
   assert.deepStrictEqual(firstBillOptions(8, at('2026-11-04'), 3), [day('2026-11-08'), day('2026-12-08'), day('2027-01-08')]);
   assert.deepStrictEqual(firstBillOptions(8, at('2026-11-09'), 1), [day('2026-12-08')], 'after the bill day, next month');
 }

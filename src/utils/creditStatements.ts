@@ -19,6 +19,9 @@ export const STATUS_LABEL: Record<StatementStatus, string> = {
   upcoming: 'Upcoming',
 };
 
+/** Part of one bill: an installment of a purchase (`chargeId`), or of the earlier balance (`chargeId` null). */
+export type StatementPiece = { chargeId: string | null; index: number; of: number; amount: number };
+
 export type Statement = {
   billDate: string;
   dueDate: string;
@@ -26,6 +29,7 @@ export type Statement = {
   paid: number;
   remaining: number;
   status: StatementStatus;
+  pieces: StatementPiece[];
 };
 
 export type StatementInput = {
@@ -34,7 +38,7 @@ export type StatementInput = {
   /** Purchases on the bill day go on the next statement instead of that day's. */
   billDayNext: boolean;
   /** Purchases on the card; `months` null = pay in full on one statement. */
-  charges: { amount: number; date: string; months: number | null }[];
+  charges: { id?: string; amount: number; date: string; months: number | null }[];
   payments: { amount: number }[];
   /** What the card says is owed right now (limit − available). */
   owed: number;
@@ -69,12 +73,14 @@ function billMonth(iso: string, billDay: number, billDayNext: boolean): number {
 }
 
 // Splits `amount` over `months` statements starting at `start`; the last piece takes the leftover centavos.
-function spread(into: Map<number, number>, amount: number, months: number, start: number) {
+function spread(into: Map<number, StatementPiece[]>, amount: number, months: number, start: number, chargeId: string | null) {
   const n = Math.max(1, Math.floor(months));
   const piece = round2(amount / n);
   for (let i = 0; i < n; i++) {
     const part = i === n - 1 ? round2(amount - piece * (n - 1)) : piece;
-    into.set(start + i, round2((into.get(start + i) ?? 0) + part));
+    const pieces = into.get(start + i) ?? [];
+    pieces.push({ chargeId, index: i + 1, of: n, amount: part });
+    into.set(start + i, pieces);
   }
 }
 
@@ -86,8 +92,8 @@ export function firstBillOptions(billDay: number, today: string, count: number):
 
 export function buildStatements(input: StatementInput): { statements: Statement[]; earlierAmount: number } {
   const { billDay, dueDay, billDayNext, charges, payments, owed, earlier, today } = input;
-  const byMonth = new Map<number, number>();
-  for (const c of charges) spread(byMonth, c.amount, c.months ?? 1, billMonth(c.date, billDay, billDayNext));
+  const byMonth = new Map<number, StatementPiece[]>();
+  for (const c of charges) spread(byMonth, c.amount, c.months ?? 1, billMonth(c.date, billDay, billDayNext), c.id ?? null);
 
   // Whatever the card owes beyond recorded purchases is the earlier balance; a negative gap (money
   // moved into the card) already paid part of the bills.
@@ -96,14 +102,15 @@ export function buildStatements(input: StatementInput): { statements: Statement[
   const gap = round2(owed - (charged - paidIn));
   if (gap > 0) {
     const start = earlier.firstBill ? manila(earlier.firstBill).mi : billMonth(today, billDay, false);
-    spread(byMonth, gap, earlier.months ?? 1, start);
+    spread(byMonth, gap, earlier.months ?? 1, start, null);
   }
 
   let credit = round2(paidIn + Math.max(0, -gap));
   const now = Date.parse(today);
   const statements = [...byMonth.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([mi, amount]): Statement => {
+    .map(([mi, pieces]): Statement => {
+      const amount = round2(pieces.reduce((sum, p) => sum + p.amount, 0));
       const paid = round2(Math.min(credit, amount));
       credit = round2(credit - paid);
       const remaining = round2(amount - paid);
@@ -116,7 +123,7 @@ export function buildStatements(input: StatementInput): { statements: Statement[
         : now >= due + DAY ? 'overdue'
         : due - now <= 7 * DAY ? 'dueSoon'
         : 'due';
-      return { billDate, dueDate, amount, paid, remaining, status };
+      return { billDate, dueDate, amount, paid, remaining, status, pieces };
     });
   return { statements, earlierAmount: Math.max(0, gap) };
 }
@@ -144,7 +151,7 @@ type CreditAccountLike = {
 /** Statements for a credit account, or null until it has both a bill day and a due day. */
 export function statementsFor(
   account: CreditAccountLike,
-  charges: { amount: number; date: string; installmentMonths: number | null }[],
+  charges: { id: string; amount: number; date: string; installmentMonths: number | null }[],
   payments: { amount: number }[],
   owed: number,
   today: string,
@@ -154,7 +161,7 @@ export function statementsFor(
     billDay: account.billDay,
     dueDay: account.dueDay,
     billDayNext: account.billDayNextStatement,
-    charges: charges.map((c) => ({ amount: c.amount, date: c.date, months: c.installmentMonths })),
+    charges: charges.map((c) => ({ id: c.id, amount: c.amount, date: c.date, months: c.installmentMonths })),
     payments,
     owed,
     earlier: { months: account.earlierBalanceMonths, firstBill: account.earlierBalanceFirstBill },

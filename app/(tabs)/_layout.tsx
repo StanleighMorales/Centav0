@@ -4,6 +4,7 @@ import { FloatingTabBar } from '../../src/components/nav/FloatingTabBar';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { DebtPickerSheet } from '../../src/components/debts/DebtPickerSheet';
+import { VoiceCommandSheet, OpenVoiceCommandContext } from '../../src/components/dashboard/VoiceCommandSheet';
 import { emitDataChanged } from '../../src/utils/dataEvents';
 import type { VoiceCommand } from '../../src/utils/voiceTransaction';
 import { useTheme } from '../../src/theme';
@@ -20,6 +21,7 @@ export default function TabLayout() {
   const [transfer, setTransfer] = useState<TransferCmd | null>(null);
   // A spoken payment that didn't name the debt waits here while the user picks one.
   const [unpicked, setUnpicked] = useState<PayCmd | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // The debt screen opens its payment sheet from these params, so card charges load in one place.
   function pay(debtId: string, cmd: PayCmd) {
@@ -36,7 +38,7 @@ export default function TabLayout() {
   }
 
   return (
-    <>
+    <OpenVoiceCommandContext.Provider value={() => setVoiceOpen(true)}>
       <Tabs
         tabBar={(props) => (
           <FloatingTabBar
@@ -75,6 +77,7 @@ export default function TabLayout() {
         onClose={() => setUnpicked(null)}
         onPick={(debt) => { if (unpicked) pay(debt.id, unpicked); setUnpicked(null); }}
       />
-    </>
+      <VoiceCommandSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} onCommand={onVoiceCommand} />
+    </OpenVoiceCommandContext.Provider>
   );
 }

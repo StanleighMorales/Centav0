@@ -5,7 +5,13 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { AppText } from '../ui/AppText';
 import { theme, makeStyles, useTheme } from '../../theme';
 
-type Props = { onResult: (text: string) => void; autoStart?: boolean };
+type Props = {
+  onResult: (text: string) => void;
+  autoStart?: boolean;
+  label?: string;
+  /** Shown under the button before anything is heard. */
+  hint?: string;
+};
 
 const ERROR_TEXT: Record<string, string> = {
   'not-allowed': 'Microphone permission is off. Enable it in Settings to use voice.',
@@ -16,7 +22,12 @@ const ERROR_TEXT: Record<string, string> = {
   'service-not-allowed': 'Voice input is not available on this phone.',
 };
 
-export function VoiceInputButton({ onResult, autoStart }: Props) {
+export function VoiceInputButton({
+  onResult,
+  autoStart,
+  label = 'Speak transaction',
+  hint = 'Try “coffee worth 120 pesos as expense”',
+}: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [listening, setListening] = useState(false);
@@ -61,13 +72,13 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
-        accessibilityLabel={listening ? 'Stop listening' : 'Add transaction by voice'}
+        accessibilityLabel={listening ? 'Stop listening' : label}
         accessibilityState={{ busy: listening }}
         style={[styles.button, listening && styles.buttonActive]}
       >
         <Feather name={listening ? 'square' : 'mic'} size={18} color={colors.accentText} />
         <AppText variant="body" color="accentText">
-          {listening ? 'Listening… tap to stop' : 'Speak transaction'}
+          {listening ? 'Listening… tap to stop' : label}
         </AppText>
       </Pressable>
       {error ? (
@@ -75,7 +86,7 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
       ) : heard ? (
         <AppText variant="bodySm" color="textSecondary">“{heard}”</AppText>
       ) : (
-        <AppText variant="bodySm" color="textMuted">Try “coffee worth 120 pesos as expense”</AppText>
+        <AppText variant="bodySm" color="textMuted">{hint}</AppText>
       )}
     </View>
   );

@@ -6,6 +6,7 @@ import { AppText } from '../../src/components/ui/AppText';
 import { Segmented } from '../../src/components/ui/Segmented';
 import { DebtsView } from '../../src/components/ledger/DebtsView';
 import { LentView } from '../../src/components/ledger/LentView';
+import { useOpenVoiceCommand } from '../../src/components/dashboard/VoiceCommandSheet';
 import { theme, makeStyles, useTheme } from '../../src/theme';
 
 const SECTIONS = ['Debts', 'Lent'] as const;
@@ -15,6 +16,7 @@ export default function LedgerScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
+  const openVoiceCommand = useOpenVoiceCommand();
   const [section, setSection] = useState<Section>('Debts');
   // Each view opens its own add sheet when its signal changes.
   const [signals, setSignals] = useState<Record<Section, number>>({ Debts: 0, Lent: 0 });
@@ -23,14 +25,24 @@ export default function LedgerScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppText variant="h1">Ledger</AppText>
-        <Pressable
-          onPress={() => setSignals((s) => ({ ...s, [section]: s[section] + 1 }))}
-          accessibilityRole="button"
-          accessibilityLabel={section === 'Debts' ? 'Add debt' : 'Add lending'}
-          style={styles.addBtn}
-        >
-          <Feather name="plus" size={20} color={colors.accentText} />
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            onPress={openVoiceCommand}
+            accessibilityRole="button"
+            accessibilityLabel="Pay or transfer by voice"
+            style={styles.addBtn}
+          >
+            <Feather name="mic" size={20} color={colors.accentText} />
+          </Pressable>
+          <Pressable
+            onPress={() => setSignals((s) => ({ ...s, [section]: s[section] + 1 }))}
+            accessibilityRole="button"
+            accessibilityLabel={section === 'Debts' ? 'Add debt' : 'Add lending'}
+            style={styles.addBtn}
+          >
+            <Feather name="plus" size={20} color={colors.accentText} />
+          </Pressable>
+        </View>
       </View>
       <View style={styles.segWrap}>
         <Segmented options={SECTIONS} value={section} onChange={setSection} />
@@ -50,6 +62,7 @@ const useStyles = makeStyles((c) => ({
     marginTop: theme.spacing[5],
     marginBottom: theme.spacing[4],
   },
+  actions: { flexDirection: 'row', gap: theme.spacing[3] },
   addBtn: {
     width: 44,
     height: 44,

@@ -28,6 +28,9 @@ Names match on word boundaries, escaped, longest first. Only open (not Paid) deb
    - **pay without `debtId`:** opens `DebtPickerSheet`, which lists debts with `outstandingBalance > 0` by due date (no due date last). Tapping one pushes the debt route as above.
 3. `AddPaymentSheet` gains `initialAccountId?` and `initialAmount?` props. An initial amount selects Custom mode. Settle mode only uses the account.
 
+## Ledger mic
+A mic button in the Ledger header opens `VoiceCommandSheet` (rendered in the tab layout, opened through `OpenVoiceCommandContext`). It starts listening right away and handles transfers and payments only, routing through the same `onVoiceCommand`. If what was heard isn't a command, the sheet stays open with the heard text and says to use + for expenses.
+
 ## Failure
 - An unrecognized name leaves that field blank; the user picks it in the sheet.
 - No debts at all → the picker shows an empty state.

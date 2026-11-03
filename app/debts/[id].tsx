@@ -121,6 +121,8 @@ export default function DebtDetailScreen() {
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
   const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
   const [earlierVisible, setEarlierVisible] = useState(false);
+  // Payment history months that are expanded; every month starts collapsed to its total.
+  const [openMonths, setOpenMonths] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -153,6 +155,24 @@ export default function DebtDetailScreen() {
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  // Payments arrive newest first, and object keys keep insertion order, so months stay newest first.
+  const paymentMonths = Object.values(
+    payments.reduce<Record<string, { key: string; label: string; total: number; items: DebtPayment[] }>>((acc, p) => {
+      const d = new Date(p.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const month = (acc[key] ??= {
+        key,
+        label: d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' }),
+        total: 0,
+        items: [],
+      });
+      month.total += p.amount;
+      month.items.push(p);
+      return acc;
+    }, {}),
+  );
+  const toggleMonth = (key: string) =>
+    setOpenMonths((open) => (open.includes(key) ? open.filter((k) => k !== key) : [...open, key]));
 
   async function handleDelete() {
     if (!debt) return;
@@ -324,20 +344,44 @@ export default function DebtDetailScreen() {
         {payments.length === 0 ? (
           <EmptyState icon="dollar-sign" title="No payments yet" subtitle="Record a payment above" />
         ) : (
-          payments.map((p) => (
-            <View key={p.id} style={styles.paymentRow}>
-              <View style={styles.paymentIconCircle}>
-                <Feather name="dollar-sign" size={18} color={colors.positive} />
+          paymentMonths.map((m) => {
+            const open = openMonths.includes(m.key);
+            return (
+              <View key={m.key}>
+                <Pressable
+                  onPress={() => toggleMonth(m.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: open }}
+                  accessibilityLabel={`${m.label}, ${m.items.length} ${m.items.length === 1 ? 'payment' : 'payments'}, ${formatPHP(m.total)}`}
+                  style={({ pressed }) => [styles.paymentRow, pressed && styles.rowPressed]}
+                >
+                  <View style={styles.paymentIconCircle}>
+                    <Feather name={open ? 'chevron-down' : 'chevron-right'} size={18} color={colors.textSecondary} />
+                  </View>
+                  <View style={styles.paymentInfo}>
+                    <AppText variant="body">{m.label}</AppText>
+                    <AppText variant="bodySm" color="textMuted">
+                      {m.items.length} {m.items.length === 1 ? 'payment' : 'payments'}
+                    </AppText>
+                  </View>
+                  <Amount value={m.total} variant="amountSm" color="positive" semanticColor={false} />
+                </Pressable>
+                {open
+                  ? m.items.map((p) => (
+                    <View key={p.id} style={[styles.paymentRow, styles.paymentDetail]}>
+                      <View style={styles.paymentInfo}>
+                        <AppText variant="body">{displayDate(p.date)}</AppText>
+                        <AppText variant="bodySm" color="textMuted">
+                          via {accountMap[p.accountId] ?? 'Unknown account'}
+                        </AppText>
+                      </View>
+                      <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
+                    </View>
+                  ))
+                  : null}
               </View>
-              <View style={styles.paymentInfo}>
-                <AppText variant="body">{displayDate(p.date)}</AppText>
-                <AppText variant="bodySm" color="textMuted">
-                  via {accountMap[p.accountId] ?? 'Unknown account'}
-                </AppText>
-              </View>
-              <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
-            </View>
-          ))
+            );
+          })
         )}
 
         {debt.linkedAccountId ? null : (
@@ -478,6 +522,8 @@ const useStyles = makeStyles((c) => ({
     marginRight: theme.spacing[4],
   },
   paymentInfo: { flex: 1, gap: theme.spacing[1] },
+  // Indented under its month, lined up with the month's text rather than its chevron.
+  paymentDetail: { paddingLeft: 36 + theme.spacing[4] },
   chargeRow: {
     flexDirection: 'row',
     alignItems: 'center',

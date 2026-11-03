@@ -14,13 +14,20 @@ export async function materializeRecurringTransactions(): Promise<void> {
   for (const rule of rules) {
     const occurrences = nextOccurrences(rule, rule.lastMaterializedDate, today);
     if (occurrences.length === 0) continue;
+    let posted: string | null = null;
     for (const date of occurrences) {
-      await transactionRepo.create({
-        date, amount: rule.amount, type: rule.type,
-        categoryId: rule.categoryId ?? undefined, accountId: rule.accountId,
-        note: rule.note ?? undefined,
-      });
+      try {
+        await transactionRepo.create({
+          date, amount: rule.amount, type: rule.type,
+          categoryId: rule.categoryId ?? undefined, accountId: rule.accountId,
+          note: rule.note ?? undefined,
+        });
+        posted = date;
+      } catch {
+        // Not enough in the account: leave this and later occurrences unposted; they post on a later start.
+        break;
+      }
     }
-    await recurringTransactionRepo.markMaterialized(rule.id, occurrences[occurrences.length - 1]);
+    if (posted) await recurringTransactionRepo.markMaterialized(rule.id, posted);
   }
 }

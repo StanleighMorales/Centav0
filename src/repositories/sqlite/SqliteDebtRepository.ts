@@ -77,9 +77,11 @@ export class SqliteDebtRepository {
     const dueDate = input.dueDate ?? null;
     const status = computeStatus(amount, dueDate);
     const isLoan = input.debtType === 'Loan';
-    if (isLoan && !input.accountId) throw new Error('Select an account to receive the loan');
-    const disbursementAccountId = isLoan ? input.accountId! : null;
-    const disbursementTransactionId = isLoan ? newId() : null;
+    // A loan already sitting in an account is tracked without paying it out again.
+    const disburse = isLoan && !input.alreadyReceived;
+    if (disburse && !input.accountId) throw new Error('Select an account to receive the loan');
+    const disbursementAccountId = disburse ? input.accountId! : null;
+    const disbursementTransactionId = disburse ? newId() : null;
     await db.withTransactionAsync(async () => {
       await db.runAsync(
         `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, termMonths, monthlyInterest, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
@@ -93,7 +95,7 @@ export class SqliteDebtRepository {
           now, now,
         ],
       );
-      if (isLoan) {
+      if (disburse) {
         const categoryId = await getOrCreateLoanCategory(db);
         await db.runAsync(
           `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)

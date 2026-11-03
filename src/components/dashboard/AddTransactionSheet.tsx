@@ -203,6 +203,8 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       }
       onSuccess();
       onClose();
+    } catch (e) {
+      setErrors({ amount: e instanceof Error ? e.message : 'Could not save' });
     } finally {
       setSaving(false);
     }

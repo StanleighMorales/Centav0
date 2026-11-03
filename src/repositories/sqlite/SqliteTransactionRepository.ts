@@ -1,9 +1,10 @@
 import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
-import { roundCentavos } from '../../utils/currency';
+import { roundCentavos, formatPHP } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
+import { balanceChanges, overdraws } from '../../utils/accounts';
 import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter, CreateTransferInput } from '../../domain/types';
 
 function rowToTransaction(row: any): Transaction {
@@ -27,6 +28,15 @@ function rowToTransaction(row: any): Transaction {
 // explicitly by createTransfer/update/softDelete — delta() is not used for them.
 function delta(type: string, amount: number): number {
   return type === 'Income' ? amount : -amount;
+}
+
+// Cash and e-wallets can't be overspent, and a credit line can't go past its limit (its balance is available credit).
+function notEnough(account: { name: string; currentBalance: number; allowsOverdraft: number }): Error {
+  return new Error(
+    account.allowsOverdraft === 1
+      ? 'Expense exceeds available credit'
+      : `Only ${formatPHP(Math.max(0, account.currentBalance))} left in ${account.name}`,
+  );
 }
 
 export class SqliteTransactionRepository {
@@ -71,14 +81,11 @@ export class SqliteTransactionRepository {
     const amount = roundCentavos(input.amount);
     if (input.type === 'Expense') {
       const account = await db.getFirstAsync<any>(
-        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        `SELECT name, currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
         [input.accountId, FIXED_USER_ID],
       );
       if (!account) throw new Error(`Account ${input.accountId} not found`);
-      // Credit accounts spend down available balance like any other account now — can't overspend it.
-      if (account.allowsOverdraft === 1 && amount > roundCentavos(account.currentBalance)) {
-        throw new Error('Expense exceeds available credit');
-      }
+      if (amount > roundCentavos(account.currentBalance)) throw notEnough(account);
     }
     await db.withTransactionAsync(async () => {
       await db.runAsync(
@@ -154,16 +161,16 @@ export class SqliteTransactionRepository {
     const newAmount = roundCentavos(input.amount ?? existing.amount);
     const newType = input.type ?? existing.type;
     const newAccountId = input.accountId ?? existing.accountId;
-    if (newType === 'Expense') {
+    // Each touched account's balance after the edit. Below zero is refused, unless the edit leaves it better off
+    // (shrinking a past expense on an account that's already negative is fine).
+    const changes = balanceChanges(existing, { accountId: newAccountId, type: newType, amount: newAmount });
+    for (const [accountId, change] of changes) {
       const account = await db.getFirstAsync<any>(
-        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
-        [newAccountId, FIXED_USER_ID],
+        `SELECT name, currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        [accountId, FIXED_USER_ID],
       );
-      if (!account) throw new Error(`Account ${newAccountId} not found`);
-      const alreadySpentHere = existing.accountId === newAccountId && existing.type === 'Expense' ? existing.amount : 0;
-      if (account.allowsOverdraft === 1 && newAmount - alreadySpentHere > roundCentavos(account.currentBalance)) {
-        throw new Error('Expense exceeds available credit');
-      }
+      if (!account) throw new Error(`Account ${accountId} not found`);
+      if (overdraws(account.currentBalance, change)) throw notEnough(account);
     }
     await db.withTransactionAsync(async () => {
       // Reverse old effect on old account

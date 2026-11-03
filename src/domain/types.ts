@@ -145,8 +145,10 @@ export interface Debt extends AuditFields, LocalSyncFields {
 
 export interface CreateDebtInput {
   creditor: string; originalAmount: number; debtType: DebtType;
-  /** Required when debtType === 'Loan'. Account to credit with originalAmount. */
+  /** Required when debtType === 'Loan', unless alreadyReceived. Account to credit with originalAmount. */
   accountId?: string;
+  /** Loan money already recorded in an account: track the debt without crediting anything. */
+  alreadyReceived?: boolean;
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
   termMonths?: number; monthlyInterest?: number;

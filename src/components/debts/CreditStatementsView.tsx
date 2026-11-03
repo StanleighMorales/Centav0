@@ -64,14 +64,14 @@ export function CreditStatementsView({
   const styles = useStyles();
   const { colors } = useTheme();
   const [open, setOpen] = useState<string[]>([]);
-  const { overdue, dueNow, current, next } = summary;
+  const { overdue, next, nextUnpaid } = summary;
   const byId = Object.fromEntries(purchases.map((p) => [p.id, p]));
   const toggle = (key: string) => setOpen((o) => (o.includes(key) ? o.filter((k) => k !== key) : [...o, key]));
 
   return (
     <>
       <Card style={styles.billCard}>
-        <AppText variant="labelSm" color="textMuted">THIS BILL</AppText>
+        <AppText variant="labelSm" color="textMuted">UNPAID</AppText>
         {overdue > 0 ? (
           <>
             <Amount value={overdue} variant="amountMd" semanticColor={false} color="negative" />
@@ -80,22 +80,27 @@ export function CreditStatementsView({
               <AppText variant="bodySm" color="negative">Overdue · pay as soon as you can</AppText>
             </View>
           </>
-        ) : dueNow > 0 && current ? (
+        ) : nextUnpaid ? (
+          // The oldest bill with anything left, even before its bill date: new purchases are already on it.
           <>
-            <Amount value={dueNow} variant="amountMd" semanticColor={false} color={STATUS_COLOR[current.status]} />
-            <AppText variant="bodySm" color={STATUS_COLOR[current.status]}>
-              {STATUS_LABEL[current.status]} · {displayDate(current.dueDate)}
+            <Amount
+              value={nextUnpaid.remaining}
+              variant="amountMd"
+              semanticColor={false}
+              color={nextUnpaid.status === 'dueSoon' ? 'warning' : 'negative'}
+            />
+            <AppText variant="bodySm" color={nextUnpaid.status === 'dueSoon' ? 'warning' : 'textSecondary'}>
+              Due {displayDate(nextUnpaid.dueDate)}
+              {nextUnpaid.status === 'upcoming' ? ` · billed ${displayDate(nextUnpaid.billDate)}` : ''}
             </AppText>
           </>
-        ) : current ? (
+        ) : (
           <View style={styles.iconRow}>
             <Feather name="check-circle" size={16} color={colors.positive} />
-            <AppText variant="body" color="positive">Paid for {displayDate(current.dueDate)}</AppText>
+            <AppText variant="body" color="positive">All paid</AppText>
           </View>
-        ) : (
-          <AppText variant="body" color="textMuted">Nothing billed yet</AppText>
         )}
-        {next ? (
+        {next && next !== nextUnpaid && next.remaining > 0 ? (
           <AppText variant="bodySm" color="textMuted">
             Next bill {displayDate(next.billDate)} · {formatPHP(next.remaining)} so far
           </AppText>

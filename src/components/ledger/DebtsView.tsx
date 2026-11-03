@@ -102,22 +102,17 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
                 <Feather name="alert-circle" size={12} color={colors.negative} style={styles.rowNoteIcon} />
                 <AppText variant="bodySm" color="negative" style={styles.rowNote}>{formatPHP(credit.overdue)} overdue</AppText>
               </View>
-            ) : credit.dueNow > 0 && credit.current ? (
-              <AppText variant="bodySm" color={STATUS_COLOR[credit.current.status]}>
-                {formatPHP(credit.dueNow)} due {displayDate(credit.current.dueDate)}
+            ) : credit.nextUnpaid ? (
+              // The next bill with anything left, even before its bill date: new purchases are already on it.
+              <AppText variant="bodySm" color={credit.nextUnpaid.status === 'dueSoon' ? 'warning' : 'textSecondary'}>
+                {formatPHP(credit.nextUnpaid.remaining)} unpaid · due {displayDate(credit.nextUnpaid.dueDate)}
               </AppText>
-            ) : credit.current ? (
+            ) : (
               <View style={styles.paidRow}>
                 <Feather name="check" size={12} color={colors.positive} style={styles.rowNoteIcon} />
-                <AppText variant="bodySm" color="positive" style={styles.rowNote}>
-                  Paid for {displayDate(credit.current.dueDate)}
-                </AppText>
+                <AppText variant="bodySm" color="positive" style={styles.rowNote}>All paid</AppText>
               </View>
-            ) : credit.next ? (
-              <AppText variant="bodySm" color="textMuted">
-                Next bill {displayDate(credit.next.billDate)} · {formatPHP(credit.next.remaining)}
-              </AppText>
-            ) : null
+            )
           ) : debt.dueDate ? (
             <AppText
               variant="bodySm"
@@ -139,15 +134,15 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
             </View>
           ) : creditLimit != null ? (
-            // What's owed on a card isn't alarming until it's overdue; red/green here read as "unpaid" after paying the bill.
+            // Owed in red, credit still available in green.
             <View style={styles.paidTrail}>
               <Amount
                 value={debt.outstandingBalance}
                 variant="amountSm"
                 semanticColor={false}
-                color={debt.status === 'Overdue' ? 'negative' : 'textPrimary'}
+                color={debt.outstandingBalance > 0 ? 'negative' : 'textPrimary'}
               />
-              <AppText variant="labelSm" color="textMuted">
+              <AppText variant="labelSm" color="positive">
                 {formatPHP(Math.max(0, creditLimit - debt.outstandingBalance))} avail
               </AppText>
             </View>
@@ -232,7 +227,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     );
     if (!built) continue;
     const summary = summarize(built.statements, today);
-    creditInfo[d.id] = { ...summary, status: creditStatus(summary, d.outstandingBalance), statements: built.statements };
+    creditInfo[d.id] = { ...summary, status: creditStatus(summary), statements: built.statements };
   }
   const tabStatus = (d: Debt): DebtStatus => {
     const c = creditInfo[d.id];

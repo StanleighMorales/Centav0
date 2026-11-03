@@ -154,7 +154,7 @@ export default function DebtDetailScreen() {
   const credit = creditAccount ? statementsFor(creditAccount, charges, payments, debt.outstandingBalance, today) : null;
   const creditSummary = credit ? summarize(credit.statements, today) : null;
   // A credit line's status comes from its bills, not from owing something: future installments aren't overdue.
-  const badge = creditSummary ? creditStatus(creditSummary, debt.outstandingBalance) : null;
+  const badge = creditSummary ? creditStatus(creditSummary) : null;
   const statusColor = badge
     ? STATUS_COLOR[badge]
     : debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
@@ -197,11 +197,16 @@ export default function DebtDetailScreen() {
           </View>
           {linkedCreditLimit != null ? (
             <>
-              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
+              <Amount
+                value={debt.outstandingBalance}
+                variant="amountLg"
+                semanticColor={false}
+                color={debt.outstandingBalance > 0 ? 'negative' : 'textPrimary'}
+              />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
                 owed of {formatPHP(linkedCreditLimit)} limit
               </AppText>
-              <AppText variant="bodySm" color="textSecondary">
+              <AppText variant="bodySm" color="positive">
                 {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
               </AppText>
             </>
@@ -363,7 +368,7 @@ export default function DebtDetailScreen() {
         // Before the bill date nothing is billed yet; offer the upcoming bill so it can be paid early.
         monthlyPayment={
           creditSummary
-            ? creditSummary.dueNow || creditSummary.next?.remaining || undefined
+            ? creditSummary.dueNow || creditSummary.nextUnpaid?.remaining || undefined
             : debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined
         }
         monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}

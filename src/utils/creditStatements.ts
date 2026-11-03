@@ -142,7 +142,10 @@ export function buildStatements(
   return { statements, earlierAmount: Math.max(0, gap), earlierRemaining };
 }
 
-/** Billed-and-unpaid total, the overdue part of it, the latest billed statement, and the next unbilled one. */
+/**
+ * Billed-and-unpaid total, the overdue part of it, the latest billed statement, the next unbilled one, and the
+ * oldest bill with anything left on it — billed or not, since new purchases sit on a bill before its bill date.
+ */
 export function summarize(statements: Statement[], today: string) {
   const now = Date.parse(today);
   const billed = statements.filter((s) => Date.parse(s.billDate) <= now);
@@ -151,6 +154,7 @@ export function summarize(statements: Statement[], today: string) {
     overdue: round2(billed.filter((s) => s.status === 'overdue').reduce((s, x) => s + x.remaining, 0)),
     current: billed[billed.length - 1],
     next: statements.find((s) => Date.parse(s.billDate) > now),
+    nextUnpaid: statements.find((s) => s.remaining > 0),
   };
 }
 
@@ -183,10 +187,8 @@ export function statementsFor(
   });
 }
 
-/** One status for the whole credit line: overdue beats due, then this bill paid, then nothing billed yet. */
-export function creditStatus(summary: ReturnType<typeof summarize>, owed: number): StatementStatus {
+/** One status for the whole credit line: overdue, else the next unpaid bill's, else paid (nothing owed at all). */
+export function creditStatus(summary: ReturnType<typeof summarize>): StatementStatus {
   if (summary.overdue > 0) return 'overdue';
-  if (summary.dueNow > 0 && summary.current) return summary.current.status;
-  if (summary.current || owed <= 0) return 'paid';
-  return 'upcoming';
+  return summary.nextUnpaid?.status ?? 'paid';
 }

@@ -1,7 +1,7 @@
 // Self-check for creditStatements.ts. No test framework in this repo — run it directly:
 //   node --experimental-strip-types src/utils/creditStatements.check.mts
 import assert from 'node:assert';
-import { buildStatements, firstBillOptions, summarize } from './creditStatements.ts';
+import { buildStatements, creditStatus, firstBillOptions, summarize } from './creditStatements.ts';
 
 // Manila noon on a day, as a UTC ISO string.
 const at = (ymd: string) => new Date(`${ymd}T04:00:00.000Z`).toISOString();
@@ -94,8 +94,9 @@ const owedOf = (charges: { amount: number }[]) => charges.reduce((s, c) => s + c
   const { statements } = buildStatements({ ...base, today, charges, owed: 600 });
   assert.deepStrictEqual(statements.map((s) => s.status), ['overdue', 'dueSoon', 'upcoming']);
   assert.deepStrictEqual(summarize(statements, today), {
-    dueNow: 300, overdue: 100, current: statements[1], next: statements[2],
+    dueNow: 300, overdue: 100, current: statements[1], next: statements[2], nextUnpaid: statements[0],
   });
+  assert.strictEqual(creditStatus(summarize(statements, today)), 'overdue');
   const paid = buildStatements({ ...base, today, charges, payments: [{ amount: 300 }], owed: 300 }).statements;
   assert.deepStrictEqual(paid.map((s) => s.status), ['paid', 'paid', 'upcoming']);
   // Billed 25 Nov, due 15 Dec: on 26 Nov it's billed but not due within a week.
@@ -136,6 +137,22 @@ const owedOf = (charges: { amount: number }[]) => charges.reduce((s, c) => s + c
 
   const all = buildStatements({ ...base, charges, payments: [{ amount: 2000 }], owed: 0, earlier });
   assert.strictEqual(all.earlierRemaining, 0, 'paid in full');
+}
+{
+  // 4 Nov: October's bill is paid, but purchases since 8 Oct sit on the 8 Nov bill (due 18 Nov), unpaid.
+  // The status is that next unpaid bill, not "paid for October".
+  const card = { ...base, dueDay: 18 };
+  const charges = [
+    { amount: 500, date: at('2026-09-20'), months: null },
+    { amount: 800, date: at('2026-10-20'), months: null },
+  ];
+  const { statements } = buildStatements({ ...card, charges, payments: [{ amount: 500 }], owed: 800 });
+  const s = summarize(statements, card.today);
+  assert.strictEqual(s.current?.status, 'paid', 'October (latest billed) is paid…');
+  assert.deepStrictEqual([s.nextUnpaid?.remaining, s.nextUnpaid?.dueDate], [800, day('2026-11-18')], '…but November is unpaid');
+  assert.strictEqual(creditStatus(s), 'upcoming', 'so the line is not "paid"');
+  const allPaid = buildStatements({ ...card, charges, payments: [{ amount: 1300 }], owed: 0 }).statements;
+  assert.strictEqual(creditStatus(summarize(allPaid, card.today)), 'paid', 'paid only when nothing is owed');
 }
 {
   assert.deepStrictEqual(firstBillOptions(8, at('2026-11-04'), 3), [day('2026-11-08'), day('2026-12-08'), day('2027-01-08')]);

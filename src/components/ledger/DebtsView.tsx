@@ -15,7 +15,7 @@ import { InstallmentGridView } from '../debts/InstallmentGridView';
 import { debtRepo, debtPaymentRepo, accountRepo } from '../../repositories';
 import { TAB_BAR_SPACE } from '../nav/FloatingTabBar';
 import { theme, makeStyles, useTheme } from '../../theme';
-import { displayDate, monthRangeIso } from '../../utils/date';
+import { displayDate, monthRangeIso, paidForDue } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
 import type { Account, Debt, DebtStatus, DebtType } from '../../domain/types';
@@ -29,12 +29,14 @@ type DebtRowProps = {
   debt: Debt;
   paidTotal: number;
   creditLimit: number | null;
+  /** Card bill for the current due date already paid. */
+  paidThisCycle: boolean;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
   onDelete: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, creditLimit, paidThisCycle, onPress, onEdit, onDelete }: DebtRowProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
@@ -88,7 +90,12 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
         </View>
         <View style={styles.rowMain}>
           <AppText variant="body" style={styles.creditor}>{debt.creditor}</AppText>
-          {debt.dueDate ? (
+          {debt.dueDate && paidThisCycle ? (
+            <View style={styles.paidRow}>
+              <Feather name="check" size={12} color={colors.positive} />
+              <AppText variant="bodySm" color="positive">Paid for {displayDate(debt.dueDate)}</AppText>
+            </View>
+          ) : debt.dueDate ? (
             <AppText
               variant="bodySm"
               color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}
@@ -109,9 +116,15 @@ function DebtRow({ debt, paidTotal, creditLimit, onPress, onEdit, onDelete }: De
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
             </View>
           ) : creditLimit != null ? (
+            // What's owed on a card isn't alarming until it's overdue; red/green here read as "unpaid" after paying the bill.
             <View style={styles.paidTrail}>
-              <Amount value={debt.outstandingBalance} variant="amountSm" semanticColor={false} color="negative" />
-              <AppText variant="labelSm" color="positive">
+              <Amount
+                value={debt.outstandingBalance}
+                variant="amountSm"
+                semanticColor={false}
+                color={debt.status === 'Overdue' ? 'negative' : 'textPrimary'}
+              />
+              <AppText variant="labelSm" color="textMuted">
                 {formatPHP(Math.max(0, creditLimit - debt.outstandingBalance))} avail
               </AppText>
             </View>
@@ -140,6 +153,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
   const [editDebt, setEditDebt] = useState<Debt | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Debt | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
+  const [paymentDates, setPaymentDates] = useState<Record<string, string[]>>({});
   const [monthPayments, setMonthPayments] = useState<{ debtId: string; amount: number }[]>([]);
 
   const load = useCallback(async () => {
@@ -148,11 +162,16 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     const accs = await accountRepo.list();
     const allPayments = await debtPaymentRepo.list();
     const totals: Record<string, number> = {};
-    for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
+    const dates: Record<string, string[]> = {};
+    for (const p of allPayments) {
+      totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
+      (dates[p.debtId] ??= []).push(p.date);
+    }
     const { from, to } = monthRangeIso();
     setDebts(all);
     setAccounts(accs);
     setPaidTotals(totals);
+    setPaymentDates(dates);
     setMonthPayments(allPayments.filter((p) => p.date >= from && p.date <= to));
     setLoading(false);
   }, []);
@@ -293,6 +312,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
               debt={item}
               paidTotal={paidTotals[item.id] ?? 0}
               creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
+              paidThisCycle={!!item.linkedAccountId && !!item.dueDate && paidForDue(item.dueDate, paymentDates[item.id] ?? [])}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
               onDelete={setDeleteTarget}
@@ -415,4 +435,5 @@ const useStyles = makeStyles((c) => ({
   creditor: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
+  paidRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] },
 }));

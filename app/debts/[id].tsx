@@ -15,8 +15,8 @@ import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme, makeStyles, useTheme } from '../../src/theme';
-import { displayDate } from '../../src/utils/date';
-import { formatPHP } from '../../src/utils/currency';
+import { displayDate, paidForDue } from '../../src/utils/date';
+import { formatPHP, roundCentavos } from '../../src/utils/currency';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
 type Charge = Transaction & { label: string };
@@ -144,10 +144,14 @@ export default function DebtDetailScreen() {
     if (pay === '1' && d && !voicePayDone.current) {
       voicePayDone.current = true;
       const prefill = { accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined };
-      // A card pays whole charges, so a spoken amount is ignored and it settles everything owed.
+      // A card pays whole charges, so a spoken amount is ignored and it settles every recorded charge.
       if (d.linkedAccountId && owed.length > 0) {
         setVoicePrefill(prefill);
-        setSettleTarget({ transactionIds: owed.map((c) => c.id), amount: d.outstandingBalance, label: 'all charges' });
+        setSettleTarget({
+          transactionIds: owed.map((c) => c.id),
+          amount: roundCentavos(owed.reduce((sum, c) => sum + c.amount, 0)),
+          label: 'all charges',
+        });
       } else if (!d.linkedAccountId && d.status !== 'Paid') {
         setVoicePrefill(prefill);
         setPaymentVisible(true);
@@ -158,6 +162,7 @@ export default function DebtDetailScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
+  const chargesTotal = roundCentavos(charges.reduce((sum, c) => sum + c.amount, 0));
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   async function handleDelete() {
@@ -255,7 +260,12 @@ export default function DebtDetailScreen() {
               </AppText>
             </>
           )}
-          {debt.dueDate ? (
+          {debt.dueDate && debt.linkedAccountId && paidForDue(debt.dueDate, payments.map((p) => p.date)) ? (
+            <View style={styles.metaRow}>
+              <Feather name="check" size={14} color={colors.positive} />
+              <AppText variant="bodySm" color="positive">Paid for {displayDate(debt.dueDate)}</AppText>
+            </View>
+          ) : debt.dueDate ? (
             <View style={styles.metaRow}>
               <Feather name="calendar" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}>
@@ -295,12 +305,13 @@ export default function DebtDetailScreen() {
 
         {debt.linkedAccountId && charges.length > 0 && (
           <>
+            {/* Settling pays the charges only, so show their total; the card can owe more than its recorded charges. */}
             <Button
-              label={`Pay All · ${formatPHP(debt.outstandingBalance)}`}
+              label={`Pay All Charges · ${formatPHP(chargesTotal)}`}
               onPress={() =>
                 setSettleTarget({
                   transactionIds: charges.map((c) => c.id),
-                  amount: debt.outstandingBalance,
+                  amount: chargesTotal,
                   label: 'all charges',
                 })
               }

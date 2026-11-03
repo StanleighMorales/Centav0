@@ -44,7 +44,11 @@ export default function TabLayout() {
           <FloatingTabBar
             state={props.state}
             navigation={props.navigation}
-            onAdd={openAdd}
+            // On Ledger, the dial's Voice speaks a payment or transfer instead of an expense.
+            onAdd={(mode) =>
+              mode === 'voice' && props.state.routes[props.state.index]?.name === 'ledger'
+                ? setVoiceOpen(true)
+                : openAdd(mode)}
           />
         )}
         screenOptions={{

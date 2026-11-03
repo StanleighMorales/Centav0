@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppText } from '../ui/AppText';
 import { VoiceInputButton } from './VoiceInputButton';
 import { parseVoiceCommand, type VoiceCommand } from '../../utils/voiceTransaction';
 import { accountRepo, debtRepo } from '../../repositories';
-import { theme, makeStyles } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 import type { Account, Debt } from '../../domain/types';
 
-/** Opens the tab layout's voice command sheet from any tab screen (Ledger's mic). */
+/** Opens the tab layout's voice command sheet from any tab screen (holding Ledger's +). */
 export const OpenVoiceCommandContext = createContext<() => void>(() => {});
 export const useOpenVoiceCommand = () => useContext(OpenVoiceCommandContext);
 
@@ -21,18 +21,18 @@ type Props = {
 // Transfers and debt payments only. Spending goes through Add Transaction.
 export function VoiceCommandSheet({ visible, onClose, onCommand }: Props) {
   const styles = useStyles();
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [debts, setDebts] = useState<Debt[]>([]);
+  const { colors } = useTheme();
+  const [data, setData] = useState<{ accounts: Account[]; debts: Debt[] } | null>(null);
   const [notCommand, setNotCommand] = useState(false);
 
   useEffect(() => {
-    if (!visible) { setNotCommand(false); return; }
-    accountRepo.list().then(setAccounts);
-    debtRepo.list().then(setDebts);
+    if (!visible) { setNotCommand(false); setData(null); return; }
+    Promise.all([accountRepo.list(), debtRepo.list()]).then(([accounts, debts]) => setData({ accounts, debts }));
   }, [visible]);
 
   function handleResult(text: string) {
-    const cmd = parseVoiceCommand(text, accounts, debts);
+    if (!data) return;
+    const cmd = parseVoiceCommand(text, data.accounts, data.debts);
     if (cmd.kind === 'transaction') { setNotCommand(true); return; }
     onClose();
     onCommand(cmd);
@@ -41,15 +41,21 @@ export function VoiceCommandSheet({ visible, onClose, onCommand }: Props) {
   return (
     <BottomSheet visible={visible} onClose={onClose} title="Voice command">
       <View style={styles.body}>
-        <VoiceInputButton
-          onResult={handleResult}
-          autoStart
-          label="Speak a payment or transfer"
-          hint="Try “pay my atome balance with gcash” or “transfer all cash to gcash”"
-        />
+        {/* Mount once names are loaded, so auto-start listens for them. */}
+        {data ? (
+          <VoiceInputButton
+            onResult={handleResult}
+            autoStart
+            label="Speak a payment or transfer"
+            hint="Try “pay my atome balance with gcash” or “transfer all cash to gcash”"
+            names={[...data.accounts.map((a) => a.name), ...data.debts.map((d) => d.creditor)]}
+          />
+        ) : (
+          <ActivityIndicator color={colors.accentPrimary} />
+        )}
         {notCommand ? (
           <AppText variant="bodySm" color="negative">
-            That sounds like an expense. Say a payment or transfer, or add it with + instead.
+            That sounds like an expense. Say a payment or transfer, or tap + to add an expense.
           </AppText>
         ) : null}
       </View>

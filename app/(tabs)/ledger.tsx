@@ -25,24 +25,16 @@ export default function LedgerScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <AppText variant="h1">Ledger</AppText>
-        <View style={styles.actions}>
-          <Pressable
-            onPress={openVoiceCommand}
-            accessibilityRole="button"
-            accessibilityLabel="Pay or transfer by voice"
-            style={styles.addBtn}
-          >
-            <Feather name="mic" size={20} color={colors.accentText} />
-          </Pressable>
-          <Pressable
-            onPress={() => setSignals((s) => ({ ...s, [section]: s[section] + 1 }))}
-            accessibilityRole="button"
-            accessibilityLabel={section === 'Debts' ? 'Add debt' : 'Add lending'}
-            style={styles.addBtn}
-          >
-            <Feather name="plus" size={20} color={colors.accentText} />
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => setSignals((s) => ({ ...s, [section]: s[section] + 1 }))}
+          onLongPress={openVoiceCommand}
+          accessibilityRole="button"
+          accessibilityLabel={section === 'Debts' ? 'Add debt' : 'Add lending'}
+          accessibilityHint="Hold to pay or transfer by voice"
+          style={styles.addBtn}
+        >
+          <Feather name="plus" size={20} color={colors.accentText} />
+        </Pressable>
       </View>
       <View style={styles.segWrap}>
         <Segmented options={SECTIONS} value={section} onChange={setSection} />
@@ -62,7 +54,6 @@ const useStyles = makeStyles((c) => ({
     marginTop: theme.spacing[5],
     marginBottom: theme.spacing[4],
   },
-  actions: { flexDirection: 'row', gap: theme.spacing[3] },
   addBtn: {
     width: 44,
     height: 44,

@@ -11,6 +11,8 @@ type Props = {
   label?: string;
   /** Shown under the button before anything is heard. */
   hint?: string;
+  /** Names to listen for (accounts, lenders) so "Atome" isn't heard as "atomic". Android 13+. */
+  names?: string[];
 };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -27,6 +29,7 @@ export function VoiceInputButton({
   autoStart,
   label = 'Speak transaction',
   hint = 'Try “coffee worth 120 pesos as expense”',
+  names,
 }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -35,6 +38,9 @@ export function VoiceInputButton({
   const [error, setError] = useState<string | null>(null);
   // Speech events are global; several sheets can be mounted at once, so only the one that started listens.
   const active = useRef(false);
+  // Auto-start runs from the mount effect; read names at start time, not from that first render.
+  const namesRef = useRef(names);
+  namesRef.current = names;
 
   useSpeechRecognitionEvent('start', () => { if (active.current) setListening(true); });
   useSpeechRecognitionEvent('end', () => {
@@ -64,7 +70,7 @@ export function VoiceInputButton({
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!perm.granted) { setError(ERROR_TEXT['not-allowed']); return; }
     active.current = true;
-    ExpoSpeechRecognitionModule.start({ lang: 'en-PH', interimResults: true });
+    ExpoSpeechRecognitionModule.start({ lang: 'en-PH', interimResults: true, contextualStrings: namesRef.current });
   }
 
   return (

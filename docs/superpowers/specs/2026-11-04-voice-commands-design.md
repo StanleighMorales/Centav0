@@ -28,8 +28,12 @@ Names match on word boundaries, escaped, longest first. Only open (not Paid) deb
    - **pay without `debtId`:** opens `DebtPickerSheet`, which lists debts with `outstandingBalance > 0` by due date (no due date last). Tapping one pushes the debt route as above.
 3. `AddPaymentSheet` gains `initialAccountId?` and `initialAmount?` props. An initial amount selects Custom mode. Settle mode only uses the account.
 
-## Ledger mic
-A mic button in the Ledger header opens `VoiceCommandSheet` (rendered in the tab layout, opened through `OpenVoiceCommandContext`). It starts listening right away and handles transfers and payments only, routing through the same `onVoiceCommand`. If what was heard isn't a command, the sheet stays open with the heard text and says to use + for expenses.
+## Voice on Ledger
+On Ledger, voice means a payment or transfer. Holding the tab bar's + and picking Voice, or holding Ledger's own top-right +, opens `VoiceCommandSheet` (rendered in the tab layout, opened through `OpenVoiceCommandContext`). It starts listening right away, handles transfers and payments only, and routes through the same `onVoiceCommand`. If what was heard isn't a command, the sheet stays open with the heard text and says to tap + for expenses. Tapping either + still adds as before.
+
+## Misheard names
+- The recognizer gets account and lender names as `contextualStrings` (Android 13+), so it favours "Atome" over "atomic".
+- If no name matches exactly, the parser takes the closest run of spoken words: same first letter, edit distance at most 2 and at most 40% of the name, names of 4+ letters only. This covers "atomic" → Atome and "g cash" / "G-Cash" → GCash, and keeps "home" from landing on Atome.
 
 ## Failure
 - An unrecognized name leaves that field blank; the user picks it in the sheet.

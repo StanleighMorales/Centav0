@@ -96,6 +96,15 @@ const debts = [
     { kind: 'pay', debtId: null, accountId: null, amount: null }, 'paid-off debts are not matched');
 }
 {
+  // Speech mishears names it doesn't know.
+  assert.deepStrictEqual(parseVoiceCommand('pay my atomic balance with gcash', accs, debts),
+    { kind: 'pay', debtId: 'atome', accountId: 'gcash', amount: null }, '"atomic" heard for Atome');
+  assert.deepStrictEqual(parseVoiceCommand('Pay my Atome balance with G-Cash', accs, debts),
+    { kind: 'pay', debtId: 'atome', accountId: 'gcash', amount: null }, '"G-Cash" for GCash');
+  assert.deepStrictEqual(parseVoiceCommand('transfer all cash to g cash', accs, debts),
+    { kind: 'transfer', fromId: 'cash', toId: 'gcash', amount: 3200 }, '"g cash" is GCash, not Cash');
+}
+{
   assert.deepStrictEqual(parseVoiceCommand('coffee 120', accs, debts), { kind: 'transaction' });
   assert.deepStrictEqual(parseVoiceCommand('pay 200 for parking', accs, debts), { kind: 'transaction' },
     'a plain "pay" with no debt or debt word is still an expense');

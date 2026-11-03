@@ -106,9 +106,55 @@ function take<T>(text: string, items: T[], name: (x: T) => string, lead = ''): {
   // Longest first so "BPI Savings" wins over "BPI" at the same spot.
   const sorted = [...items].sort((a, b) => name(b).length - name(a).length);
   const m = new RegExp(`${lead}\\b(${sorted.map((x) => escapeRe(name(x))).join('|')})\\b`, 'i').exec(text);
-  if (!m) return { hit: null, rest: text };
+  if (!m) return takeClosest(text, items, name, lead);
   const hit = sorted.find((x) => name(x).toLowerCase() === m[1].toLowerCase()) ?? null;
   return { hit, rest: `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}` };
+}
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Speech mishears names it doesn't know: "atomic" for Atome, "g cash" / "G-Cash" for GCash.
+// Compares each run of spoken words (one more word than the name has, so split names rejoin) and keeps the closest.
+// ponytail: plain edit distance, same first letter, at most 2 and 40% of the name; names under 4 letters must match exactly.
+// Swap in a phonetic match if mishearings get further off than that.
+function takeClosest<T>(text: string, items: T[], name: (x: T) => string, lead: string): { hit: T | null; rest: string } {
+  const words = [...text.matchAll(/[a-z0-9]+/gi)];
+  const afterLead = new RegExp(`${lead}$`, 'i');
+  let best: { hit: T; dist: number; start: number; end: number } | null = null;
+  for (const item of items) {
+    const target = squash(name(item));
+    if (target.length < 4) continue;
+    const span = name(item).trim().split(/\s+/).length;
+    words.forEach((w, i) => {
+      if (lead && !afterLead.test(text.slice(0, w.index))) return;
+      for (let n = span; n <= span + 1 && i + n <= words.length; n++) {
+        const run = words.slice(i, i + n);
+        const heard = squash(run.map((r) => r[0]).join(''));
+        // Mishearings keep the first sound; without this "home" (Home Credit) lands on Atome.
+        if (heard[0] !== target[0]) continue;
+        const dist = editDistance(heard, target);
+        if (dist <= 2 && dist <= target.length * 0.4 && (!best || dist < best.dist)) {
+          const last = run[run.length - 1];
+          best = { hit: item, dist, start: w.index, end: last.index + last[0].length };
+        }
+      }
+    });
+  }
+  if (!best) return { hit: null, rest: text };
+  const { hit, start, end } = best;
+  return { hit, rest: `${text.slice(0, start)} ${text.slice(end)}` };
 }
 
 const accountName = (a: AccountLike) => a.name;

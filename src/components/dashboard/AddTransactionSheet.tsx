@@ -204,7 +204,13 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {initial ? null : <VoiceInputButton onResult={applyVoice} autoStart={autoStart === 'voice'} />}
+        {initial ? null : (
+          <VoiceInputButton
+            onResult={applyVoice}
+            autoStart={autoStart === 'voice'}
+            names={[...accounts.map((a) => a.name), ...debts.map((d) => d.creditor)]}
+          />
+        )}
 
         {lockAccountAndType ? null : (
           <Segmented options={TYPES} value={type} onChange={changeType} />

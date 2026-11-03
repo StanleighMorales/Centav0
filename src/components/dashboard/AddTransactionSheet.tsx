@@ -13,6 +13,8 @@ import { AppText } from '../ui/AppText';
 import { ReceiptItemsEditor } from '../transactions/ReceiptItemsEditor';
 import { CategorySheet } from '../categories/CategorySheet';
 import { AddAccountSheet } from '../accounts/AddAccountSheet';
+import { VoiceInputButton } from './VoiceInputButton';
+import { parseVoiceTransaction } from '../../utils/voiceTransaction';
 import { accountRepo, categoryRepo, transactionRepo, transactionItemRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { scanReceipt } from '../../utils/receiptScan';
@@ -120,6 +122,22 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
     }
   }, [visible, initial]);
 
+  function changeType(t: 'Expense' | 'Income') {
+    setType(t);
+    setCategoryId(null);
+    if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+  }
+
+  // Voice only prefills the form; the user still reviews and taps Save.
+  function applyVoice(text: string) {
+    const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined);
+    changeType(parsed.type);
+    if (parsed.amount) setAmount(parsed.amount);
+    setCategoryId(parsed.categoryId);
+    if (parsed.note) setNote(parsed.note);
+    setErrors({});
+  }
+
   const filteredCategories = categories.filter((c) => c.type === type);
   const isAccumulated = accountId === ACCUMULATED_ID;
   // Accumulated Balance is a virtual source: new expenses only, split across real accounts.
@@ -171,16 +189,10 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {initial ? null : <VoiceInputButton onResult={applyVoice} />}
+
         {lockAccountAndType ? null : (
-          <Segmented
-            options={TYPES}
-            value={type}
-            onChange={(t) => {
-              setType(t);
-              setCategoryId(null);
-              if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
-            }}
-          />
+          <Segmented options={TYPES} value={type} onChange={changeType} />
         )}
 
         <AmountInput label="Amount" value={amount} onChange={setAmount} error={errors.amount} />

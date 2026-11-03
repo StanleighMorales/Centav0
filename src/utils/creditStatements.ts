@@ -20,7 +20,7 @@ export const STATUS_LABEL: Record<StatementStatus, string> = {
 };
 
 /** Part of one bill: an installment of a purchase (`chargeId`), or of the earlier balance (`chargeId` null). */
-export type StatementPiece = { chargeId: string | null; index: number; of: number; amount: number };
+export type StatementPiece = { chargeId: string | null; index: number; of: number; amount: number; paid: number };
 
 export type Statement = {
   billDate: string;
@@ -79,7 +79,7 @@ function spread(into: Map<number, StatementPiece[]>, amount: number, months: num
   for (let i = 0; i < n; i++) {
     const part = i === n - 1 ? round2(amount - piece * (n - 1)) : piece;
     const pieces = into.get(start + i) ?? [];
-    pieces.push({ chargeId, index: i + 1, of: n, amount: part });
+    pieces.push({ chargeId, index: i + 1, of: n, amount: part, paid: 0 });
     into.set(start + i, pieces);
   }
 }
@@ -90,13 +90,14 @@ export function firstBillOptions(billDay: number, today: string, count: number):
   return Array.from({ length: count }, (_, i) => dayIso(start + i, billDay));
 }
 
-export function buildStatements(input: StatementInput): { statements: Statement[]; earlierAmount: number } {
+export function buildStatements(
+  input: StatementInput,
+): { statements: Statement[]; earlierAmount: number; earlierRemaining: number } {
   const { billDay, dueDay, billDayNext, charges, payments, owed, earlier, today } = input;
   const byMonth = new Map<number, StatementPiece[]>();
-  for (const c of charges) spread(byMonth, c.amount, c.months ?? 1, billMonth(c.date, billDay, billDayNext), c.id ?? null);
 
   // Whatever the card owes beyond recorded purchases is the earlier balance; a negative gap (money
-  // moved into the card) already paid part of the bills.
+  // moved into the card) already paid part of the bills. It's spread first: it's the oldest debt on any bill.
   const charged = charges.reduce((s, c) => s + c.amount, 0);
   const paidIn = payments.reduce((s, p) => s + p.amount, 0);
   const gap = round2(owed - (charged - paidIn));
@@ -104,6 +105,7 @@ export function buildStatements(input: StatementInput): { statements: Statement[
     const start = earlier.firstBill ? manila(earlier.firstBill).mi : billMonth(today, billDay, false);
     spread(byMonth, gap, earlier.months ?? 1, start, null);
   }
+  for (const c of charges) spread(byMonth, c.amount, c.months ?? 1, billMonth(c.date, billDay, billDayNext), c.id ?? null);
 
   let credit = round2(paidIn + Math.max(0, -gap));
   const now = Date.parse(today);
@@ -113,6 +115,12 @@ export function buildStatements(input: StatementInput): { statements: Statement[
       const amount = round2(pieces.reduce((sum, p) => sum + p.amount, 0));
       const paid = round2(Math.min(credit, amount));
       credit = round2(credit - paid);
+      // Within a bill, payment covers pieces in order (earlier balance first).
+      let left = paid;
+      for (const piece of pieces) {
+        piece.paid = round2(Math.min(left, piece.amount));
+        left = round2(left - piece.paid);
+      }
       const remaining = round2(amount - paid);
       const billDate = dayIso(mi, billDay);
       const dueDate = dayIso(dueDay > billDay ? mi : mi + 1, dueDay);
@@ -125,7 +133,13 @@ export function buildStatements(input: StatementInput): { statements: Statement[
         : 'due';
       return { billDate, dueDate, amount, paid, remaining, status, pieces };
     });
-  return { statements, earlierAmount: Math.max(0, gap) };
+  // The gap is the earlier balance's original size (paying lowers owed and raises paidIn equally);
+  // what's left of it comes from its pieces.
+  const earlierRemaining = round2(statements.reduce(
+    (sum, st) => sum + st.pieces.filter((p) => p.chargeId === null).reduce((s, p) => s + p.amount - p.paid, 0),
+    0,
+  ));
+  return { statements, earlierAmount: Math.max(0, gap), earlierRemaining };
 }
 
 /** Billed-and-unpaid total, the overdue part of it, the latest billed statement, and the next unbilled one. */

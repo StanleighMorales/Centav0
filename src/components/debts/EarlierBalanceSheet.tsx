@@ -18,10 +18,14 @@ type Props = {
   onSaved: () => void;
   account: Account;
   amount: number;
+  /** Still owed of `amount`. */
+  remaining: number;
+  /** Opens Pay with the remaining amount filled in. */
+  onPay: () => void;
 };
 
 // What a credit line owes beyond recorded purchases: how many months are left on it, and which bill it starts on.
-export function EarlierBalanceSheet({ visible, onClose, onSaved, account, amount }: Props) {
+export function EarlierBalanceSheet({ visible, onClose, onSaved, account, amount, remaining, onPay }: Props) {
   const styles = useStyles();
   const [monthsText, setMonthsText] = useState('1');
   const [firstBill, setFirstBill] = useState<string | null>(null);
@@ -58,8 +62,11 @@ export function EarlierBalanceSheet({ visible, onClose, onSaved, account, amount
     <BottomSheet visible={visible} onClose={onClose} title="Earlier Balance">
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <AppText variant="bodySm" color="textMuted">
-          {formatPHP(amount)} is owed on {account.name} beyond the purchases recorded here. Split it the way {account.name} bills you.
+          {formatPHP(amount)} was owed on {account.name} beyond the purchases recorded here
+          {remaining > 0 ? `; ${formatPHP(remaining)} of it is still unpaid.` : ", and it's paid off."}
         </AppText>
+        {remaining > 0 ? <Button label={`Pay ${formatPHP(remaining)}`} onPress={onPay} /> : null}
+        <AppText variant="labelLg" color="textSecondary">Split it the way {account.name} bills you</AppText>
         <AppTextInput label="Months left" value={monthsText} onChangeText={setMonthsText} numeric error={error ?? undefined} />
         <View style={styles.block}>
           <AppText variant="labelLg" color="textSecondary">First bill</AppText>
@@ -75,7 +82,7 @@ export function EarlierBalanceSheet({ visible, onClose, onSaved, account, amount
             {firstBill ? ` from ${displayDate(firstBill)}` : ''}
           </AppText>
         ) : null}
-        <Button label="Save" onPress={handleSave} loading={saving} />
+        <Button label="Save split" variant="secondary" onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
       </ScrollView>
     </BottomSheet>

@@ -78,7 +78,7 @@ export default function DebtDetailScreen() {
   const [editCharge, setEditCharge] = useState<Charge | null>(null);
   const [deleteCharge, setDeleteCharge] = useState<Charge | null>(null);
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
-  const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
+  const [payPrefill, setPayPrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
   const [earlierVisible, setEarlierVisible] = useState(false);
   // Expanded payment-history months; every month starts collapsed to its total.
   const [openMonths, setOpenMonths] = useState<string[]>([]);
@@ -105,7 +105,7 @@ export default function DebtDetailScreen() {
 
     if (pay === '1' && d && !voicePayDone.current && d.outstandingBalance > 0) {
       voicePayDone.current = true;
-      setVoicePrefill({ accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined });
+      setPayPrefill({ accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined });
       setPaymentVisible(true);
     }
   }, [id, pay, voiceAccountId, voiceAmount]);
@@ -268,6 +268,7 @@ export default function DebtDetailScreen() {
             statements={credit.statements}
             summary={creditSummary}
             earlierAmount={credit.earlierAmount}
+            earlierRemaining={credit.earlierRemaining}
             earlierMonths={creditAccount.earlierBalanceMonths}
             earlierFirstBill={creditAccount.earlierBalanceFirstBill}
             onChangeEarlier={() => setEarlierVisible(true)}
@@ -354,7 +355,7 @@ export default function DebtDetailScreen() {
 
       <AddPaymentSheet
         visible={paymentVisible}
-        onClose={() => { setPaymentVisible(false); setVoicePrefill(null); }}
+        onClose={() => { setPaymentVisible(false); setPayPrefill(null); }}
         onSuccess={load}
         debtId={debt.id}
         creditor={debt.creditor}
@@ -367,8 +368,8 @@ export default function DebtDetailScreen() {
         }
         monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}
         cashOnly={!!creditAccount}
-        initialAccountId={voicePrefill?.accountId}
-        initialAmount={voicePrefill?.amount}
+        initialAccountId={payPrefill?.accountId}
+        initialAmount={payPrefill?.amount}
       />
 
       {creditAccount && credit ? (
@@ -378,6 +379,12 @@ export default function DebtDetailScreen() {
           onSaved={load}
           account={creditAccount}
           amount={credit.earlierAmount}
+          remaining={credit.earlierRemaining}
+          onPay={() => {
+            setEarlierVisible(false);
+            setPayPrefill({ amount: credit.earlierRemaining });
+            setPaymentVisible(true);
+          }}
         />
       ) : null}
 

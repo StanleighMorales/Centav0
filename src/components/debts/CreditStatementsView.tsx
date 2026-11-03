@@ -17,6 +17,7 @@ type Props = {
   summary: ReturnType<typeof summarize>;
   purchases: Purchase[];
   earlierAmount: number;
+  earlierRemaining: number;
   earlierMonths: number | null;
   earlierFirstBill: string | null;
   onChangeEarlier: () => void;
@@ -57,7 +58,7 @@ export function PurchaseLine({ title, subtitle, amount, onPress, onLongPress, ac
 // A credit line's bills: what's due now, then every bill, past and upcoming. Each bill opens to show the
 // purchases (and installment pieces) on it and how much of it is paid.
 export function CreditStatementsView({
-  statements, summary, purchases, earlierAmount, earlierMonths, earlierFirstBill,
+  statements, summary, purchases, earlierAmount, earlierRemaining, earlierMonths, earlierFirstBill,
   onChangeEarlier, onEditPurchase, onDeletePurchase,
 }: Props) {
   const styles = useStyles();
@@ -105,18 +106,23 @@ export function CreditStatementsView({
         <Pressable
           onPress={onChangeEarlier}
           accessibilityRole="button"
-          accessibilityLabel="Change how the earlier balance is split"
+          accessibilityLabel="Pay or split the earlier balance"
           style={({ pressed }) => [styles.earlier, pressed && styles.pressed]}
         >
           <View style={styles.flex}>
-            <AppText variant="body">Earlier balance · {formatPHP(earlierAmount)}</AppText>
+            <AppText variant="body">Earlier balance</AppText>
+            <AppText variant="amountSm" color={earlierRemaining > 0 ? 'textPrimary' : 'positive'}>
+              {earlierRemaining > 0
+                ? `${formatPHP(earlierRemaining)} left of ${formatPHP(earlierAmount)}`
+                : `${formatPHP(earlierAmount)} paid off`}
+            </AppText>
             <AppText variant="bodySm" color="textMuted">
               {earlierMonths
                 ? `${earlierMonths} ${earlierMonths === 1 ? 'month' : 'months'} from ${earlierFirstBill ? displayDate(earlierFirstBill) : 'the next bill'}`
                 : 'Owed beyond your recorded purchases · set months left'}
             </AppText>
           </View>
-          <AppText variant="labelLg" color="accentPrimary">Change</AppText>
+          <AppText variant="labelLg" color="accentPrimary">{earlierRemaining > 0 ? 'Pay' : 'View'}</AppText>
         </Pressable>
       ) : null}
 

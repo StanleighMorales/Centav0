@@ -113,12 +113,29 @@ const owedOf = (charges: { amount: number }[]) => charges.reduce((s, c) => s + c
   ];
   const { statements } = buildStatements({ ...base, charges, owed: 1150 });
   assert.deepStrictEqual(statements.map((s) => s.pieces), [
-    [{ chargeId: null, index: 1, of: 1, amount: 100 }],
-    [{ chargeId: 'shoes', index: 1, of: 3, amount: 333.33 }, { chargeId: 'food', index: 1, of: 1, amount: 50 }],
-    [{ chargeId: 'shoes', index: 2, of: 3, amount: 333.33 }],
-    [{ chargeId: 'shoes', index: 3, of: 3, amount: 333.34 }],
+    [{ chargeId: null, index: 1, of: 1, amount: 100, paid: 0 }],
+    [{ chargeId: 'shoes', index: 1, of: 3, amount: 333.33, paid: 0 }, { chargeId: 'food', index: 1, of: 1, amount: 50, paid: 0 }],
+    [{ chargeId: 'shoes', index: 2, of: 3, amount: 333.33, paid: 0 }],
+    [{ chargeId: 'shoes', index: 3, of: 3, amount: 333.34, paid: 0 }],
   ]);
   assert.deepStrictEqual(statements.map((s) => s.amount), [100, 383.33, 333.33, 333.34], 'bill = sum of its pieces');
+}
+{
+  // What's left of the earlier balance goes down as it's paid; its original amount doesn't.
+  const earlier = { months: 2, firstBill: day('2026-11-08') };
+  const charges = [{ id: 'tv', amount: 1000, date: at('2026-11-07'), months: null }];
+  const unpaid = buildStatements({ ...base, charges, owed: 2000, earlier });
+  assert.deepStrictEqual([unpaid.earlierAmount, unpaid.earlierRemaining], [1000, 1000]);
+  assert.deepStrictEqual(unpaid.statements[0].pieces.map((p) => p.chargeId), [null, 'tv'],
+    'the earlier balance is the oldest debt on a bill, so it comes first');
+
+  // ₱700 paid: the Nov bill (₱500 earlier + ₱1,000 tv) takes it, earlier piece first.
+  const part = buildStatements({ ...base, charges, payments: [{ amount: 700 }], owed: 1300, earlier });
+  assert.deepStrictEqual([part.earlierAmount, part.earlierRemaining], [1000, 500], 'original stays, remaining drops');
+  assert.deepStrictEqual(part.statements[0].pieces.map((p) => p.paid), [500, 200]);
+
+  const all = buildStatements({ ...base, charges, payments: [{ amount: 2000 }], owed: 0, earlier });
+  assert.strictEqual(all.earlierRemaining, 0, 'paid in full');
 }
 {
   assert.deepStrictEqual(firstBillOptions(8, at('2026-11-04'), 3), [day('2026-11-08'), day('2026-12-08'), day('2027-01-08')]);

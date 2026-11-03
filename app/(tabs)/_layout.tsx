@@ -8,6 +8,8 @@ import { useTheme } from '../../src/theme';
 export default function TabLayout() {
   const { colors } = useTheme();
   const [addOpen, setAddOpen] = useState(false);
+  const [autoStart, setAutoStart] = useState<'voice' | 'camera' | null>(null);
+  const openAdd = (mode: 'voice' | 'camera' | null = null) => { setAutoStart(mode); setAddOpen(true); };
 
   return (
     <>
@@ -16,7 +18,7 @@ export default function TabLayout() {
           <FloatingTabBar
             state={props.state}
             navigation={props.navigation}
-            onAdd={() => setAddOpen(true)}
+            onAdd={openAdd}
           />
         )}
         screenOptions={{
@@ -31,7 +33,12 @@ export default function TabLayout() {
         <Tabs.Screen name="more" options={{ title: 'More' }} />
       </Tabs>
 
-      <AddTransactionSheet visible={addOpen} onClose={() => setAddOpen(false)} onSuccess={emitDataChanged} />
+      <AddTransactionSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={emitDataChanged}
+        autoStart={autoStart}
+      />
     </>
   );
 }

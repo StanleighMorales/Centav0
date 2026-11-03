@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,16 +12,19 @@ import { LoadingOverlay } from '../../src/components/ui/LoadingOverlay';
 import { Segmented } from '../../src/components/ui/Segmented';
 import { exportBackup, restoreBackup, InvalidBackupError } from '../../src/db/backup';
 import { resetAppData } from '../../src/db/database';
+import { getSetting } from '../../src/repositories';
+import { backupAgeLabel, LAST_BACKUP_KEY } from '../../src/utils/backupRules';
 import { theme, makeStyles, useTheme, type ThemeMode } from '../../src/theme';
 
 type RowProps = {
   icon: React.ComponentProps<typeof Feather>['name'];
   label: string;
+  hint?: string;
   onPress: () => void;
   destructive?: boolean;
 };
 
-function Row({ icon, label, onPress, destructive }: RowProps) {
+function Row({ icon, label, hint, onPress, destructive }: RowProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const color = destructive ? colors.negative : colors.textSecondary;
@@ -33,9 +36,10 @@ function Row({ icon, label, onPress, destructive }: RowProps) {
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       <Feather name={icon} size={20} color={color} />
-      <AppText variant="body" color={destructive ? 'negative' : 'textPrimary'} style={styles.rowLabel}>
-        {label}
-      </AppText>
+      <View style={styles.rowLabel}>
+        <AppText variant="body" color={destructive ? 'negative' : 'textPrimary'}>{label}</AppText>
+        {hint ? <AppText variant="bodySm" color="textMuted">{hint}</AppText> : null}
+      </View>
       <Feather name="chevron-right" size={18} color={colors.textMuted} />
     </Pressable>
   );
@@ -53,12 +57,16 @@ export default function SettingsScreen() {
   const [resetVisible, setResetVisible] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+
+  useEffect(() => { getSetting(LAST_BACKUP_KEY).then(setLastBackupAt); }, []);
 
   async function handleBackup() {
     setError(null);
     setBusy('Preparing backup…');
     try {
       await exportBackup();
+      setLastBackupAt(await getSetting(LAST_BACKUP_KEY));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -113,7 +121,7 @@ export default function SettingsScreen() {
       </View>
 
       <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA</AppText>
-      <Row icon="upload" label="Back up now" onPress={handleBackup} />
+      <Row icon="upload" label="Back up now" hint={backupAgeLabel(lastBackupAt)} onPress={handleBackup} />
       <Row icon="download" label="Restore from file" onPress={handleRestore} />
       <Row icon="trash-2" label="Remove all data" onPress={() => setResetVisible(true)} destructive />
 

@@ -25,10 +25,7 @@
         "backgroundColor": "#111111",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -42,7 +39,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Centav0 to attach receipt photos to your expenses."
+          "photosPermission": "Allow Centav0 to attach receipt photos to your expenses.",
+          "cameraPermission": "Allow Centav0 to scan receipts with the camera."
         }
       ],
       [
@@ -54,7 +52,14 @@
           "backgroundColor": "#111111"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Centav0 to use the microphone so you can add transactions by voice.",
+          "speechRecognitionPermission": "Allow Centav0 to turn your voice into transactions."
+        }
+      ]
     ],
     "extra": {
       "router": {},

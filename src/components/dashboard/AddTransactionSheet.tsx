@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Pressable, Image } from 'react-native';
+import { View, Pressable, Image, ActivityIndicator } from 'react-native';
 import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
-import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { Segmented } from '../ui/Segmented';
 import { BottomSheet } from '../ui/BottomSheet';
@@ -11,14 +10,18 @@ import { Select } from '../ui/Select';
 import { DatePicker } from '../ui/DatePicker';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
+import { ReceiptItemsEditor } from '../transactions/ReceiptItemsEditor';
 import { CategorySheet } from '../categories/CategorySheet';
 import { AddAccountSheet } from '../accounts/AddAccountSheet';
-import { accountRepo, categoryRepo, transactionRepo } from '../../repositories';
+import { VoiceInputButton } from './VoiceInputButton';
+import { parseVoiceTransaction } from '../../utils/voiceTransaction';
+import { accountRepo, categoryRepo, transactionRepo, transactionItemRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
+import { scanReceipt } from '../../utils/receiptScan';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
 import { theme, makeStyles, useTheme } from '../../theme';
-import type { Account, Category, Transaction, TransactionType } from '../../domain/types';
+import type { Account, Category, Transaction, TransactionItemInput } from '../../domain/types';
 
 type Props = {
   visible: boolean;
@@ -47,15 +50,24 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [accountSheetVisible, setAccountSheetVisible] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [items, setItems] = useState<TransactionItemInput[]>([]);
+  const [scanning, setScanning] = useState(false);
 
-  async function pickReceipt() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (!result.canceled) setReceiptUri(result.assets[0].uri);
+  async function handleScan(source: 'camera' | 'gallery') {
+    setScanning(true);
+    try {
+      const res = await scanReceipt(source);
+      if (!res) return;
+      const { uri, parsed } = res;
+      setReceiptUri(uri);
+      // Nothing parsed leaves the fields as they were: the photo is attached and saving is never blocked.
+      if (parsed.total != null) setAmount(parsed.total);
+      if (parsed.date) setDate(parsed.date);
+      if (parsed.merchant) setNote(parsed.merchant);
+      setItems(parsed.items);
+    } finally {
+      setScanning(false);
+    }
   }
 
   useEffect(() => {
@@ -73,6 +85,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         setDate(initial.date);
         setNote(initial.note ?? '');
         setReceiptUri(initial.receiptUri);
+        setItems((await transactionItemRepo.listByTransaction(initial.id)).map(({ name, qty, price }) => ({ name, qty, price })));
       } else if (accs.length > 0) {
         setAccountId(accs[0].id);
       }
@@ -104,9 +117,26 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       setDate(nowIso());
       setNote('');
       setReceiptUri(null);
+      setItems([]);
       setErrors({});
     }
   }, [visible, initial]);
+
+  function changeType(t: 'Expense' | 'Income') {
+    setType(t);
+    setCategoryId(null);
+    if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+  }
+
+  // Voice only prefills the form; the user still reviews and taps Save.
+  function applyVoice(text: string) {
+    const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined);
+    changeType(parsed.type);
+    if (parsed.amount) setAmount(parsed.amount);
+    setCategoryId(parsed.categoryId);
+    if (parsed.note) setNote(parsed.note);
+    setErrors({});
+  }
 
   const filteredCategories = categories.filter((c) => c.type === type);
   const isAccumulated = accountId === ACCUMULATED_ID;
@@ -137,10 +167,13 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         for (const p of portions) {
           await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
         }
-      } else if (initial) {
-        await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! });
       } else {
-        await transactionRepo.create({ ...base, amount, accountId: accountId! });
+        const saved = initial
+          ? await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! })
+          : await transactionRepo.create({ ...base, amount, accountId: accountId! });
+        // Items only belong to a receipt-bearing expense; blank rows are dropped.
+        const kept = type === 'Expense' ? items.filter((i) => i.name.trim()) : [];
+        if (initial || kept.length > 0) await transactionItemRepo.replaceForTransaction(saved.id, kept);
       }
       onSuccess();
       onClose();
@@ -156,16 +189,10 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {initial ? null : <VoiceInputButton onResult={applyVoice} />}
+
         {lockAccountAndType ? null : (
-          <Segmented
-            options={TYPES}
-            value={type}
-            onChange={(t) => {
-              setType(t);
-              setCategoryId(null);
-              if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
-            }}
-          />
+          <Segmented options={TYPES} value={type} onChange={changeType} />
         )}
 
         <AmountInput label="Amount" value={amount} onChange={setAmount} error={errors.amount} />
@@ -229,7 +256,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
               <View style={styles.receiptPreview}>
                 <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="cover" />
                 <Pressable
-                  onPress={() => setReceiptUri(null)}
+                  onPress={() => { setReceiptUri(null); setItems([]); }}
                   accessibilityRole="button"
                   accessibilityLabel="Remove receipt"
                   style={styles.receiptRemove}
@@ -237,18 +264,37 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
                   <Feather name="x" size={16} color={colors.textPrimary} />
                 </Pressable>
               </View>
+            ) : scanning ? (
+              <View style={styles.receiptAttach}>
+                <ActivityIndicator color={colors.accentPrimary} />
+                <AppText variant="body" color="textSecondary">Reading receipt...</AppText>
+              </View>
             ) : (
-              <Pressable
-                onPress={pickReceipt}
-                accessibilityRole="button"
-                accessibilityLabel="Attach receipt image"
-                style={styles.receiptAttach}
-              >
-                <Feather name="paperclip" size={18} color={colors.accentPrimary} />
-                <AppText variant="body" color="accentPrimary">Attach image</AppText>
-              </Pressable>
+              <View style={styles.scanRow}>
+                <Pressable
+                  onPress={() => handleScan('camera')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Scan receipt with camera"
+                  style={[styles.receiptAttach, styles.scanBtn]}
+                >
+                  <Feather name="camera" size={18} color={colors.accentPrimary} />
+                  <AppText variant="body" color="accentPrimary">Scan receipt</AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleScan('gallery')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pick receipt from gallery"
+                  style={[styles.receiptAttach, styles.scanBtn]}
+                >
+                  <Feather name="image" size={18} color={colors.accentPrimary} />
+                  <AppText variant="body" color="accentPrimary">Gallery</AppText>
+                </Pressable>
+              </View>
             )}
           </View>
+        ) : null}
+        {type === 'Expense' && (receiptUri || items.length > 0) ? (
+          <ReceiptItemsEditor items={items} onChange={setItems} total={amount} />
         ) : null}
         <Button label={initial ? 'Save Changes' : 'Save Transaction'} onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
@@ -278,6 +324,8 @@ const useStyles = makeStyles((c) => ({
   },
   pickerFlex: { flex: 1 },
   receiptSection: { gap: theme.spacing[2] },
+  scanRow: { flexDirection: 'row', gap: theme.spacing[3] },
+  scanBtn: { flex: 1, justifyContent: 'center' },
   receiptAttach: {
     flexDirection: 'row',
     alignItems: 'center',

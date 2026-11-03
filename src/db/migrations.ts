@@ -391,6 +391,22 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '018_transaction_items',
+    up: async (db) => {
+      // Receipt line items. Their sum is not forced to equal the transaction total (tax, discounts).
+      await db.execAsync(`
+        CREATE TABLE transaction_items (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, transactionId TEXT NOT NULL,
+          name TEXT NOT NULL, qty REAL NOT NULL DEFAULT 1, price REAL NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (transactionId) REFERENCES transactions(id)
+        );
+        CREATE INDEX idx_tx_items_tx ON transaction_items(transactionId);
+      `);
+    },
+  },
 ];
 
 /** Highest migration this app build knows how to run — stamped into backup filenames. */

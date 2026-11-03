@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Image } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppText } from '../ui/AppText';
 import { Amount } from '../ui/Amount';
+import { transactionItemRepo } from '../../repositories';
 import { displayDateTime } from '../../utils/date';
 import { theme, makeStyles } from '../../theme';
-import type { Transaction } from '../../domain/types';
+import type { Transaction, TransactionItem } from '../../domain/types';
 
 type Props = {
   transaction: Transaction | null;
@@ -17,6 +18,12 @@ type Props = {
 
 export function TransactionDetailSheet({ transaction, categoryName, accountName, toAccountName, onClose }: Props) {
   const styles = useStyles();
+  const [items, setItems] = useState<TransactionItem[]>([]);
+  const txId = transaction?.id;
+  useEffect(() => {
+    if (!txId) { setItems([]); return; }
+    transactionItemRepo.listByTransaction(txId).then(setItems);
+  }, [txId]);
   if (!transaction) {
     return <BottomSheet visible={false} onClose={onClose}><View /></BottomSheet>;
   }
@@ -68,6 +75,19 @@ export function TransactionDetailSheet({ transaction, categoryName, accountName,
         {transaction.receiptUri ? (
           <Image source={{ uri: transaction.receiptUri }} style={styles.image} resizeMode="cover" />
         ) : null}
+        {items.length > 0 ? (
+          <View style={styles.noteBlock}>
+            <AppText variant="labelSm" color="textMuted">ITEMS</AppText>
+            {items.map((it) => (
+              <View key={it.id} style={styles.row}>
+                <AppText variant="body" style={styles.itemName}>
+                  {it.qty !== 1 ? `${it.qty} x ` : ''}{it.name}
+                </AppText>
+                <Amount value={it.qty * it.price} variant="amountSm" color="textSecondary" />
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
     </BottomSheet>
   );
@@ -77,6 +97,7 @@ const useStyles = makeStyles((c) => ({
   body: { gap: theme.spacing[4] },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   noteBlock: { gap: theme.spacing[1] },
+  itemName: { flex: 1, marginRight: theme.spacing[3] },
   image: {
     width: '100%',
     height: 220,

@@ -143,6 +143,11 @@ export class SqliteAccountRepository {
         `UPDATE debts SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE linkedAccountId = ? AND userId = ?`,
         [now, now, id, FIXED_USER_ID],
       );
+      // Recurring rules on it could never post again.
+      await db.runAsync(
+        `UPDATE recurring_transactions SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE accountId = ? AND userId = ? AND deletedAt IS NULL`,
+        [now, now, id, FIXED_USER_ID],
+      );
     });
   }
 

@@ -58,18 +58,19 @@ function manila(iso: string): { mi: number; d: number } {
   return { mi: t.getUTCFullYear() * 12 + t.getUTCMonth(), d: t.getUTCDate() };
 }
 
-// Manila midnight of `day` in month `mi`, clamped to the month's last day (bill day 31 → 28 Feb).
+// `day` clamped to month `mi`'s last day (bill day 31 → 28 Feb).
+const clampDay = (mi: number, day: number) => Math.min(day, new Date(Date.UTC(Math.floor(mi / 12), (mi % 12) + 1, 0)).getUTCDate());
+
+// Manila midnight of `day` in month `mi`, clamped to the month's last day.
 function dayIso(mi: number, day: number): string {
-  const y = Math.floor(mi / 12);
-  const m = mi % 12;
-  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(y, m, Math.min(day, last)) - OFFSET).toISOString();
+  return new Date(Date.UTC(Math.floor(mi / 12), mi % 12, clampDay(mi, day)) - OFFSET).toISOString();
 }
 
-// Which statement month a purchase on `iso` lands on.
+// Which statement month a purchase on `iso` lands on. Compared with the clamped bill day: 30 Apr is bill day 31's bill date.
 function billMonth(iso: string, billDay: number, billDayNext: boolean): number {
   const { mi, d } = manila(iso);
-  return d < billDay || (d === billDay && !billDayNext) ? mi : mi + 1;
+  const bd = clampDay(mi, billDay);
+  return d < bd || (d === bd && !billDayNext) ? mi : mi + 1;
 }
 
 // Splits `amount` over `months` statements starting at `start`; the last piece takes the leftover centavos.
@@ -143,8 +144,8 @@ export function buildStatements(
 }
 
 /**
- * Billed-and-unpaid total, the overdue part of it, the latest billed statement, the next unbilled one, and the
- * oldest bill with anything left on it — billed or not, since new purchases sit on a bill before its bill date.
+ * Billed-and-unpaid total, the overdue part of it, the next unbilled statement, and the oldest bill with
+ * anything left on it — billed or not, since new purchases sit on a bill before its bill date.
  */
 export function summarize(statements: Statement[], today: string) {
   const now = Date.parse(today);
@@ -152,7 +153,6 @@ export function summarize(statements: Statement[], today: string) {
   return {
     dueNow: round2(billed.reduce((s, x) => s + x.remaining, 0)),
     overdue: round2(billed.filter((s) => s.status === 'overdue').reduce((s, x) => s + x.remaining, 0)),
-    current: billed[billed.length - 1],
     next: statements.find((s) => Date.parse(s.billDate) > now),
     nextUnpaid: statements.find((s) => s.remaining > 0),
   };
@@ -192,3 +192,21 @@ export function creditStatus(summary: ReturnType<typeof summarize>): StatementSt
   if (summary.overdue > 0) return 'overdue';
   return summary.nextUnpaid?.status ?? 'paid';
 }
+
+/** A credit line's bills, their summary and one status: what the list row and the detail screen both show. */
+export function creditInfoFor(
+  account: CreditAccountLike & { creditLimit: number | null; currentBalance: number },
+  charges: Parameters<typeof statementsFor>[1],
+  payments: { amount: number }[],
+  today: string,
+) {
+  // Owed straight from the card, not its debt row: that stops at 0, but deleting a paid purchase leaves
+  // the card above its limit, and the money paid for it then pays later bills.
+  const owed = round2((account.creditLimit ?? 0) - account.currentBalance);
+  const built = statementsFor(account, charges, payments, owed, today);
+  if (!built) return null;
+  const summary = summarize(built.statements, today);
+  return { ...built, summary, status: creditStatus(summary) };
+}
+
+export type CreditInfo = NonNullable<ReturnType<typeof creditInfoFor>>;

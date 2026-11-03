@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, FlatList, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -17,12 +17,10 @@ import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo } from '../../r
 import { TAB_BAR_SPACE } from '../nav/FloatingTabBar';
 import { theme, makeStyles, useTheme } from '../../theme';
 import { displayDate, monthRangeIso, nowIso } from '../../utils/date';
-import { STATUS_COLOR, creditStatus, statementsFor, summarize, type Statement, type StatementStatus } from '../../utils/creditStatements';
+import { STATUS_COLOR, creditInfoFor, type CreditInfo } from '../../utils/creditStatements';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
 import type { Account, Debt, DebtPayment, DebtStatus, DebtType, Transaction } from '../../domain/types';
-
-type CreditInfo = ReturnType<typeof summarize> & { status: StatementStatus; statements: Statement[] };
 
 const TYPE_TABS: DebtType[] = ['Credit', 'Loan', 'Custom'];
 const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
@@ -32,7 +30,8 @@ type ViewMode = (typeof VIEW_MODES)[number];
 type DebtRowProps = {
   debt: Debt;
   paidTotal: number;
-  creditLimit: number | null;
+  /** Credit still available on a credit line with a limit. */
+  available: number | null;
   /** Bills for a credit line with bill and due days set. */
   credit: CreditInfo | null;
   onPress: (d: Debt) => void;
@@ -40,7 +39,7 @@ type DebtRowProps = {
   onDelete: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDelete }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, available, credit, onPress, onEdit, onDelete }: DebtRowProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
@@ -97,15 +96,15 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
         <View style={styles.rowMain}>
           <AppText variant="body" style={styles.creditor}>{debt.creditor}</AppText>
           {credit ? (
-            credit.overdue > 0 ? (
+            credit.summary.overdue > 0 ? (
               <View style={styles.paidRow}>
                 <Feather name="alert-circle" size={12} color={colors.negative} style={styles.rowNoteIcon} />
-                <AppText variant="bodySm" color="negative" style={styles.rowNote}>{formatPHP(credit.overdue)} overdue</AppText>
+                <AppText variant="bodySm" color="negative" style={styles.rowNote}>{formatPHP(credit.summary.overdue)} overdue</AppText>
               </View>
-            ) : credit.nextUnpaid ? (
+            ) : credit.summary.nextUnpaid ? (
               // The next bill with anything left, even before its bill date: new purchases are already on it.
-              <AppText variant="bodySm" color={credit.nextUnpaid.status === 'dueSoon' ? 'warning' : 'textSecondary'}>
-                {formatPHP(credit.nextUnpaid.remaining)} unpaid · due {displayDate(credit.nextUnpaid.dueDate)}
+              <AppText variant="bodySm" color={credit.summary.nextUnpaid.status === 'dueSoon' ? 'warning' : 'textSecondary'}>
+                {formatPHP(credit.summary.nextUnpaid.remaining)} unpaid · due {displayDate(credit.summary.nextUnpaid.dueDate)}
               </AppText>
             ) : (
               <View style={styles.paidRow}>
@@ -128,12 +127,13 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
           ) : null}
         </View>
         <View style={styles.rowTrail}>
-          {debt.status === 'Paid' ? (
+          {/* A credit line nothing was ever paid on is new, not paid off. */}
+          {debt.status === 'Paid' && paidTotal > 0 ? (
             <View style={styles.paidTrail}>
               <AppText variant="labelSm" color="positive">PAID</AppText>
               <Amount value={paidTotal} variant="amountSm" semanticColor={false} color="positive" />
             </View>
-          ) : creditLimit != null ? (
+          ) : available != null ? (
             // Owed in red, credit still available in green.
             <View style={styles.paidTrail}>
               <Amount
@@ -143,7 +143,7 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
                 color={debt.outstandingBalance > 0 ? 'negative' : 'textPrimary'}
               />
               <AppText variant="labelSm" color="positive">
-                {formatPHP(Math.max(0, creditLimit - debt.outstandingBalance))} avail
+                {formatPHP(available)} avail
               </AppText>
             </View>
           ) : (
@@ -172,7 +172,8 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
   const [deleteTarget, setDeleteTarget] = useState<Debt | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
   const [payments, setPayments] = useState<DebtPayment[]>([]);
-  const [creditCharges, setCreditCharges] = useState<Transaction[]>([]);
+  // Purchases per credit account.
+  const [creditCharges, setCreditCharges] = useState<Record<string, Transaction[]>>({});
   const [creditSheetVisible, setCreditSheetVisible] = useState(false);
   const [monthPayments, setMonthPayments] = useState<{ debtId: string; amount: number }[]>([]);
 
@@ -183,15 +184,15 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     const allPayments = await debtPaymentRepo.list();
     const totals: Record<string, number> = {};
     for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
-    // Purchases on credit lines feed their monthly statements.
-    const creditIds = new Set(accs.filter((a) => a.allowsOverdraft).map((a) => a.id));
-    const expenses = await transactionRepo.list({ type: 'Expense' });
+    // Purchases on credit lines feed their monthly statements. Only those accounts are read, not every expense.
+    const creditAccs = accs.filter((a) => a.allowsOverdraft);
+    const charges = await Promise.all(creditAccs.map((a) => transactionRepo.list({ accountId: a.id, type: 'Expense' })));
     const { from, to } = monthRangeIso();
     setDebts(all);
     setAccounts(accs);
     setPaidTotals(totals);
     setPayments(allPayments);
-    setCreditCharges(expenses.filter((t) => creditIds.has(t.accountId)));
+    setCreditCharges(Object.fromEntries(creditAccs.map((a, i) => [a.id, charges[i]])));
     setMonthPayments(allPayments.filter((p) => p.date >= from && p.date <= to));
     setLoading(false);
   }, []);
@@ -213,35 +214,30 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     load();
   }
 
-  const today = nowIso();
-  const creditInfo: Record<string, CreditInfo> = {};
-  for (const d of debts) {
-    const account = d.linkedAccountId ? accounts.find((a) => a.id === d.linkedAccountId) : undefined;
-    if (!account) continue;
-    const built = statementsFor(
-      account,
-      creditCharges.filter((t) => t.accountId === account.id),
-      payments.filter((p) => p.debtId === d.id),
-      d.outstandingBalance,
-      today,
-    );
-    if (!built) continue;
-    const summary = summarize(built.statements, today);
-    creditInfo[d.id] = { ...summary, status: creditStatus(summary), statements: built.statements };
-  }
+  // Memoized so swipes and tab taps don't rebuild every card's bills.
+  const creditInfo = useMemo(() => {
+    const today = nowIso();
+    const paymentsByDebt: Record<string, DebtPayment[]> = {};
+    for (const p of payments) (paymentsByDebt[p.debtId] ??= []).push(p);
+    const info: Record<string, CreditInfo> = {};
+    for (const d of debts) {
+      const account = d.linkedAccountId ? accounts.find((a) => a.id === d.linkedAccountId) : undefined;
+      const c = account ? creditInfoFor(account, creditCharges[account.id] ?? [], paymentsByDebt[d.id] ?? [], today) : null;
+      if (c) info[d.id] = c;
+    }
+    return info;
+  }, [debts, accounts, creditCharges, payments]);
+
+  // A credit line nothing was ever owed or paid on was just added: it's open, not paid off.
+  // One charged and paid off has payment history, so it moves to the Paid tab.
   const tabStatus = (d: Debt): DebtStatus => {
+    if (d.linkedAccountId && d.outstandingBalance <= 0 && !(paidTotals[d.id] > 0)) return 'Open';
     const c = creditInfo[d.id];
     if (!c) return d.status;
-    return c.overdue > 0 ? 'Overdue' : d.outstandingBalance <= 0 ? 'Paid' : 'Open';
+    return c.summary.overdue > 0 ? 'Overdue' : d.outstandingBalance <= 0 ? 'Paid' : 'Open';
   };
 
-  // Auto-managed credit cards stay hidden only while truly untouched — a fresh
-  // card at ₱0 isn't a debt yet. One that was charged and paid off still has
-  // payment history, so it stays visible (on the Paid tab) instead of vanishing.
-  const typeDebts = debts.filter(
-    (d) => d.debtType === activeType
-      && !(d.linkedAccountId && d.outstandingBalance <= 0 && !(paidTotals[d.id] > 0)),
-  );
+  const typeDebts = debts.filter((d) => d.debtType === activeType);
   const typeDebtIds = new Set(typeDebts.map((d) => d.id));
   const paidThisMonth = monthPayments
     .filter((p) => typeDebtIds.has(p.debtId))
@@ -355,17 +351,20 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
               subtitle={activeStatus === 'Paid' ? 'Paid debts will appear here' : activeType === 'Credit' ? 'Tap + to add a credit line' : 'Tap + to add a debt'}
             />
           }
-          renderItem={({ item }) => (
-            <DebtRow
-              debt={item}
-              paidTotal={paidTotals[item.id] ?? 0}
-              creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
-              credit={creditInfo[item.id] ?? null}
-              onPress={(d) => router.push(`/debts/${d.id}`)}
-              onEdit={setEditDebt}
-              onDelete={setDeleteTarget}
-            />
-          )}
+          renderItem={({ item }) => {
+            const account = item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId) : undefined;
+            return (
+              <DebtRow
+                debt={item}
+                paidTotal={paidTotals[item.id] ?? 0}
+                available={account?.creditLimit != null ? account.currentBalance : null}
+                credit={creditInfo[item.id] ?? null}
+                onPress={(d) => router.push(`/debts/${d.id}`)}
+                onEdit={setEditDebt}
+                onDelete={setDeleteTarget}
+              />
+            );
+          }}
         />
       )}
         </>

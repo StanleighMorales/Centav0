@@ -53,6 +53,8 @@ export function EarlierBalanceSheet({ visible, onClose, onSaved, account, amount
       await accountRepo.update(account.id, { earlierBalanceMonths: months, earlierBalanceFirstBill: firstBill });
       onSaved();
       onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save');
     } finally {
       setSaving(false);
     }

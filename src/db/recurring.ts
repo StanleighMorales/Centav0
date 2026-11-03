@@ -1,4 +1,5 @@
 import { recurringTransactionRepo, transactionRepo } from '../repositories';
+import { NotEnoughError } from '../repositories/sqlite/SqliteTransactionRepository';
 import { nextOccurrences } from '../utils/recurring';
 import { nowIso } from '../utils/date';
 
@@ -23,8 +24,10 @@ export async function materializeRecurringTransactions(): Promise<void> {
           note: rule.note ?? undefined,
         });
         posted = date;
-      } catch {
+      } catch (e) {
         // Not enough in the account: leave this and later occurrences unposted; they post on a later start.
+        // Anything else stops the rule the same way, but shouldn't pass silently.
+        if (!(e instanceof NotEnoughError)) console.warn(`Recurring transaction ${rule.id} not posted:`, e);
         break;
       }
     }

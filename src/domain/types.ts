@@ -165,8 +165,6 @@ export interface DebtPayment extends AuditFields, LocalSyncFields {
 }
 export interface CreateDebtPaymentInput { date: string; amount: number; accountId: string; }
 
-/** Pay off specific Credit Card charges. Amount is derived from the charges, not passed. */
-
 export type AllocationPeriod = 'Weekly' | 'Monthly';
 
 export interface Allocation extends AuditFields, LocalSyncFields {

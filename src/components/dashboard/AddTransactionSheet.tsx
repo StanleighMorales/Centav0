@@ -173,6 +173,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
     if (amount <= 0) errs.amount = 'Enter an amount';
     if (!categoryId) errs.categoryId = 'Select a category';
     if (!accountId) errs.accountId = 'Select an account';
+    if (onCredit && !(parsedMonths >= 1 && parsedMonths <= 60)) errs.months = 'Enter 1 to 60 months';
     if (isAccumulated && amount > accumulatedTotal(accounts)) {
       errs.accountId = `Only ${formatPHP(accumulatedTotal(accounts))} available across accounts`;
     }
@@ -290,7 +291,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
                 />
               ))}
             </View>
-            <AppTextInput label="Months" value={monthsText} onChangeText={setMonthsText} numeric />
+            <AppTextInput label="Months" value={monthsText} onChangeText={setMonthsText} numeric error={errors.months} />
             {months > 1 && amount > 0 ? (
               <AppText variant="bodySm" color="textMuted">
                 {formatPHP(Math.round((amount / months) * 100) / 100)}/month on your next {months} bills

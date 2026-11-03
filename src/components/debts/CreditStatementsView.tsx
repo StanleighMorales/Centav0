@@ -124,7 +124,8 @@ export function CreditStatementsView({
       {statements.length === 0 ? (
         <EmptyState icon="calendar" title="No bills yet" subtitle="Purchases on this credit line show up here on their bill" />
       ) : (
-        statements.map((s) => {
+        // Newest bill first; statements come oldest first because payments fill them in that order.
+        [...statements].reverse().map((s) => {
           const isOpen = open.includes(s.billDate);
           return (
             <View key={s.billDate}>

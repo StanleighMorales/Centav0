@@ -42,7 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Centav0 to attach receipt photos to your expenses."
+          "photosPermission": "Allow Centav0 to attach receipt photos to your expenses.",
+          "cameraPermission": "Allow Centav0 to scan receipts with the camera."
         }
       ],
       [

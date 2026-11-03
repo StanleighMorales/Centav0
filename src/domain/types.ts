@@ -89,6 +89,12 @@ export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;
   categoryId?: string; accountId?: string; note?: string; receiptUri?: string;
 }
+export interface TransactionItem extends AuditFields, LocalSyncFields {
+  id: string; userId: string; transactionId: string;
+  name: string; qty: number; price: number;
+}
+export interface TransactionItemInput { name: string; qty: number; price: number; }
+
 export interface TransactionFilter {
   from?: string; to?: string; type?: TransactionType;
   categoryId?: string; accountId?: string;

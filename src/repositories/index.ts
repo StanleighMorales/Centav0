@@ -9,6 +9,7 @@ import { SqliteLendingPersonRepository } from './sqlite/SqliteLendingPersonRepos
 import { SqliteLendingRepository } from './sqlite/SqliteLendingRepository';
 import { SqliteLendingPaymentRepository } from './sqlite/SqliteLendingPaymentRepository';
 import { SqliteRecurringTransactionRepository } from './sqlite/SqliteRecurringTransactionRepository';
+import { SqliteTransactionItemRepository } from './sqlite/SqliteTransactionItemRepository';
 import { SqliteInvestmentRepository } from './sqlite/SqliteInvestmentRepository';
 
 export const investmentRepo = new SqliteInvestmentRepository();
@@ -16,6 +17,7 @@ export const accountRepo = new SqliteAccountRepository();
 export const accountTypeRepo = new SqliteAccountTypeRepository();
 export const categoryRepo = new SqliteCategoryRepository();
 export const transactionRepo = new SqliteTransactionRepository();
+export const transactionItemRepo = new SqliteTransactionItemRepository();
 export const debtRepo = new SqliteDebtRepository();
 export const debtPaymentRepo = new SqliteDebtPaymentRepository();
 export const allocationRepo = new SqliteAllocationRepository();

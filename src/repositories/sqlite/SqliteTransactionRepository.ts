@@ -203,6 +203,10 @@ export class SqliteTransactionRepository {
         `UPDATE transactions SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
         [now, now, id, FIXED_USER_ID],
       );
+      await db.runAsync(
+        `UPDATE transaction_items SET deletedAt = ?, updatedAt = ?, isDirty = 1 WHERE transactionId = ? AND userId = ? AND deletedAt IS NULL`,
+        [now, now, id, FIXED_USER_ID],
+      );
       if (existing.type === 'Transfer' && existing.toAccountId) {
         // Reverse both legs: give back to source, take back from destination.
         await db.runAsync(

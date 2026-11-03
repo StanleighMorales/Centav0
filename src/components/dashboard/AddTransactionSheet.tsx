@@ -14,14 +14,14 @@ import { ReceiptItemsEditor } from '../transactions/ReceiptItemsEditor';
 import { CategorySheet } from '../categories/CategorySheet';
 import { AddAccountSheet } from '../accounts/AddAccountSheet';
 import { VoiceInputButton } from './VoiceInputButton';
-import { parseVoiceTransaction } from '../../utils/voiceTransaction';
-import { accountRepo, categoryRepo, transactionRepo, transactionItemRepo } from '../../repositories';
+import { parseVoiceCommand, parseVoiceTransaction, type VoiceCommand } from '../../utils/voiceTransaction';
+import { accountRepo, categoryRepo, debtRepo, transactionRepo, transactionItemRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { scanReceipt } from '../../utils/receiptScan';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
 import { theme, makeStyles, useTheme } from '../../theme';
-import type { Account, Category, Transaction, TransactionItemInput } from '../../domain/types';
+import type { Account, Category, Debt, Transaction, TransactionItemInput } from '../../domain/types';
 
 type Props = {
   visible: boolean;
@@ -31,11 +31,13 @@ type Props = {
   lockAccountAndType?: boolean;
   /** Fast dial: start listening or open the camera as soon as the sheet opens. */
   autoStart?: 'voice' | 'camera' | null;
+  /** Spoken transfers and debt payments go here instead of prefilling this form. The sheet closes itself. */
+  onVoiceCommand?: (cmd: Exclude<VoiceCommand, { kind: 'transaction' }>) => void;
 };
 
 const TYPES = ['Expense', 'Income'] as const;
 
-export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType, autoStart }: Props) {
+export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType, autoStart, onVoiceCommand }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [amount, setAmount] = useState(0);
@@ -47,6 +49,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   const [note, setNote] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
@@ -79,6 +82,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       const accs = await accountRepo.list();
       setCategories(cats);
       setAccounts(accs);
+      if (onVoiceCommand) setDebts(await debtRepo.list());
       if (initial) {
         setAmount(initial.amount);
         setType(initial.type as 'Expense' | 'Income');
@@ -136,6 +140,10 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
 
   // Voice only prefills the form; the user still reviews and taps Save.
   function applyVoice(text: string) {
+    if (onVoiceCommand) {
+      const cmd = parseVoiceCommand(text, accounts, debts);
+      if (cmd.kind !== 'transaction') { onClose(); onVoiceCommand(cmd); return; }
+    }
     const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined, accounts);
     changeType(parsed.type);
     if (parsed.accountId && !lockAccountAndType) setAccountId(parsed.accountId);

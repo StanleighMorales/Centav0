@@ -9,18 +9,18 @@ Speak a money move into the existing Voice button ("transfer all cash to gcash",
 - **No debt named → ask.** "pay my monthly balance with gcash" opens a picker of open debts.
 - **English only** for now.
 
-## Parser (`src/utils/voiceCommand.ts`)
-`parseVoiceCommand(text, accounts, debts)` returns one of:
-- `{ kind: 'transfer', fromId, toId, amount }`. Triggered by a leading `transfer | move | send`. The account after `to | into` is `toId`; the other named account is `fromId`. `all | everything | whole balance` sets `amount` to the source's `currentBalance`. An unnamed account or missing amount is `null`.
-- `{ kind: 'pay', debtId, accountId, amount }`. Triggered by `pay`. The account after `with | using | from | via` is `accountId`. That phrase is cut out first, then the debt is matched in what's left by creditor name, longest first. Card debts are auto-created with the card account's name as creditor, so "pay my maribank card with gcash" picks the MariBank debt even though MariBank is also an account. A spoken amount sets `amount` (Custom mode). Otherwise `amount` is `null` and the sheet uses its normal default: Monthly for installments, Full otherwise.
+## Parser (`src/utils/voiceTransaction.ts`)
+`parseVoiceCommand(text, accounts, debts)` lives next to `parseVoiceTransaction`. The utils self-checks run in plain Node, which can't resolve extensionless imports between utils. It returns one of:
+- `{ kind: 'transfer', fromId, toId, amount }`. Triggered by a leading `transfer | move | send`. The account after `to | into` is `toId`; the other named account is `fromId`. `all | everything | whole | entire` sets `amount` to the source's `currentBalance` (null if the source owes, e.g. a card). An unnamed account or missing amount is `null`.
+- `{ kind: 'pay', debtId, accountId, amount }`. Triggered by a leading `pay`, but only when a debt is named or the sentence has a debt word (`balance | loan | debt | card | installment | statement | due`). "pay 200 for parking" stays an expense. The account after `with | using | from | via` is `accountId`. That phrase is cut out first, then the debt is matched in what's left by creditor name, longest first. Card debts are auto-created with the card account's name as creditor, so "pay my maribank card with gcash" picks the MariBank debt even though MariBank is also an account. A spoken amount sets `amount` (Custom mode). Otherwise `amount` is `null` and the sheet uses its normal default: Monthly for installments, Full otherwise.
 - `{ kind: 'transaction' }` for anything else. The caller falls back to `parseVoiceTransaction` unchanged.
 
-Names reuse the account matching from `voiceTransaction.ts` (word-boundary, escaped, longest first). Only open (not Paid) debts are matched.
+Names match on word boundaries, escaped, longest first. Only open (not Paid) debts are matched.
 
 ## Routing
 1. `AddTransactionSheet.applyVoice` runs `parseVoiceCommand` first. Its accounts are already loaded; it also loads debts while open. For `transfer` / `pay` it calls a new `onVoiceCommand(cmd)` prop and closes.
 2. `app/(tabs)/_layout.tsx` handles the command:
-   - **transfer:** opens a `TransferSheet` rendered in the layout, with a new `initial={ accountId, toAccountId, amount }` prop.
+   - **transfer:** opens a `TransferSheet` rendered in the layout, with a new `prefill={ fromId, toId, amount }` prop.
    - **pay with `debtId`:** `router.push({ pathname: '/debts/[id]', params: { id, pay: '1', accountId?, amount? } })`. Once loaded, the debt screen opens one sheet, once:
      - card debt with unpaid charges → the existing "Pay All" settle sheet. A spoken amount is ignored, because settle pays whole charges.
      - card debt with no charges → nothing to pay; the screen just shows.
@@ -34,14 +34,16 @@ Names reuse the account matching from `voiceTransaction.ts` (word-boundary, esca
 - Existing sheet validation (overdraw, overpay) still applies.
 
 ## Check
-`src/utils/voiceCommand.check.mts`, in the style of `voiceTransaction.check.mts`:
+Added to `src/utils/voiceTransaction.check.mts`:
 - "transfer all cash to gcash" → full Cash balance, Cash → GCash
 - "transfer 500 from cash to gcash" and "move 500 to gcash" (no source)
 - "pay my loan on atome with gcash" → Atome debt, GCash, `amount` null
 - "pay 1,000 on atome using maribank" → custom amount
 - "pay my maribank card with gcash" → MariBank debt, not MariBank account
 - "pay my monthly balance with gcash" → `debtId` null, GCash
-- "coffee 120" → `transaction`
+- "coffee 120" and "pay 200 for parking" → `transaction`
+- "transfer all maribank to cash" → `amount` null
+- a paid-off debt is never matched
 
 `npx tsc --noEmit` and `npx expo-doctor` must pass.
 

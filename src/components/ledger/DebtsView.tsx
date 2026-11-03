@@ -99,8 +99,8 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
           {credit ? (
             credit.overdue > 0 ? (
               <View style={styles.paidRow}>
-                <Feather name="alert-circle" size={12} color={colors.negative} />
-                <AppText variant="bodySm" color="negative">{formatPHP(credit.overdue)} overdue</AppText>
+                <Feather name="alert-circle" size={12} color={colors.negative} style={styles.rowNoteIcon} />
+                <AppText variant="bodySm" color="negative" style={styles.rowNote}>{formatPHP(credit.overdue)} overdue</AppText>
               </View>
             ) : credit.dueNow > 0 && credit.current ? (
               <AppText variant="bodySm" color={STATUS_COLOR[credit.current.status]}>
@@ -108,8 +108,10 @@ function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDele
               </AppText>
             ) : credit.current ? (
               <View style={styles.paidRow}>
-                <Feather name="check" size={12} color={colors.positive} />
-                <AppText variant="bodySm" color="positive">Paid for {displayDate(credit.current.dueDate)}</AppText>
+                <Feather name="check" size={12} color={colors.positive} style={styles.rowNoteIcon} />
+                <AppText variant="bodySm" color="positive" style={styles.rowNote}>
+                  Paid for {displayDate(credit.current.dueDate)}
+                </AppText>
               </View>
             ) : credit.next ? (
               <AppText variant="bodySm" color="textMuted">
@@ -489,9 +491,14 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
     marginRight: theme.spacing[4],
   },
-  rowMain: { flex: 1, gap: theme.spacing[1] },
+  // The gap keeps a long status line from running into the amounts on the right.
+  rowMain: { flex: 1, gap: theme.spacing[1], marginRight: theme.spacing[3] },
   creditor: { fontWeight: '600' },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] },
   paidTrail: { alignItems: 'flex-end', gap: theme.spacing[1] },
-  paidRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] },
+  paidRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[1] },
+  // Text in a row only wraps if it may shrink; without this it overflowed under the amounts.
+  rowNote: { flexShrink: 1 },
+  // Centres the icon on the first line of text when the line wraps.
+  rowNoteIcon: { marginTop: theme.spacing[1] },
 }));

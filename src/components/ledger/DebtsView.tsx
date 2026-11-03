@@ -198,7 +198,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // Ledger header's + bumps addSignal; the first value is just the initial mount.
+  // The tab bar's + bumps addSignal on Ledger; the first value is just the initial mount.
   const firstSignal = useRef(addSignal);
   useEffect(() => {
     if (addSignal === firstSignal.current) return;

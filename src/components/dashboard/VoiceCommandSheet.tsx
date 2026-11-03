@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AppText } from '../ui/AppText';
@@ -7,10 +7,6 @@ import { parseVoiceCommand, type VoiceCommand } from '../../utils/voiceTransacti
 import { accountRepo, debtRepo } from '../../repositories';
 import { theme, makeStyles, useTheme } from '../../theme';
 import type { Account, Debt } from '../../domain/types';
-
-/** Opens the tab layout's voice command sheet from any tab screen (holding Ledger's +). */
-export const OpenVoiceCommandContext = createContext<() => void>(() => {});
-export const useOpenVoiceCommand = () => useContext(OpenVoiceCommandContext);
 
 type Props = {
   visible: boolean;

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { createContext, useRef, useState } from 'react';
 import { View, Pressable, GestureResponderEvent } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Reanimated, { ZoomIn } from 'react-native-reanimated';
@@ -8,6 +8,9 @@ import { theme, makeStyles, useTheme } from '../../theme';
 
 // Space screens must leave at the bottom so content clears the floating bar.
 export const TAB_BAR_SPACE = 104;
+
+/** Counts + taps on Ledger; the open Ledger section adds its own item (credit line, debt, lending) when it changes. */
+export const LedgerAddContext = createContext(0);
 
 type TabBarState = { index: number; routes: { key: string; name: string }[] };
 type Props = {
@@ -44,6 +47,7 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
   const activeName = state.routes[state.index]?.name;
+  const onLedger = activeName === 'ledger';
   const [dialOpen, setDialOpen] = useState(false);
   const [hover, setHover] = useState<DialMode | null>(null);
   const touchStart = useRef({ x: 0, y: 0 });
@@ -110,7 +114,7 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
               <Pressable
                 onPress={() => { setDialOpen(false); onAdd(d.mode); }}
                 accessibilityRole="button"
-                accessibilityLabel={d.mode === 'voice' ? 'Add transaction by voice' : 'Scan a receipt'}
+                accessibilityLabel={d.mode === 'voice' ? (onLedger ? 'Pay or transfer by voice' : 'Add transaction by voice') : 'Scan a receipt'}
                 style={({ pressed }) => [styles.dialBtn, (pressed || hover === d.mode) && styles.dialBtnHover]}
               >
                 <Feather name={d.icon} size={22} color={colors.onAccent} />
@@ -133,7 +137,7 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
           onTouchEnd={onTouchEnd}
           onTouchCancel={() => { setHover(null); setDialOpen(false); }}
           accessibilityRole="button"
-          accessibilityLabel={dialOpen ? 'Close quick add' : 'Add transaction'}
+          accessibilityLabel={dialOpen ? 'Close quick add' : onLedger ? 'Add to ledger' : 'Add transaction'}
           accessibilityHint="Hold for voice or receipt scan"
           style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
         >

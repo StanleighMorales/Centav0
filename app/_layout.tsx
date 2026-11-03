@@ -21,7 +21,6 @@ import { DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { getDatabase } from '../src/db/database';
 import { accountRepo } from '../src/repositories';
-import { materializeRecurringTransactions } from '../src/db/recurring';
 import { CalculatorProvider } from '../src/components/calculator/CalculatorOverlay';
 import { theme, AppThemeProvider, useTheme } from '../src/theme';
 
@@ -45,7 +44,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     getDatabase()
-      .then(() => materializeRecurringTransactions())
       .then(() => accountRepo.list())
       .then((accounts) => {
         setHasAccounts(accounts.length > 0);

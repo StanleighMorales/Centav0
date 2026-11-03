@@ -29,6 +29,7 @@ import { theme, makeStyles, useTheme } from '../../src/theme';
 import { TAB_BAR_SPACE } from '../../src/components/nav/FloatingTabBar';
 import { onDataChanged } from '../../src/utils/dataEvents';
 import { backupAgeLabel, backupIsStale, LAST_BACKUP_KEY } from '../../src/utils/backupRules';
+import { materializeRecurringTransactions } from '../../src/db/recurring';
 import type { Account, Transaction } from '../../src/domain/types';
 
 function parseOrder(raw: string | null): string[] {
@@ -110,6 +111,7 @@ export default function DashboardScreen() {
   const [hideCredit, setHideCredit] = useState(false);
   const [hideSavings, setHideSavings] = useState(false);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
+  const [stuckBills, setStuckBills] = useState<string[]>([]);
 
   // Restore the persisted period once on mount so it survives app restarts.
   useEffect(() => {
@@ -120,6 +122,7 @@ export default function DashboardScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const stuck = await materializeRecurringTransactions();
     // ponytail: sequential to avoid expo-sqlite concurrent promise queue bug
     const accs = await accountRepo.list();
     const cats = await categoryRepo.list();
@@ -128,7 +131,14 @@ export default function DashboardScreen() {
     setAccounts(accs);
     setOrder(parseOrder(await getSetting(ORDER_KEY)));
     setTotalBalance(sumBalance(accs.filter(isSpending)));
-    setCategoryMap(Object.fromEntries(cats.map((c) => [c.id, c.name])));
+    const categoryNames: Record<string, string> = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+    setCategoryMap(categoryNames);
+    // No amounts here: the account's balance may be hidden with the eye toggle.
+    setStuckBills(stuck.map(({ rule, notEnough }) => {
+      const name = rule.note || (rule.categoryId ? categoryNames[rule.categoryId] : null) || 'Recurring bill';
+      const account = accs.find((a) => a.id === rule.accountId)?.name ?? 'its account';
+      return notEnough ? `${name}: not enough in ${account}` : `${name}: couldn't post`;
+    }));
     setAllTxns(txns);
     const { from, to } = periodRangeIso(period);
     const periodTxns = txns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
@@ -241,6 +251,10 @@ export default function DashboardScreen() {
               </View>
             </LinearGradient>
           </View>
+
+          {stuckBills.length > 0 && (
+            <NoticeCard icon="alert-circle" title="Recurring didn't post" lines={stuckBills} onPress={() => router.push('/recurring')} />
+          )}
 
           {backupNotice && (
             <NoticeCard icon="upload" title="Time to back up" lines={[backupNotice]} onPress={() => router.push('/settings')} />

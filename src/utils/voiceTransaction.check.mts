@@ -1,7 +1,7 @@
 // Self-check for voiceTransaction.ts. No test framework in this repo — run it directly:
 //   node --experimental-strip-types src/utils/voiceTransaction.check.mts
 import assert from 'node:assert';
-import { parseVoiceCommand, parseVoiceTransaction } from './voiceTransaction.ts';
+import { parseVoiceCommand, parseVoiceTransaction, pickTranscript } from './voiceTransaction.ts';
 
 const cats = [
   { id: 'food', name: 'Food', type: 'Expense' as const },
@@ -26,6 +26,23 @@ const cats = [
   assert.strictEqual(r.note, 'Bread', 'account phrase dropped from note');
   assert.strictEqual(parseVoiceTransaction('paid 500 from bpi savings account', cats, undefined, accounts).accountId, 'bpi-sav', 'longest account name wins');
   assert.strictEqual(parseVoiceTransaction('lunch 200', cats, undefined, accounts).accountId, null, 'no account mentioned');
+}
+{
+  // Close matches in spending sentences too.
+  const accounts = [{ id: 'gcash', name: 'GCash' }, { id: 'mari', name: 'MariBank' }];
+  const r = parseVoiceTransaction('spent 200 on lunch using my mari bank', cats, undefined, accounts);
+  assert.strictEqual(r.accountId, 'mari', '"mari bank" is MariBank');
+  assert.strictEqual(r.note, 'Lunch', 'misheard account phrase dropped from note');
+  const custom = [...cats, { id: 'tuition', name: 'Tuition', type: 'Expense' as const }];
+  assert.strictEqual(parseVoiceTransaction('paid tuitions 5000', custom).categoryId, 'tuition', 'close category name');
+  assert.strictEqual(parseVoiceTransaction('lunch 200', custom).categoryId, 'food', 'keyword hints still beat close matches');
+}
+{
+  const names = ['Cash', 'GCash', 'MariBank', 'Atome', 'Food'];
+  assert.strictEqual(pickTranscript(['pay my atomic balance with g cash', 'pay my Atome balance with GCash'], names),
+    'pay my Atome balance with GCash', 'alternative naming more of our things wins');
+  assert.strictEqual(pickTranscript(['coffee 120', 'copy 120'], names), 'coffee 120', 'tie keeps the recognizer’s first guess');
+  assert.strictEqual(pickTranscript([], names), '', 'nothing heard');
 }
 {
   const r = parseVoiceTransaction('spent 1,250.50 on grab', cats);

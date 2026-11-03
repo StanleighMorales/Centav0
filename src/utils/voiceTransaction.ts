@@ -65,16 +65,19 @@ export function parseVoiceTransaction(
   const lower = text.toLowerCase();
   const hasWord = (pattern: string) => new RegExp(`\\b${pattern}\\b`, 'i').test(lower);
 
-  // Longest name first so "Other Income" beats "Other".
+  // Longest name first so "Other Income" beats "Other". Keyword hints beat a close-sounding name.
   const named = longestFirst(ofType).find((c) => hasWord(escapeRe(c.name.toLowerCase())));
-  const hinted = named ?? ofType.find((c) => CATEGORY_HINTS[c.name]?.some(hasWord));
-  const account = longestFirst(accounts).find((a) => hasWord(escapeRe(a.name.toLowerCase())));
+  const hinted = named
+    ?? ofType.find((c) => CATEGORY_HINTS[c.name]?.some(hasWord))
+    ?? takeClosest(text, ofType, (c) => c.name, '').hit;
+  const spoken = take(text, accounts, (a) => a.name);
+  const account = spoken.hit;
 
   let note = text;
   // "… using my GCash account" says where the money came from, not what it was for.
   if (account) {
     note = note.replace(
-      new RegExp(`\\b((from|using|via|with|through|thru|on|in|to|into)\\s+)?(my\\s+)?${escapeRe(account.name)}(\\s+(account|wallet))?\\b`, 'i'),
+      new RegExp(`\\b((from|using|via|with|through|thru|on|in|to|into)\\s+)?(my\\s+)?${escapeRe(spoken.matched)}(\\s+(account|wallet))?\\b`, 'i'),
       ' ',
     );
   }
@@ -100,15 +103,18 @@ const PAY_START = /^\s*(please\s+)?pay\b/i;
 const DEBT_WORDS = /\b(balance|loan|debt|card|installment|statement|dues?)\b/i;
 const ALL_WORDS = /\b(all|everything|whole|entire)\b/i;
 
-// First item named in `text`, optionally right after `lead` ("to my GCash"); also returns the text with that phrase cut out.
-function take<T>(text: string, items: T[], name: (x: T) => string, lead = ''): { hit: T | null; rest: string } {
-  if (items.length === 0) return { hit: null, rest: text };
+// `matched` is the words as spoken ("mari bank"); `rest` is the text with the whole phrase cut out.
+type Taken<T> = { hit: T | null; rest: string; matched: string };
+
+// First item named in `text`, optionally right after `lead` ("to my GCash").
+function take<T>(text: string, items: T[], name: (x: T) => string, lead = ''): Taken<T> {
+  if (items.length === 0) return { hit: null, rest: text, matched: '' };
   // Longest first so "BPI Savings" wins over "BPI" at the same spot.
   const sorted = [...items].sort((a, b) => name(b).length - name(a).length);
   const m = new RegExp(`${lead}\\b(${sorted.map((x) => escapeRe(name(x))).join('|')})\\b`, 'i').exec(text);
   if (!m) return takeClosest(text, items, name, lead);
   const hit = sorted.find((x) => name(x).toLowerCase() === m[1].toLowerCase()) ?? null;
-  return { hit, rest: `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}` };
+  return { hit, rest: `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`, matched: m[1] };
 }
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -129,7 +135,7 @@ function editDistance(a: string, b: string): number {
 // Compares each run of spoken words (one more word than the name has, so split names rejoin) and keeps the closest.
 // ponytail: plain edit distance, same first letter, at most 2 and 40% of the name; names under 4 letters must match exactly.
 // Swap in a phonetic match if mishearings get further off than that.
-function takeClosest<T>(text: string, items: T[], name: (x: T) => string, lead: string): { hit: T | null; rest: string } {
+function takeClosest<T>(text: string, items: T[], name: (x: T) => string, lead: string): Taken<T> {
   const words = [...text.matchAll(/[a-z0-9]+/gi)];
   const afterLead = new RegExp(`${lead}$`, 'i');
   let best: { hit: T; dist: number; start: number; end: number } | null = null;
@@ -152,9 +158,35 @@ function takeClosest<T>(text: string, items: T[], name: (x: T) => string, lead: 
       }
     });
   }
-  if (!best) return { hit: null, rest: text };
+  if (!best) return { hit: null, rest: text, matched: '' };
   const { hit, start, end } = best;
-  return { hit, rest: `${text.slice(0, start)} ${text.slice(end)}` };
+  return { hit, rest: `${text.slice(0, start)} ${text.slice(end)}`, matched: text.slice(start, end) };
+}
+
+/**
+ * The recognizer returns a few guesses ("pay my atomic balance", "pay my Atome balance"); keep the one that names
+ * the most of our accounts, lenders and categories. An exact name scores 2, a close one 1; ties keep its ranking.
+ */
+export function pickTranscript(alternatives: string[], names: string[]): string {
+  const score = (text: string) => {
+    let rest = text;
+    let total = 0;
+    // Longest first, and each spoken phrase counts once, so "g cash" can't score for both GCash and Cash.
+    for (const n of [...names].sort((a, b) => b.length - a.length)) {
+      const t = take(rest, [n], (x) => x);
+      if (!t.hit) continue;
+      total += squash(t.matched) === squash(n) ? 2 : 1;
+      rest = t.rest;
+    }
+    return total;
+  };
+  let best = alternatives[0] ?? '';
+  let bestScore = -1;
+  for (const a of alternatives) {
+    const s = score(a);
+    if (s > bestScore) { best = a; bestScore = s; }
+  }
+  return best;
 }
 
 const accountName = (a: AccountLike) => a.name;

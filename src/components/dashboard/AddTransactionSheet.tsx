@@ -208,7 +208,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
           <VoiceInputButton
             onResult={applyVoice}
             autoStart={autoStart === 'voice'}
-            names={[...accounts.map((a) => a.name), ...debts.map((d) => d.creditor)]}
+            names={[...accounts.map((a) => a.name), ...debts.map((d) => d.creditor), ...categories.map((c) => c.name)]}
           />
         )}
 

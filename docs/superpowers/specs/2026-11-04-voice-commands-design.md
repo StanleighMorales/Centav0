@@ -32,8 +32,9 @@ Names match on word boundaries, escaped, longest first. Only open (not Paid) deb
 On Ledger, voice means a payment or transfer. Holding the tab bar's + and picking Voice, or holding Ledger's own top-right +, opens `VoiceCommandSheet` (rendered in the tab layout, opened through `OpenVoiceCommandContext`). It starts listening right away, handles transfers and payments only, and routes through the same `onVoiceCommand`. If what was heard isn't a command, the sheet stays open with the heard text and says to tap + for expenses. Tapping either + still adds as before.
 
 ## Misheard names
-- The recognizer gets account and lender names as `contextualStrings` (Android 13+), so it favours "Atome" over "atomic".
-- If no name matches exactly, the parser takes the closest run of spoken words: same first letter, edit distance at most 2 and at most 40% of the name, names of 4+ letters only. This covers "atomic" → Atome and "g cash" / "G-Cash" → GCash, and keeps "home" from landing on Atome.
+- **Best of 5 guesses.** The recognizer returns up to 5 alternatives (`maxAlternatives: 5`). `pickTranscript` keeps the one naming the most of our accounts, lenders and categories (exact name 2 points, close name 1, each spoken phrase counted once); ties keep the recognizer's order.
+- **Name hints.** Account, lender and category names go to the recognizer as `contextualStrings`. Android 13+ only, so phones on 12 or below (e.g. the Android 11 test phone) rely on the two points around this one.
+- **Close matches.** If no name matches exactly, the parser takes the closest run of spoken words: same first letter, edit distance at most 2 and at most 40% of the name, names of 4+ letters only. This covers "atomic" → Atome and "g cash" / "mari bank" → GCash / MariBank, and keeps "home" from landing on Atome. It applies to commands and to spending sentences (account, and category after the keyword hints).
 
 ## Failure
 - An unrecognized name leaves that field blank; the user picks it in the sheet.

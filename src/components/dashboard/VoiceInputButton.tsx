@@ -3,6 +3,7 @@ import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { AppText } from '../ui/AppText';
+import { pickTranscript } from '../../utils/voiceTransaction';
 import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
@@ -11,7 +12,7 @@ type Props = {
   label?: string;
   /** Shown under the button before anything is heard. */
   hint?: string;
-  /** Names to listen for (accounts, lenders) so "Atome" isn't heard as "atomic". Android 13+. */
+  /** Names to listen for (accounts, lenders, categories) so "Atome" isn't heard as "atomic". */
   names?: string[];
 };
 
@@ -50,7 +51,10 @@ export function VoiceInputButton({
   });
   useSpeechRecognitionEvent('result', (e) => {
     if (!active.current) return;
-    const text = e.results[0]?.transcript ?? '';
+    // Interim results show the top guess; the final one picks whichever guess names our things.
+    const text = e.isFinal
+      ? pickTranscript(e.results.map((r) => r.transcript), namesRef.current ?? [])
+      : e.results[0]?.transcript ?? '';
     setHeard(text);
     if (e.isFinal && text) onResult(text);
   });
@@ -70,7 +74,12 @@ export function VoiceInputButton({
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!perm.granted) { setError(ERROR_TEXT['not-allowed']); return; }
     active.current = true;
-    ExpoSpeechRecognitionModule.start({ lang: 'en-PH', interimResults: true, contextualStrings: namesRef.current });
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-PH',
+      interimResults: true,
+      maxAlternatives: 5,
+      contextualStrings: namesRef.current,
+    });
   }
 
   return (

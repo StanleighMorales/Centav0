@@ -14,7 +14,12 @@ import { duesInMonth, type DueRow } from '../../utils/installmentSchedule';
 import { getSetting, setSetting } from '../../repositories/settings';
 import type { Account, Debt } from '../../domain/types';
 
-type Props = { debts: Debt[]; accounts: Account[] };
+type Props = {
+  debts: Debt[];
+  accounts: Account[];
+  /** Credit lines' statements by debt id: they owe each bill in its own month. */
+  credit: Record<string, { dueDate: string; remaining: number }[]>;
+};
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -34,7 +39,7 @@ function dueTag(iso: string): DueTag {
   return { label: days === 1 ? 'Tomorrow' : `In ${days} days`, color: 'textMuted', icon: 'calendar' };
 }
 
-export function MonthlyDebtView({ debts, accounts }: Props) {
+export function MonthlyDebtView({ debts, accounts, credit }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
@@ -65,7 +70,7 @@ export function MonthlyDebtView({ debts, accounts }: Props) {
     await setSetting(`expectedIncome:${key}`, String(value));
   }
 
-  const rows: DueRow[] = duesInMonth(debts, selectedMonth);
+  const rows: DueRow[] = duesInMonth(debts, selectedMonth, credit);
 
   const groups = Object.values(
     rows.reduce<Record<string, DueRow[]>>((acc, r) => {

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { FloatingTabBar } from '../../src/components/nav/FloatingTabBar';
+import { FloatingTabBar, LedgerAddContext } from '../../src/components/nav/FloatingTabBar';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
 import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { DebtPickerSheet } from '../../src/components/debts/DebtPickerSheet';
-import { VoiceCommandSheet, OpenVoiceCommandContext } from '../../src/components/dashboard/VoiceCommandSheet';
+import { VoiceCommandSheet } from '../../src/components/dashboard/VoiceCommandSheet';
 import { emitDataChanged } from '../../src/utils/dataEvents';
 import type { VoiceCommand } from '../../src/utils/voiceTransaction';
 import { useTheme } from '../../src/theme';
@@ -22,6 +22,7 @@ export default function TabLayout() {
   // A spoken payment that didn't name the debt waits here while the user picks one.
   const [unpicked, setUnpicked] = useState<PayCmd | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [ledgerAdd, setLedgerAdd] = useState(0);
 
   // The debt screen opens its payment sheet from these params, so card charges load in one place.
   function pay(debtId: string, cmd: PayCmd) {
@@ -38,17 +39,18 @@ export default function TabLayout() {
   }
 
   return (
-    <OpenVoiceCommandContext.Provider value={() => setVoiceOpen(true)}>
+    <LedgerAddContext.Provider value={ledgerAdd}>
       <Tabs
         tabBar={(props) => (
           <FloatingTabBar
             state={props.state}
             navigation={props.navigation}
-            // On Ledger, the dial's Voice speaks a payment or transfer instead of an expense.
-            onAdd={(mode) =>
-              mode === 'voice' && props.state.routes[props.state.index]?.name === 'ledger'
-                ? setVoiceOpen(true)
-                : openAdd(mode)}
+            // On Ledger, + adds to the open section and the dial's Voice speaks a payment or transfer instead of an expense.
+            onAdd={(mode) => {
+              if (props.state.routes[props.state.index]?.name !== 'ledger' || mode === 'camera') openAdd(mode);
+              else if (mode === 'voice') setVoiceOpen(true);
+              else setLedgerAdd((n) => n + 1);
+            }}
           />
         )}
         screenOptions={{
@@ -82,6 +84,6 @@ export default function TabLayout() {
         onPick={(debt) => { if (unpicked) pay(debt.id, unpicked); setUnpicked(null); }}
       />
       <VoiceCommandSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} onCommand={onVoiceCommand} />
-    </OpenVoiceCommandContext.Provider>
+    </LedgerAddContext.Provider>
   );
 }

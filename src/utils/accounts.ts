@@ -29,6 +29,21 @@ export function groupAccounts(accounts: Account[]): AccountGroup[] {
 }
 
 /** Income/Expense pair that moves an account from `from` to `to`. Null when equal. */
+type TxLike = { accountId: string; type: string; amount: number };
+const signed = (t: TxLike) => (t.type === 'Income' ? t.amount : -t.amount);
+
+/** Net balance change per account when a transaction is edited from `before` to `after`. */
+export function balanceChanges(before: TxLike, after: TxLike): Map<string, number> {
+  const changes = new Map([[before.accountId, -signed(before)]]);
+  changes.set(after.accountId, Math.round(((changes.get(after.accountId) ?? 0) + signed(after)) * 100) / 100);
+  return changes;
+}
+
+/** A change takes the account below zero. An already-negative account may still be helped. */
+export function overdraws(balance: number, change: number): boolean {
+  return change < 0 && Math.round((balance + change) * 100) / 100 < 0;
+}
+
 export function balanceAdjustment(from: number, to: number):
   { type: 'Income' | 'Expense'; amount: number } | null {
   const diff = Math.round((to - from) * 100) / 100; // roundCentavos, inlined so the self-check runs standalone

@@ -79,13 +79,25 @@ export interface DueRow {
  * balance, and not only in its first month. Lump-sum debts (buildSchedule -> []) fall back
  * to the balance owed on their single due date. Installments already marked 'paid' are
  * excluded so they stop counting toward what the user still owes.
+ *
+ * A credit line with statements (keyed by debt id in `credit`) owes each statement's unpaid part in its due month.
  */
-export function duesInMonth(debts: Debt[], month: Date): DueRow[] {
+export function duesInMonth(
+  debts: Debt[],
+  month: Date,
+  credit: Record<string, { dueDate: string; remaining: number }[]> = {},
+): DueRow[] {
   const inMonth = (iso: string) => {
     const d = new Date(iso);
     return d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth();
   };
   return debts.flatMap((debt) => {
+    const statements = credit[debt.id];
+    if (statements) {
+      return statements
+        .filter((s) => s.remaining > 0 && inMonth(s.dueDate))
+        .map((s) => ({ debt, dueDate: s.dueDate, amount: s.remaining }));
+    }
     if (debt.status === 'Paid') return [];
     const schedule = buildSchedule(debt);
     if (schedule.length > 0) {

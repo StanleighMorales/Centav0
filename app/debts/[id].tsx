@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator, Animated } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -13,83 +12,49 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { CreditStatementsView, PurchaseLine } from '../../src/components/debts/CreditStatementsView';
+import { EarlierBalanceSheet } from '../../src/components/debts/EarlierBalanceSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme, makeStyles, useTheme } from '../../src/theme';
-import { displayDate } from '../../src/utils/date';
+import { displayDate, groupByMonth, nowIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
+import { STATUS_COLOR, STATUS_LABEL, creditStatus, statementsFor, summarize } from '../../src/utils/creditStatements';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
 type Charge = Transaction & { label: string };
-type SettleTarget = { transactionIds: string[]; amount: number; label: string };
 
-const CHARGE_ACTION_WIDTH = 76;
-
-type ChargeRowProps = {
-  charge: Charge;
-  onPay: (c: Charge) => void;
-  onEdit: (c: Charge) => void;
-  onDelete: (c: Charge) => void;
+type MonthHeaderProps = {
+  label: string;
+  count: number;
+  noun: string;
+  total: number;
+  color: 'positive';
+  open: boolean;
+  onPress: () => void;
 };
 
-function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
+// One collapsed line per month: its total and how many items, tap to show them.
+function MonthHeader({ label, count, noun, total, color, open, onPress }: MonthHeaderProps) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const swipeRef = useRef<Swipeable>(null);
-  const close = () => swipeRef.current?.close();
-
+  const items = `${count} ${count === 1 ? noun : `${noun}s`}`;
   return (
-    <Swipeable
-      ref={swipeRef}
-      overshootRight={false}
-      renderRightActions={(progress) => (
-        <Animated.View
-          style={[
-            styles.chargeActions,
-            {
-              transform: [{
-                translateX: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [CHARGE_ACTION_WIDTH * 2, 0],
-                }),
-              }],
-            },
-          ]}
-        >
-          <Pressable
-            onPress={() => { close(); onEdit(charge); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Edit charge ${charge.label}`}
-            style={[styles.chargeAction, styles.chargeEditAction]}
-          >
-            <Feather name="edit-2" size={18} color={colors.textPrimary} />
-            <AppText variant="labelSm" color="textPrimary">Edit</AppText>
-          </Pressable>
-          <Pressable
-            onPress={() => { close(); onDelete(charge); }}
-            accessibilityRole="button"
-            accessibilityLabel={`Delete charge ${charge.label}`}
-            style={[styles.chargeAction, styles.chargeDeleteAction]}
-          >
-            <Feather name="trash-2" size={18} color={colors.textPrimary} />
-            <AppText variant="labelSm" color="textPrimary">Delete</AppText>
-          </Pressable>
-        </Animated.View>
-      )}
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`${label}, ${items}, ${formatPHP(total)}`}
+      style={({ pressed }) => [styles.paymentRow, pressed && styles.rowPressed]}
     >
-      <Pressable
-        onPress={() => onPay(charge)}
-        accessibilityRole="button"
-        accessibilityLabel={`Pay charge ${charge.label}, ${formatPHP(charge.amount)}`}
-        style={({ pressed }) => [styles.chargeRow, pressed && styles.rowPressed]}
-      >
-        <View style={styles.chargeInfo}>
-          <AppText variant="body">{charge.label}</AppText>
-          <AppText variant="bodySm" color="textMuted">{displayDate(charge.date)}</AppText>
-        </View>
-        <Amount value={charge.amount} variant="amountSm" semanticColor={false} />
-        <Feather name="chevron-right" size={16} color={colors.textMuted} />
-      </Pressable>
-    </Swipeable>
+      <View style={styles.paymentIconCircle}>
+        <Feather name={open ? 'chevron-down' : 'chevron-right'} size={18} color={colors.textSecondary} />
+      </View>
+      <View style={styles.paymentInfo}>
+        <AppText variant="body">{label}</AppText>
+        <AppText variant="bodySm" color="textMuted">{items}</AppText>
+      </View>
+      <Amount value={total} variant="amountSm" color={color} semanticColor={false} />
+    </Pressable>
   );
 }
 
@@ -109,12 +74,14 @@ export default function DebtDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
-  const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [editCharge, setEditCharge] = useState<Charge | null>(null);
   const [deleteCharge, setDeleteCharge] = useState<Charge | null>(null);
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
-  const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
+  const [payPrefill, setPayPrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
+  const [earlierVisible, setEarlierVisible] = useState(false);
+  // Expanded payment-history months; every month starts collapsed to its total.
+  const [openMonths, setOpenMonths] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -125,33 +92,21 @@ export default function DebtDetailScreen() {
     setDebt(d);
     setPayments(p);
     setAccounts(a);
-    let owed: Charge[] = [];
+    let purchases: Charge[] = [];
     if (d?.linkedAccountId) {
+      // Every purchase on a credit line feeds its statements; payments decide what's still owed.
       const txns = await transactionRepo.list({ accountId: d.linkedAccountId, type: 'Expense' });
       const cats = await categoryRepo.list();
       const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
-      // Only unsettled charges are still owed; settled ones live in Payment History.
-      owed = txns
-        .filter((t) => t.settledAt == null)
-        .map((t) => ({
-          ...t,
-          label: t.note || catName[t.categoryId ?? ''] || 'Charge',
-        }));
+      purchases = txns.map((t) => ({ ...t, label: t.note || catName[t.categoryId ?? ''] || 'Charge' }));
     }
-    setCharges(owed);
+    setCharges(purchases);
     setLoading(false);
 
-    if (pay === '1' && d && !voicePayDone.current) {
+    if (pay === '1' && d && !voicePayDone.current && d.outstandingBalance > 0) {
       voicePayDone.current = true;
-      const prefill = { accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined };
-      // A card pays whole charges, so a spoken amount is ignored and it settles everything owed.
-      if (d.linkedAccountId && owed.length > 0) {
-        setVoicePrefill(prefill);
-        setSettleTarget({ transactionIds: owed.map((c) => c.id), amount: d.outstandingBalance, label: 'all charges' });
-      } else if (!d.linkedAccountId && d.status !== 'Paid') {
-        setVoicePrefill(prefill);
-        setPaymentVisible(true);
-      }
+      setPayPrefill({ accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined });
+      setPaymentVisible(true);
     }
   }, [id, pay, voiceAccountId, voiceAmount]);
 
@@ -159,6 +114,9 @@ export default function DebtDetailScreen() {
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const paymentMonths = groupByMonth(payments);
+  const toggleMonth = (key: string) =>
+    setOpenMonths((open) => (open.includes(key) ? open.filter((k) => k !== key) : [...open, key]));
 
   async function handleDelete() {
     if (!debt) return;
@@ -190,10 +148,17 @@ export default function DebtDetailScreen() {
     );
   }
 
-  const statusColor = debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
-  const linkedCreditLimit = debt.linkedAccountId
-    ? accounts.find((a) => a.id === debt.linkedAccountId)?.creditLimit ?? null
-    : null;
+  const creditAccount = debt.linkedAccountId ? accounts.find((a) => a.id === debt.linkedAccountId) : undefined;
+  const linkedCreditLimit = creditAccount?.creditLimit ?? null;
+  const today = nowIso();
+  const credit = creditAccount ? statementsFor(creditAccount, charges, payments, debt.outstandingBalance, today) : null;
+  const creditSummary = credit ? summarize(credit.statements, today) : null;
+  // A credit line's status comes from its bills, not from owing something: future installments aren't overdue.
+  const badge = creditSummary ? creditStatus(creditSummary) : null;
+  const statusColor = badge
+    ? STATUS_COLOR[badge]
+    : debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
+  const statusLabel = badge ? STATUS_LABEL[badge] : debt.status;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -228,23 +193,28 @@ export default function DebtDetailScreen() {
         <Card style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <AppText variant="h3" style={styles.flex}>{debt.creditor}</AppText>
-            <AppText variant="labelLg" color={statusColor}>{debt.status}</AppText>
+            <AppText variant="labelLg" color={statusColor}>{statusLabel}</AppText>
           </View>
-          {debt.status === 'Paid' ? (
+          {linkedCreditLimit != null ? (
+            <>
+              <Amount
+                value={debt.outstandingBalance}
+                variant="amountLg"
+                semanticColor={false}
+                color={debt.outstandingBalance > 0 ? 'negative' : 'textPrimary'}
+              />
+              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+                owed of {formatPHP(linkedCreditLimit)} limit
+              </AppText>
+              <AppText variant="bodySm" color="positive">
+                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
+              </AppText>
+            </>
+          ) : debt.status === 'Paid' ? (
             <>
               <Amount value={totalPaid} variant="amountLg" semanticColor={false} color="positive" />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
                 Fully paid • {formatPHP(debt.originalAmount)} borrowed
-              </AppText>
-            </>
-          ) : linkedCreditLimit != null ? (
-            <>
-              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
-              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
-                of {formatPHP(linkedCreditLimit)} limit
-              </AppText>
-              <AppText variant="bodySm" color="positive">
-                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
               </AppText>
             </>
           ) : (
@@ -255,7 +225,12 @@ export default function DebtDetailScreen() {
               </AppText>
             </>
           )}
-          {debt.dueDate ? (
+          {creditAccount && !credit ? (
+            <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+              Set a bill date and due date on this account to see monthly bills.
+            </AppText>
+          ) : null}
+          {debt.dueDate && !credit ? (
             <View style={styles.metaRow}>
               <Feather name="calendar" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}>
@@ -283,36 +258,44 @@ export default function DebtDetailScreen() {
           ) : null}
         </Card>
 
-        {debt.status !== 'Paid' && !debt.linkedAccountId && (
+        {(creditAccount ? debt.outstandingBalance > 0 : debt.status !== 'Paid') && (
           <View style={styles.actions}>
             <Button
-              label="Add Payment"
+              label={creditAccount ? 'Pay' : 'Add Payment'}
               onPress={() => setPaymentVisible(true)}
               style={styles.flex}
             />
           </View>
         )}
 
-        {debt.linkedAccountId && charges.length > 0 && (
+        {credit && creditSummary && creditAccount ? (
+          <CreditStatementsView
+            statements={credit.statements}
+            summary={creditSummary}
+            earlierAmount={credit.earlierAmount}
+            earlierRemaining={credit.earlierRemaining}
+            earlierMonths={creditAccount.earlierBalanceMonths}
+            earlierFirstBill={creditAccount.earlierBalanceFirstBill}
+            onChangeEarlier={() => setEarlierVisible(true)}
+            purchases={charges}
+            onEditPurchase={(cid) => setEditCharge(charges.find((c) => c.id === cid) ?? null)}
+            onDeletePurchase={(cid) => setDeleteCharge(charges.find((c) => c.id === cid) ?? null)}
+          />
+        ) : null}
+
+        {/* Without a bill date there are no bills to hold purchases, so list them plainly. */}
+        {creditAccount && !credit && charges.length > 0 && (
           <>
-            <Button
-              label={`Pay All · ${formatPHP(debt.outstandingBalance)}`}
-              onPress={() =>
-                setSettleTarget({
-                  transactionIds: charges.map((c) => c.id),
-                  amount: debt.outstandingBalance,
-                  label: 'all charges',
-                })
-              }
-            />
-            <AppText variant="h3" style={styles.sectionTitle}>Charges</AppText>
+            <AppText variant="h3" style={styles.sectionTitle}>Purchases</AppText>
             {charges.map((c) => (
-              <ChargeRow
+              <PurchaseLine
                 key={c.id}
-                charge={c}
-                onPay={(charge) => setSettleTarget({ transactionIds: [charge.id], amount: charge.amount, label: charge.label })}
-                onEdit={setEditCharge}
-                onDelete={setDeleteCharge}
+                title={c.label}
+                subtitle={`Bought ${displayDate(c.date)}`}
+                amount={c.amount}
+                onPress={() => setEditCharge(c)}
+                onLongPress={() => setDeleteCharge(c)}
+                accessibilityHint="Tap to edit, hold to delete"
               />
             ))}
           </>
@@ -323,20 +306,35 @@ export default function DebtDetailScreen() {
         {payments.length === 0 ? (
           <EmptyState icon="dollar-sign" title="No payments yet" subtitle="Record a payment above" />
         ) : (
-          payments.map((p) => (
-            <View key={p.id} style={styles.paymentRow}>
-              <View style={styles.paymentIconCircle}>
-                <Feather name="dollar-sign" size={18} color={colors.positive} />
+          paymentMonths.map((m) => {
+            const open = openMonths.includes(m.key);
+            return (
+              <View key={m.key}>
+                <MonthHeader
+                  label={m.label}
+                  count={m.items.length}
+                  noun="payment"
+                  total={m.total}
+                  color="positive"
+                  open={open}
+                  onPress={() => toggleMonth(m.key)}
+                />
+                {open
+                  ? m.items.map((p) => (
+                    <View key={p.id} style={[styles.paymentRow, styles.monthDetail]}>
+                      <View style={styles.paymentInfo}>
+                        <AppText variant="body">{displayDate(p.date)}</AppText>
+                        <AppText variant="bodySm" color="textMuted">
+                          via {accountMap[p.accountId] ?? 'Unknown account'}
+                        </AppText>
+                      </View>
+                      <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
+                    </View>
+                  ))
+                  : null}
               </View>
-              <View style={styles.paymentInfo}>
-                <AppText variant="body">{displayDate(p.date)}</AppText>
-                <AppText variant="bodySm" color="textMuted">
-                  via {accountMap[p.accountId] ?? 'Unknown account'}
-                </AppText>
-              </View>
-              <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
-            </View>
-          ))
+            );
+          })
         )}
 
         {debt.linkedAccountId ? null : (
@@ -362,26 +360,38 @@ export default function DebtDetailScreen() {
 
       <AddPaymentSheet
         visible={paymentVisible}
-        onClose={() => { setPaymentVisible(false); setVoicePrefill(null); }}
+        onClose={() => { setPaymentVisible(false); setPayPrefill(null); }}
         onSuccess={load}
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
-        monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
-        initialAccountId={voicePrefill?.accountId}
-        initialAmount={voicePrefill?.amount}
+        // Before the bill date nothing is billed yet; offer the upcoming bill so it can be paid early.
+        monthlyPayment={
+          creditSummary
+            ? creditSummary.dueNow || creditSummary.nextUnpaid?.remaining || undefined
+            : debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined
+        }
+        monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}
+        cashOnly={!!creditAccount}
+        initialAccountId={payPrefill?.accountId}
+        initialAmount={payPrefill?.amount}
       />
 
-      <AddPaymentSheet
-        visible={settleTarget !== null}
-        onClose={() => { setSettleTarget(null); setVoicePrefill(null); }}
-        onSuccess={load}
-        debtId={debt.id}
-        creditor={debt.creditor}
-        outstandingBalance={debt.outstandingBalance}
-        settle={settleTarget ?? undefined}
-        initialAccountId={voicePrefill?.accountId}
-      />
+      {creditAccount && credit ? (
+        <EarlierBalanceSheet
+          visible={earlierVisible}
+          onClose={() => setEarlierVisible(false)}
+          onSaved={load}
+          account={creditAccount}
+          amount={credit.earlierAmount}
+          remaining={credit.earlierRemaining}
+          onPay={() => {
+            setEarlierVisible(false);
+            setPayPrefill({ amount: credit.earlierRemaining });
+            setPaymentVisible(true);
+          }}
+        />
+      ) : null}
 
       <ConfirmDialog
         visible={deleteVisible}
@@ -471,25 +481,7 @@ const useStyles = makeStyles((c) => ({
     marginRight: theme.spacing[4],
   },
   paymentInfo: { flex: 1, gap: theme.spacing[1] },
-  chargeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderDefault,
-  },
-  chargeInfo: { flex: 1, gap: theme.spacing[1] },
   rowPressed: { opacity: 0.6 },
-  chargeActions: { flexDirection: 'row', alignItems: 'stretch' },
-  chargeAction: {
-    width: CHARGE_ACTION_WIDTH,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing[2],
-  },
-  chargeEditAction: { backgroundColor: c.bgElevated },
-  chargeDeleteAction: { backgroundColor: c.negative },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -498,4 +490,6 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: theme.spacing[5],
     marginTop: theme.spacing[3],
   },
+  // Indented under its month, lined up with the month's text rather than its chevron.
+  monthDetail: { paddingLeft: 36 + theme.spacing[4] },
 }));

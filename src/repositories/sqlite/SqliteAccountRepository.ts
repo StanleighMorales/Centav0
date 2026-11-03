@@ -3,6 +3,7 @@ import { newId } from '../../utils/id';
 import { nowIso, nextDueDateIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
+import { syncLinkedCreditDebt } from './creditSync';
 import type { Account, CreateAccountInput, UpdateAccountInput } from '../../domain/types';
 
 function rowToAccount(row: any): Account {
@@ -13,6 +14,9 @@ function rowToAccount(row: any): Account {
     initialBalance: row.initialBalance, currentBalance: row.currentBalance,
     billDay: row.billDay ?? null, dueDay: row.dueDay ?? null,
     creditLimit: row.creditLimit ?? null,
+    billDayNextStatement: row.billDayNextStatement === 1,
+    earlierBalanceMonths: row.earlierBalanceMonths ?? null,
+    earlierBalanceFirstBill: row.earlierBalanceFirstBill ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null, isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
   };
@@ -68,11 +72,12 @@ export class SqliteAccountRepository {
       : roundCentavos(input.initialBalance);
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO accounts (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, creditLimit, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        `INSERT INTO accounts (id, userId, name, accountTypeId, allowsOverdraft, initialBalance, currentBalance, billDay, dueDay, creditLimit, billDayNextStatement, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
         [
           id, FIXED_USER_ID, input.name, input.accountTypeId, accountType.allowsOverdraft,
-          initial, initial, input.billDay ?? null, input.dueDay ?? null, input.creditLimit ?? null, now, now,
+          initial, initial, input.billDay ?? null, input.dueDay ?? null, input.creditLimit ?? null,
+          input.billDayNextStatement ? 1 : 0, now, now,
         ],
       );
       if (accountType.allowsOverdraft) {
@@ -104,15 +109,22 @@ export class SqliteAccountRepository {
       allowsOverdraft = accountType.allowsOverdraft === 1;
     }
     await db.runAsync(
-      `UPDATE accounts SET name = ?, accountTypeId = ?, allowsOverdraft = ?, billDay = ?, dueDay = ?, creditLimit = ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+      `UPDATE accounts SET name = ?, accountTypeId = ?, allowsOverdraft = ?, billDay = ?, dueDay = ?, creditLimit = ?,
+         billDayNextStatement = ?, earlierBalanceMonths = ?, earlierBalanceFirstBill = ?, updatedAt = ?, isDirty = 1
+       WHERE id = ? AND userId = ?`,
       [
         input.name ?? existing.name, input.accountTypeId ?? existing.accountTypeId, allowsOverdraft ? 1 : 0,
         'billDay' in input ? (input.billDay ?? null) : existing.billDay,
         'dueDay' in input ? (input.dueDay ?? null) : existing.dueDay,
         'creditLimit' in input ? (input.creditLimit ?? null) : existing.creditLimit,
+        (input.billDayNextStatement ?? existing.billDayNextStatement) ? 1 : 0,
+        'earlierBalanceMonths' in input ? (input.earlierBalanceMonths ?? null) : existing.earlierBalanceMonths,
+        'earlierBalanceFirstBill' in input ? (input.earlierBalanceFirstBill ?? null) : existing.earlierBalanceFirstBill,
         updatedAt, id, FIXED_USER_ID,
       ],
     );
+    // A new limit or due day changes what the linked debt owes and when.
+    await syncLinkedCreditDebt(db, id);
     const updated = await this.getById(id);
     if (!updated) throw new Error('Account vanished after update');
     return updated;

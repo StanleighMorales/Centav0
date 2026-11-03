@@ -1,0 +1,194 @@
+// Monthly statements for a credit line (Atome, credit cards). Pure, so the self-check runs in plain Node.
+
+export type StatementStatus = 'paid' | 'overdue' | 'dueSoon' | 'due' | 'upcoming';
+
+/** Theme colour per status. Only an overdue bill is red; what's owed but not due stays neutral. */
+export const STATUS_COLOR = {
+  paid: 'positive',
+  overdue: 'negative',
+  dueSoon: 'warning',
+  due: 'textPrimary',
+  upcoming: 'textMuted',
+} as const satisfies Record<StatementStatus, string>;
+
+export const STATUS_LABEL: Record<StatementStatus, string> = {
+  paid: 'Paid',
+  overdue: 'Overdue',
+  dueSoon: 'Due soon',
+  due: 'Due',
+  upcoming: 'Upcoming',
+};
+
+/** Part of one bill: an installment of a purchase (`chargeId`), or of the earlier balance (`chargeId` null). */
+export type StatementPiece = { chargeId: string | null; index: number; of: number; amount: number; paid: number };
+
+export type Statement = {
+  billDate: string;
+  dueDate: string;
+  amount: number;
+  paid: number;
+  remaining: number;
+  status: StatementStatus;
+  pieces: StatementPiece[];
+};
+
+export type StatementInput = {
+  billDay: number;
+  dueDay: number;
+  /** Purchases on the bill day go on the next statement instead of that day's. */
+  billDayNext: boolean;
+  /** Purchases on the card; `months` null = pay in full on one statement. */
+  charges: { id?: string; amount: number; date: string; months: number | null }[];
+  payments: { amount: number }[];
+  /** What the card says is owed right now (limit − available). */
+  owed: number;
+  /** How to split what's owed beyond recorded purchases. Null fields: one month, next bill. */
+  earlier: { months: number | null; firstBill: string | null };
+  today: string;
+};
+
+// ponytail: Manila is fixed UTC+8 (no DST), same as utils/date.ts.
+const OFFSET = 8 * 3600 * 1000;
+const DAY = 24 * 3600 * 1000;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Month index (year * 12 + month) and day of the month, in Manila.
+function manila(iso: string): { mi: number; d: number } {
+  const t = new Date(Date.parse(iso) + OFFSET);
+  return { mi: t.getUTCFullYear() * 12 + t.getUTCMonth(), d: t.getUTCDate() };
+}
+
+// Manila midnight of `day` in month `mi`, clamped to the month's last day (bill day 31 → 28 Feb).
+function dayIso(mi: number, day: number): string {
+  const y = Math.floor(mi / 12);
+  const m = mi % 12;
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(day, last)) - OFFSET).toISOString();
+}
+
+// Which statement month a purchase on `iso` lands on.
+function billMonth(iso: string, billDay: number, billDayNext: boolean): number {
+  const { mi, d } = manila(iso);
+  return d < billDay || (d === billDay && !billDayNext) ? mi : mi + 1;
+}
+
+// Splits `amount` over `months` statements starting at `start`; the last piece takes the leftover centavos.
+function spread(into: Map<number, StatementPiece[]>, amount: number, months: number, start: number, chargeId: string | null) {
+  const n = Math.max(1, Math.floor(months));
+  const piece = round2(amount / n);
+  for (let i = 0; i < n; i++) {
+    const part = i === n - 1 ? round2(amount - piece * (n - 1)) : piece;
+    const pieces = into.get(start + i) ?? [];
+    pieces.push({ chargeId, index: i + 1, of: n, amount: part, paid: 0 });
+    into.set(start + i, pieces);
+  }
+}
+
+/** The next `count` bill dates from `today` on: choices for where an earlier balance starts. */
+export function firstBillOptions(billDay: number, today: string, count: number): string[] {
+  const start = billMonth(today, billDay, false);
+  return Array.from({ length: count }, (_, i) => dayIso(start + i, billDay));
+}
+
+export function buildStatements(
+  input: StatementInput,
+): { statements: Statement[]; earlierAmount: number; earlierRemaining: number } {
+  const { billDay, dueDay, billDayNext, charges, payments, owed, earlier, today } = input;
+  const byMonth = new Map<number, StatementPiece[]>();
+
+  // Whatever the card owes beyond recorded purchases is the earlier balance; a negative gap (money
+  // moved into the card) already paid part of the bills. It's spread first: it's the oldest debt on any bill.
+  const charged = charges.reduce((s, c) => s + c.amount, 0);
+  const paidIn = payments.reduce((s, p) => s + p.amount, 0);
+  const gap = round2(owed - (charged - paidIn));
+  if (gap > 0) {
+    const start = earlier.firstBill ? manila(earlier.firstBill).mi : billMonth(today, billDay, false);
+    spread(byMonth, gap, earlier.months ?? 1, start, null);
+  }
+  for (const c of charges) spread(byMonth, c.amount, c.months ?? 1, billMonth(c.date, billDay, billDayNext), c.id ?? null);
+
+  let credit = round2(paidIn + Math.max(0, -gap));
+  const now = Date.parse(today);
+  const statements = [...byMonth.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([mi, pieces]): Statement => {
+      const amount = round2(pieces.reduce((sum, p) => sum + p.amount, 0));
+      const paid = round2(Math.min(credit, amount));
+      credit = round2(credit - paid);
+      // Within a bill, payment covers pieces in order (earlier balance first).
+      let left = paid;
+      for (const piece of pieces) {
+        piece.paid = round2(Math.min(left, piece.amount));
+        left = round2(left - piece.paid);
+      }
+      const remaining = round2(amount - paid);
+      const billDate = dayIso(mi, billDay);
+      const dueDate = dayIso(dueDay > billDay ? mi : mi + 1, dueDay);
+      const due = Date.parse(dueDate);
+      const status: StatementStatus =
+        remaining <= 0 ? 'paid'
+        : Date.parse(billDate) > now ? 'upcoming'
+        : now >= due + DAY ? 'overdue'
+        : due - now <= 7 * DAY ? 'dueSoon'
+        : 'due';
+      return { billDate, dueDate, amount, paid, remaining, status, pieces };
+    });
+  // The gap is the earlier balance's original size (paying lowers owed and raises paidIn equally);
+  // what's left of it comes from its pieces.
+  const earlierRemaining = round2(statements.reduce(
+    (sum, st) => sum + st.pieces.filter((p) => p.chargeId === null).reduce((s, p) => s + p.amount - p.paid, 0),
+    0,
+  ));
+  return { statements, earlierAmount: Math.max(0, gap), earlierRemaining };
+}
+
+/**
+ * Billed-and-unpaid total, the overdue part of it, the latest billed statement, the next unbilled one, and the
+ * oldest bill with anything left on it — billed or not, since new purchases sit on a bill before its bill date.
+ */
+export function summarize(statements: Statement[], today: string) {
+  const now = Date.parse(today);
+  const billed = statements.filter((s) => Date.parse(s.billDate) <= now);
+  return {
+    dueNow: round2(billed.reduce((s, x) => s + x.remaining, 0)),
+    overdue: round2(billed.filter((s) => s.status === 'overdue').reduce((s, x) => s + x.remaining, 0)),
+    current: billed[billed.length - 1],
+    next: statements.find((s) => Date.parse(s.billDate) > now),
+    nextUnpaid: statements.find((s) => s.remaining > 0),
+  };
+}
+
+type CreditAccountLike = {
+  billDay: number | null;
+  dueDay: number | null;
+  billDayNextStatement: boolean;
+  earlierBalanceMonths: number | null;
+  earlierBalanceFirstBill: string | null;
+};
+
+/** Statements for a credit account, or null until it has both a bill day and a due day. */
+export function statementsFor(
+  account: CreditAccountLike,
+  charges: { id: string; amount: number; date: string; installmentMonths: number | null }[],
+  payments: { amount: number }[],
+  owed: number,
+  today: string,
+) {
+  if (account.billDay == null || account.dueDay == null) return null;
+  return buildStatements({
+    billDay: account.billDay,
+    dueDay: account.dueDay,
+    billDayNext: account.billDayNextStatement,
+    charges: charges.map((c) => ({ id: c.id, amount: c.amount, date: c.date, months: c.installmentMonths })),
+    payments,
+    owed,
+    earlier: { months: account.earlierBalanceMonths, firstBill: account.earlierBalanceFirstBill },
+    today,
+  });
+}
+
+/** One status for the whole credit line: overdue, else the next unpaid bill's, else paid (nothing owed at all). */
+export function creditStatus(summary: ReturnType<typeof summarize>): StatementStatus {
+  if (summary.overdue > 0) return 'overdue';
+  return summary.nextUnpaid?.status ?? 'paid';
+}

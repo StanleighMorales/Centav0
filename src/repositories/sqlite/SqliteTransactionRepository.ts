@@ -1,9 +1,10 @@
 import { getDatabase } from '../../db/database';
 import { newId } from '../../utils/id';
 import { nowIso } from '../../utils/date';
-import { roundCentavos } from '../../utils/currency';
+import { roundCentavos, formatPHP } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
+import { balanceChanges, overdraws } from '../../utils/accounts';
 import type { Transaction, CreateTransactionInput, UpdateTransactionInput, TransactionFilter, CreateTransferInput } from '../../domain/types';
 
 function rowToTransaction(row: any): Transaction {
@@ -16,6 +17,7 @@ function rowToTransaction(row: any): Transaction {
     note: row.note ?? null,
     receiptUri: row.receiptUri ?? null,
     settledAt: row.settledAt ?? null,
+    installmentMonths: row.installmentMonths ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -26,6 +28,15 @@ function rowToTransaction(row: any): Transaction {
 // explicitly by createTransfer/update/softDelete — delta() is not used for them.
 function delta(type: string, amount: number): number {
   return type === 'Income' ? amount : -amount;
+}
+
+// Cash and e-wallets can't be overspent, and a credit line can't go past its limit (its balance is available credit).
+function notEnough(account: { name: string; currentBalance: number; allowsOverdraft: number }): Error {
+  return new Error(
+    account.allowsOverdraft === 1
+      ? 'Expense exceeds available credit'
+      : `Only ${formatPHP(Math.max(0, account.currentBalance))} left in ${account.name}`,
+  );
 }
 
 export class SqliteTransactionRepository {
@@ -70,20 +81,20 @@ export class SqliteTransactionRepository {
     const amount = roundCentavos(input.amount);
     if (input.type === 'Expense') {
       const account = await db.getFirstAsync<any>(
-        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        `SELECT name, currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
         [input.accountId, FIXED_USER_ID],
       );
       if (!account) throw new Error(`Account ${input.accountId} not found`);
-      // Credit accounts spend down available balance like any other account now — can't overspend it.
-      if (account.allowsOverdraft === 1 && amount > roundCentavos(account.currentBalance)) {
-        throw new Error('Expense exceeds available credit');
-      }
+      if (amount > roundCentavos(account.currentBalance)) throw notEnough(account);
     }
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 1, NULL)`,
-        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId ?? null, input.accountId, input.note ?? null, input.receiptUri ?? null, now, now],
+        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, installmentMonths, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [
+          id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId ?? null, input.accountId,
+          input.note ?? null, input.receiptUri ?? null, input.installmentMonths ?? null, now, now,
+        ],
       );
       await db.runAsync(
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
@@ -142,7 +153,6 @@ export class SqliteTransactionRepository {
   async update(id: string, input: UpdateTransactionInput): Promise<Transaction> {
     const existing = await this.getById(id);
     if (!existing) throw new Error(`Transaction ${id} not found`);
-    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     if (existing.type === 'Transfer' || input.type === 'Transfer') {
       throw new Error('Transfers cannot be edited — delete and recreate instead');
     }
@@ -151,16 +161,16 @@ export class SqliteTransactionRepository {
     const newAmount = roundCentavos(input.amount ?? existing.amount);
     const newType = input.type ?? existing.type;
     const newAccountId = input.accountId ?? existing.accountId;
-    if (newType === 'Expense') {
+    // Each touched account's balance after the edit. Below zero is refused, unless the edit leaves it better off
+    // (shrinking a past expense on an account that's already negative is fine).
+    const changes = balanceChanges(existing, { accountId: newAccountId, type: newType, amount: newAmount });
+    for (const [accountId, change] of changes) {
       const account = await db.getFirstAsync<any>(
-        `SELECT currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
-        [newAccountId, FIXED_USER_ID],
+        `SELECT name, currentBalance, allowsOverdraft FROM accounts WHERE id = ? AND userId = ? AND deletedAt IS NULL`,
+        [accountId, FIXED_USER_ID],
       );
-      if (!account) throw new Error(`Account ${newAccountId} not found`);
-      const alreadySpentHere = existing.accountId === newAccountId && existing.type === 'Expense' ? existing.amount : 0;
-      if (account.allowsOverdraft === 1 && newAmount - alreadySpentHere > roundCentavos(account.currentBalance)) {
-        throw new Error('Expense exceeds available credit');
-      }
+      if (!account) throw new Error(`Account ${accountId} not found`);
+      if (overdraws(account.currentBalance, change)) throw notEnough(account);
     }
     await db.withTransactionAsync(async () => {
       // Reverse old effect on old account
@@ -174,13 +184,15 @@ export class SqliteTransactionRepository {
         [delta(newType, newAmount), now, newAccountId, FIXED_USER_ID],
       );
       await db.runAsync(
-        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, receiptUri = ?, updatedAt = ?, isDirty = 1
+        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, receiptUri = ?,
+           installmentMonths = ?, updatedAt = ?, isDirty = 1
          WHERE id = ? AND userId = ?`,
         [
           input.date ?? existing.date, newAmount, newType,
           input.categoryId ?? existing.categoryId, newAccountId,
           'note' in input ? (input.note ?? null) : existing.note,
           'receiptUri' in input ? (input.receiptUri ?? null) : existing.receiptUri,
+          'installmentMonths' in input ? (input.installmentMonths ?? null) : existing.installmentMonths,
           now, id, FIXED_USER_ID,
         ],
       );
@@ -195,7 +207,6 @@ export class SqliteTransactionRepository {
   async softDelete(id: string): Promise<void> {
     const existing = await this.getById(id);
     if (!existing) return;
-    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     const db = await getDatabase();
     const now = nowIso();
     await db.withTransactionAsync(async () => {

@@ -38,6 +38,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   const [termMonths, setTermMonths] = useState('');
   const [monthlyInterest, setMonthlyInterest] = useState(0);
   const [accountId, setAccountId] = useState('');
+  const [alreadyReceived, setAlreadyReceived] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,6 +62,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
       setMonthlyInterest(initial?.monthlyInterest ?? 0);
       setAccountId('');
       setErrors({});
+      setAlreadyReceived(false);
       if (isLoan) accountRepo.list().then(setAccounts);
     }
   }, [visible]);
@@ -77,7 +79,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         errs.termMonths = 'Enter the number of months';
       }
     }
-    if (!isEdit && isLoan && !accountId) errs.accountId = 'Select an account to receive the loan';
+    if (!isEdit && isLoan && !alreadyReceived && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
@@ -102,7 +104,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           creditor: creditor.trim(),
           originalAmount,
           debtType,
-          accountId: isLoan ? accountId : undefined,
+          accountId: isLoan && !alreadyReceived ? accountId : undefined,
+          alreadyReceived: isLoan && alreadyReceived,
           dueDate: dueDateEnabled ? dueDate : undefined,
           interestRate: rate,
           note: note.trim() || undefined,
@@ -140,6 +143,23 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
           />
         )}
         {!isEdit && isLoan && (
+          <View style={styles.installmentRow}>
+            <View style={styles.flex}>
+              <AppText variant="labelLg" color="textSecondary">Already received</AppText>
+              <AppText variant="bodySm" color="textMuted">
+                {alreadyReceived ? 'The money is already in one of your accounts' : 'Add the borrowed money to an account'}
+              </AppText>
+            </View>
+            <Switch
+              value={alreadyReceived}
+              onValueChange={setAlreadyReceived}
+              accessibilityLabel="Loan money already received"
+              trackColor={{ false: colors.borderStrong, true: colors.accentDim }}
+              thumbColor={alreadyReceived ? colors.accentPrimary : colors.textMuted}
+            />
+          </View>
+        )}
+        {!isEdit && isLoan && !alreadyReceived && (
           <Select
             label="Disburse to Account"
             options={accounts.map((a) => ({ label: a.name, value: a.id }))}

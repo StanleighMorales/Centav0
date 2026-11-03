@@ -127,9 +127,9 @@ export default function AccountsScreen() {
   async function handleDeletePress(account: Account) {
     const debts = await debtRepo.list();
     const linkedDebt = debts.find((d) => d.linkedAccountId === account.id);
-    const owed = linkedDebt ? linkedDebt.outstandingBalance : account.currentBalance;
     const txns = await transactionRepo.list({ accountId: account.id });
-    setDeleteBlocked(owed !== 0);
+    // Only a credit line that still owes is kept; any other account can go, its balance just stops counting.
+    setDeleteBlocked(account.allowsOverdraft && (linkedDebt ? linkedDebt.outstandingBalance : 0) !== 0);
     setDeleteHasHistory(txns.length > 0 || linkedDebt !== undefined);
     setPendingDelete(account);
   }
@@ -242,7 +242,9 @@ export default function AccountsScreen() {
         message={
           deleteBlocked
             ? `"${pendingDelete?.name}" still has an outstanding balance. Pay it off before deleting.`
-            : deleteHasHistory
+            : pendingDelete && !pendingDelete.allowsOverdraft && pendingDelete.currentBalance !== 0
+              ? `"${pendingDelete.name}" has a balance of ${formatPHP(pendingDelete.currentBalance)}. Deleting it removes that from your Total Balance. Its transactions stay in your history, marked as a deleted account.`
+              : deleteHasHistory
               ? `"${pendingDelete?.name}" has debts or transactions linked to it. Deleting it won't delete them — they'll stay visible, marked as a deleted account. You can manually delete individual transactions later from Settings > Transaction Archive.`
               : `Delete "${pendingDelete?.name}"? This cannot be undone.`
         }

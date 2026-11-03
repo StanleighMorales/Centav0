@@ -93,3 +93,22 @@ export function periodRangeIso(period: Period, date: Date = new Date()): { from:
       return { from: dayStart(y, m, 1), to: dayEnd(y, m + 1, 0) };
   }
 }
+
+export type MonthGroup<T> = { key: string; label: string; total: number; items: T[] };
+
+/** Items grouped by calendar month in the order given (newest first in, newest first out), with each month's total. */
+export function groupByMonth<T extends { date: string; amount: number }>(items: T[]): MonthGroup<T>[] {
+  const groups = new Map<string, MonthGroup<T>>();
+  for (const item of items) {
+    const d = new Date(item.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, label: d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' }), total: 0, items: [] };
+      groups.set(key, group);
+    }
+    group.total = Math.round((group.total + item.amount) * 100) / 100;
+    group.items.push(item);
+  }
+  return [...groups.values()];
+}

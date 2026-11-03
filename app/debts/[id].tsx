@@ -96,7 +96,10 @@ function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
 export default function DebtDetailScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // pay/accountId/amount come from a voice command: open the payment sheet once, prefilled.
+  const { id, pay, accountId: voiceAccountId, amount: voiceAmount } =
+    useLocalSearchParams<{ id: string; pay?: string; accountId?: string; amount?: string }>();
+  const voicePayDone = useRef(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [debt, setDebt] = useState<Debt | null>(null);
@@ -111,6 +114,7 @@ export default function DebtDetailScreen() {
   const [editCharge, setEditCharge] = useState<Charge | null>(null);
   const [deleteCharge, setDeleteCharge] = useState<Charge | null>(null);
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
+  const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -121,24 +125,35 @@ export default function DebtDetailScreen() {
     setDebt(d);
     setPayments(p);
     setAccounts(a);
+    let owed: Charge[] = [];
     if (d?.linkedAccountId) {
       const txns = await transactionRepo.list({ accountId: d.linkedAccountId, type: 'Expense' });
       const cats = await categoryRepo.list();
       const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
       // Only unsettled charges are still owed; settled ones live in Payment History.
-      setCharges(
-        txns
-          .filter((t) => t.settledAt == null)
-          .map((t) => ({
-            ...t,
-            label: t.note || catName[t.categoryId ?? ''] || 'Charge',
-          })),
-      );
-    } else {
-      setCharges([]);
+      owed = txns
+        .filter((t) => t.settledAt == null)
+        .map((t) => ({
+          ...t,
+          label: t.note || catName[t.categoryId ?? ''] || 'Charge',
+        }));
     }
+    setCharges(owed);
     setLoading(false);
-  }, [id]);
+
+    if (pay === '1' && d && !voicePayDone.current) {
+      voicePayDone.current = true;
+      const prefill = { accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined };
+      // A card pays whole charges, so a spoken amount is ignored and it settles everything owed.
+      if (d.linkedAccountId && owed.length > 0) {
+        setVoicePrefill(prefill);
+        setSettleTarget({ transactionIds: owed.map((c) => c.id), amount: d.outstandingBalance, label: 'all charges' });
+      } else if (!d.linkedAccountId && d.status !== 'Paid') {
+        setVoicePrefill(prefill);
+        setPaymentVisible(true);
+      }
+    }
+  }, [id, pay, voiceAccountId, voiceAmount]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -347,22 +362,25 @@ export default function DebtDetailScreen() {
 
       <AddPaymentSheet
         visible={paymentVisible}
-        onClose={() => setPaymentVisible(false)}
+        onClose={() => { setPaymentVisible(false); setVoicePrefill(null); }}
         onSuccess={load}
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
         monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
+        initialAccountId={voicePrefill?.accountId}
+        initialAmount={voicePrefill?.amount}
       />
 
       <AddPaymentSheet
         visible={settleTarget !== null}
-        onClose={() => setSettleTarget(null)}
+        onClose={() => { setSettleTarget(null); setVoicePrefill(null); }}
         onSuccess={load}
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
         settle={settleTarget ?? undefined}
+        initialAccountId={voicePrefill?.accountId}
       />
 
       <ConfirmDialog

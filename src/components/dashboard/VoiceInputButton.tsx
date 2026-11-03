@@ -3,9 +3,18 @@ import { View, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { AppText } from '../ui/AppText';
+import { pickTranscript } from '../../utils/voiceTransaction';
 import { theme, makeStyles, useTheme } from '../../theme';
 
-type Props = { onResult: (text: string) => void; autoStart?: boolean };
+type Props = {
+  onResult: (text: string) => void;
+  autoStart?: boolean;
+  label?: string;
+  /** Shown under the button before anything is heard. */
+  hint?: string;
+  /** Names to listen for (accounts, lenders, categories) so "Atome" isn't heard as "atomic". */
+  names?: string[];
+};
 
 const ERROR_TEXT: Record<string, string> = {
   'not-allowed': 'Microphone permission is off. Enable it in Settings to use voice.',
@@ -16,7 +25,13 @@ const ERROR_TEXT: Record<string, string> = {
   'service-not-allowed': 'Voice input is not available on this phone.',
 };
 
-export function VoiceInputButton({ onResult, autoStart }: Props) {
+export function VoiceInputButton({
+  onResult,
+  autoStart,
+  label = 'Speak transaction',
+  hint = 'Try “coffee worth 120 pesos as expense”',
+  names,
+}: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [listening, setListening] = useState(false);
@@ -24,6 +39,9 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Speech events are global; several sheets can be mounted at once, so only the one that started listens.
   const active = useRef(false);
+  // Auto-start runs from the mount effect; read names at start time, not from that first render.
+  const namesRef = useRef(names);
+  namesRef.current = names;
 
   useSpeechRecognitionEvent('start', () => { if (active.current) setListening(true); });
   useSpeechRecognitionEvent('end', () => {
@@ -33,7 +51,10 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
   });
   useSpeechRecognitionEvent('result', (e) => {
     if (!active.current) return;
-    const text = e.results[0]?.transcript ?? '';
+    // Interim results show the top guess; the final one picks whichever guess names our things.
+    const text = e.isFinal
+      ? pickTranscript(e.results.map((r) => r.transcript), namesRef.current ?? [])
+      : e.results[0]?.transcript ?? '';
     setHeard(text);
     if (e.isFinal && text) onResult(text);
   });
@@ -53,7 +74,12 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!perm.granted) { setError(ERROR_TEXT['not-allowed']); return; }
     active.current = true;
-    ExpoSpeechRecognitionModule.start({ lang: 'en-PH', interimResults: true });
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-PH',
+      interimResults: true,
+      maxAlternatives: 5,
+      contextualStrings: namesRef.current,
+    });
   }
 
   return (
@@ -61,13 +87,13 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
       <Pressable
         onPress={toggle}
         accessibilityRole="button"
-        accessibilityLabel={listening ? 'Stop listening' : 'Add transaction by voice'}
+        accessibilityLabel={listening ? 'Stop listening' : label}
         accessibilityState={{ busy: listening }}
         style={[styles.button, listening && styles.buttonActive]}
       >
         <Feather name={listening ? 'square' : 'mic'} size={18} color={colors.accentText} />
         <AppText variant="body" color="accentText">
-          {listening ? 'Listening… tap to stop' : 'Speak transaction'}
+          {listening ? 'Listening… tap to stop' : label}
         </AppText>
       </Pressable>
       {error ? (
@@ -75,7 +101,7 @@ export function VoiceInputButton({ onResult, autoStart }: Props) {
       ) : heard ? (
         <AppText variant="bodySm" color="textSecondary">“{heard}”</AppText>
       ) : (
-        <AppText variant="bodySm" color="textMuted">Try “coffee worth 120 pesos as expense”</AppText>
+        <AppText variant="bodySm" color="textMuted">{hint}</AppText>
       )}
     </View>
   );

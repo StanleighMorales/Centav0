@@ -368,12 +368,13 @@ export default function DebtDetailScreen() {
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
+        // Before the bill date nothing is billed yet; offer the upcoming bill so it can be paid early.
         monthlyPayment={
           creditSummary
-            ? creditSummary.dueNow || undefined
+            ? creditSummary.dueNow || creditSummary.next?.remaining || undefined
             : debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined
         }
-        monthlyLabel={creditSummary ? 'Due now' : undefined}
+        monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}
         cashOnly={!!creditAccount}
         initialAccountId={voicePrefill?.accountId}
         initialAmount={voicePrefill?.amount}

@@ -29,11 +29,13 @@ type Props = {
   onSuccess: () => void;
   initial?: Transaction | null;
   lockAccountAndType?: boolean;
+  /** Fast dial: start listening or open the camera as soon as the sheet opens. */
+  autoStart?: 'voice' | 'camera' | null;
 };
 
 const TYPES = ['Expense', 'Income'] as const;
 
-export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType }: Props) {
+export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType, autoStart }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [amount, setAmount] = useState(0);
@@ -92,6 +94,10 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
     })();
   }, [visible, initial]);
 
+  useEffect(() => {
+    if (visible && autoStart === 'camera') handleScan('camera');
+  }, [visible, autoStart]);
+
   // After inline-creating a category/account, reload and auto-select the new one.
   async function reloadCategoriesSelectNew() {
     const before = new Set(categories.map((c) => c.id));
@@ -130,8 +136,9 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
 
   // Voice only prefills the form; the user still reviews and taps Save.
   function applyVoice(text: string) {
-    const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined);
+    const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined, accounts);
     changeType(parsed.type);
+    if (parsed.accountId && !lockAccountAndType) setAccountId(parsed.accountId);
     if (parsed.amount) setAmount(parsed.amount);
     setCategoryId(parsed.categoryId);
     if (parsed.note) setNote(parsed.note);
@@ -189,7 +196,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {initial ? null : <VoiceInputButton onResult={applyVoice} />}
+        {initial ? null : <VoiceInputButton onResult={applyVoice} autoStart={autoStart === 'voice'} />}
 
         {lockAccountAndType ? null : (
           <Segmented options={TYPES} value={type} onChange={changeType} />

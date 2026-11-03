@@ -5,7 +5,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { AppText } from '../ui/AppText';
 import { theme, makeStyles, useTheme } from '../../theme';
 
-type Props = { onResult: (text: string) => void };
+type Props = { onResult: (text: string) => void; autoStart?: boolean };
 
 const ERROR_TEXT: Record<string, string> = {
   'not-allowed': 'Microphone permission is off. Enable it in Settings to use voice.',
@@ -16,7 +16,7 @@ const ERROR_TEXT: Record<string, string> = {
   'service-not-allowed': 'Voice input is not available on this phone.',
 };
 
-export function VoiceInputButton({ onResult }: Props) {
+export function VoiceInputButton({ onResult, autoStart }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [listening, setListening] = useState(false);
@@ -43,6 +43,8 @@ export function VoiceInputButton({ onResult }: Props) {
   });
 
   useEffect(() => () => { if (active.current) ExpoSpeechRecognitionModule.abort(); }, []);
+  // Mounted fresh each time the sheet opens, so this fires once per fast-dial open.
+  useEffect(() => { if (autoStart) toggle(); }, []);
 
   async function toggle() {
     if (listening) { ExpoSpeechRecognitionModule.stop(); return; }

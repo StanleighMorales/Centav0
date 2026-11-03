@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Pressable } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Pressable, GestureResponderEvent } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Reanimated, { ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,10 +13,21 @@ type TabBarState = { index: number; routes: { key: string; name: string }[] };
 type Props = {
   state: TabBarState;
   navigation: any;
-  onAdd: () => void;
+  /** No mode = plain form; 'voice'/'camera' come from the hold-to-open fast dial. */
+  onAdd: (mode?: 'voice' | 'camera') => void;
 };
 
 type Slot = { route: string; label: string; icon: React.ComponentProps<typeof Feather>['name'] };
+
+const DIAL = [
+  { mode: 'voice', label: 'Voice', icon: 'mic' },
+  { mode: 'camera', label: 'Scan', icon: 'camera' },
+] as const;
+type DialMode = (typeof DIAL)[number]['mode'];
+
+// How far up the finger must slide from + to open the dial, and to pick a dial button.
+const DRAG_OPEN_DY = 12;
+const DRAG_PICK_DY = 40;
 
 // Five slots: Home · Activity · (+) · Ledger · More.
 const LEFT: Slot[] = [
@@ -33,8 +44,38 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
   const activeName = state.routes[state.index]?.name;
+  const [dialOpen, setDialOpen] = useState(false);
+  const [hover, setHover] = useState<DialMode | null>(null);
+  const touchStart = useRef({ x: 0, y: 0 });
+  // A swipe can still end inside Pressable's retention area and count as a tap; this stops it opening the plain form too.
+  const swiped = useRef(false);
+
+  // Swipe up from + (or hold it), slide onto Voice or Scan, let go to pick it.
+  // ponytail: picks by drag direction (up-left = Voice, up-right = Scan), not exact button bounds;
+  // measure the buttons if more than two dial items are ever added.
+  function onTouchMove(e: GestureResponderEvent) {
+    const dx = e.nativeEvent.pageX - touchStart.current.x;
+    const dy = e.nativeEvent.pageY - touchStart.current.y;
+    if (dy < -DRAG_OPEN_DY) { swiped.current = true; setDialOpen(true); }
+    if (swiped.current || dialOpen) setHover(dy < -DRAG_PICK_DY ? (dx < 0 ? 'voice' : 'camera') : null);
+  }
+
+  function onAddPress() {
+    if (swiped.current) return;
+    if (dialOpen) setDialOpen(false);
+    else onAdd();
+  }
+
+  // The dial only lives while the finger is down; letting go picks the hovered button or just closes it.
+  function onTouchEnd() {
+    const picked = hover;
+    setHover(null);
+    setDialOpen(false);
+    if (picked) onAdd(picked);
+  }
 
   function go(route: string) {
+    setDialOpen(false);
     const target = state.routes.find((r) => r.name === route);
     if (!target) return;
     const event = navigation.emit({ type: 'tabPress', target: target.key, canPreventDefault: true });
@@ -62,15 +103,41 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: theme.spacing[3] + insets.bottom }]}>
+      {dialOpen ? (
+        <View pointerEvents="box-none" style={styles.dial}>
+          {DIAL.map((d) => (
+            <Reanimated.View key={d.mode} entering={ZoomIn.duration(theme.motion.micro.duration)} style={styles.dialItem}>
+              <Pressable
+                onPress={() => { setDialOpen(false); onAdd(d.mode); }}
+                accessibilityRole="button"
+                accessibilityLabel={d.mode === 'voice' ? 'Add transaction by voice' : 'Scan a receipt'}
+                style={({ pressed }) => [styles.dialBtn, (pressed || hover === d.mode) && styles.dialBtnHover]}
+              >
+                <Feather name={d.icon} size={22} color={colors.onAccent} />
+              </Pressable>
+              <AppText variant="labelSm" color={hover === d.mode ? 'accentText' : 'textSecondary'}>{d.label}</AppText>
+            </Reanimated.View>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.bar}>
         {LEFT.map(renderSlot)}
         <Pressable
-          onPress={onAdd}
+          onPress={onAddPress}
+          onLongPress={() => setDialOpen(true)}
+          onTouchStart={(e) => {
+            touchStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+            swiped.current = false;
+          }}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={() => { setHover(null); setDialOpen(false); }}
           accessibilityRole="button"
-          accessibilityLabel="Add transaction"
+          accessibilityLabel={dialOpen ? 'Close quick add' : 'Add transaction'}
+          accessibilityHint="Hold for voice or receipt scan"
           style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
         >
-          <Feather name="plus" size={26} color={colors.onAccent} />
+          <Feather name={dialOpen ? 'x' : 'plus'} size={26} color={colors.onAccent} />
         </Pressable>
         {RIGHT.map(renderSlot)}
       </View>
@@ -103,4 +170,29 @@ const useStyles = makeStyles((c) => ({
     justifyContent: 'center',
   },
   addPressed: { backgroundColor: c.accentDim, transform: [{ scale: 0.95 }] },
+  dial: {
+    position: 'absolute',
+    bottom: 70 + theme.spacing[3],
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: theme.spacing[6],
+  },
+  dialItem: { alignItems: 'center', gap: 4 },
+  dialBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: c.accentPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.md,
+  },
+  dialBtnHover: {
+    backgroundColor: c.accentDim,
+    borderWidth: 2,
+    borderColor: c.accentText,
+    transform: [{ scale: 1.15 }],
+  },
 }));

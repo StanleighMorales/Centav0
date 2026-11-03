@@ -13,7 +13,19 @@ const cats = [
 
 {
   const r = parseVoiceTransaction('add coffee worth 20 pesos as a expense', cats);
-  assert.deepStrictEqual(r, { amount: 20, type: 'Expense', categoryId: 'food', note: 'Coffee' });
+  assert.deepStrictEqual(r, { amount: 20, type: 'Expense', categoryId: 'food', accountId: null, note: 'Coffee' });
+}
+{
+  assert.strictEqual(parseVoiceTransaction('orange juice 45', cats).categoryId, 'food', 'juice is food');
+  assert.strictEqual(parseVoiceTransaction('bought bread for 60', cats).categoryId, 'food', 'bread is food');
+}
+{
+  const accounts = [{ id: 'gcash', name: 'GCash' }, { id: 'bpi', name: 'BPI' }, { id: 'bpi-sav', name: 'BPI Savings' }];
+  const r = parseVoiceTransaction('spent 150 on bread using my gcash', cats, undefined, accounts);
+  assert.strictEqual(r.accountId, 'gcash', 'account named in speech');
+  assert.strictEqual(r.note, 'Bread', 'account phrase dropped from note');
+  assert.strictEqual(parseVoiceTransaction('paid 500 from bpi savings account', cats, undefined, accounts).accountId, 'bpi-sav', 'longest account name wins');
+  assert.strictEqual(parseVoiceTransaction('lunch 200', cats, undefined, accounts).accountId, null, 'no account mentioned');
 }
 {
   const r = parseVoiceTransaction('spent 1,250.50 on grab', cats);

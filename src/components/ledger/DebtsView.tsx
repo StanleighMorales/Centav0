@@ -10,15 +10,19 @@ import { Amount } from '../ui/Amount';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { AddDebtSheet } from '../debts/AddDebtSheet';
+import { AddAccountSheet } from '../accounts/AddAccountSheet';
 import { MonthlyDebtView } from '../debts/MonthlyDebtView';
 import { InstallmentGridView } from '../debts/InstallmentGridView';
-import { debtRepo, debtPaymentRepo, accountRepo } from '../../repositories';
+import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo } from '../../repositories';
 import { TAB_BAR_SPACE } from '../nav/FloatingTabBar';
 import { theme, makeStyles, useTheme } from '../../theme';
-import { displayDate, monthRangeIso, paidForDue } from '../../utils/date';
+import { displayDate, monthRangeIso, nowIso } from '../../utils/date';
+import { STATUS_COLOR, creditStatus, statementsFor, summarize, type Statement, type StatementStatus } from '../../utils/creditStatements';
 import { formatPHP } from '../../utils/currency';
 import { spendableAccounts } from '../../utils/accumulated';
-import type { Account, Debt, DebtStatus, DebtType } from '../../domain/types';
+import type { Account, Debt, DebtPayment, DebtStatus, DebtType, Transaction } from '../../domain/types';
+
+type CreditInfo = ReturnType<typeof summarize> & { status: StatementStatus; statements: Statement[] };
 
 const TYPE_TABS: DebtType[] = ['Credit', 'Loan', 'Custom'];
 const STATUS_TABS: DebtStatus[] = ['Open', 'Overdue', 'Paid'];
@@ -29,14 +33,14 @@ type DebtRowProps = {
   debt: Debt;
   paidTotal: number;
   creditLimit: number | null;
-  /** Card bill for the current due date already paid. */
-  paidThisCycle: boolean;
+  /** Bills for a credit line with bill and due days set. */
+  credit: CreditInfo | null;
   onPress: (d: Debt) => void;
   onEdit: (d: Debt) => void;
   onDelete: (d: Debt) => void;
 };
 
-function DebtRow({ debt, paidTotal, creditLimit, paidThisCycle, onPress, onEdit, onDelete }: DebtRowProps) {
+function DebtRow({ debt, paidTotal, creditLimit, credit, onPress, onEdit, onDelete }: DebtRowProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
@@ -80,7 +84,9 @@ function DebtRow({ debt, paidTotal, creditLimit, paidThisCycle, onPress, onEdit,
             name="credit-card"
             size={18}
             color={
-              debt.status === 'Overdue'
+              credit
+                ? credit.status === 'upcoming' || credit.status === 'due' ? colors.accentPrimary : colors[STATUS_COLOR[credit.status]]
+                : debt.status === 'Overdue'
                 ? colors.negative
                 : debt.status === 'Paid'
                 ? colors.positive
@@ -90,11 +96,26 @@ function DebtRow({ debt, paidTotal, creditLimit, paidThisCycle, onPress, onEdit,
         </View>
         <View style={styles.rowMain}>
           <AppText variant="body" style={styles.creditor}>{debt.creditor}</AppText>
-          {debt.dueDate && paidThisCycle ? (
-            <View style={styles.paidRow}>
-              <Feather name="check" size={12} color={colors.positive} />
-              <AppText variant="bodySm" color="positive">Paid for {displayDate(debt.dueDate)}</AppText>
-            </View>
+          {credit ? (
+            credit.overdue > 0 ? (
+              <View style={styles.paidRow}>
+                <Feather name="alert-circle" size={12} color={colors.negative} />
+                <AppText variant="bodySm" color="negative">{formatPHP(credit.overdue)} overdue</AppText>
+              </View>
+            ) : credit.dueNow > 0 && credit.current ? (
+              <AppText variant="bodySm" color={STATUS_COLOR[credit.current.status]}>
+                {formatPHP(credit.dueNow)} due {displayDate(credit.current.dueDate)}
+              </AppText>
+            ) : credit.current ? (
+              <View style={styles.paidRow}>
+                <Feather name="check" size={12} color={colors.positive} />
+                <AppText variant="bodySm" color="positive">Paid for {displayDate(credit.current.dueDate)}</AppText>
+              </View>
+            ) : credit.next ? (
+              <AppText variant="bodySm" color="textMuted">
+                Next bill {displayDate(credit.next.billDate)} · {formatPHP(credit.next.remaining)}
+              </AppText>
+            ) : null
           ) : debt.dueDate ? (
             <AppText
               variant="bodySm"
@@ -153,7 +174,9 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
   const [editDebt, setEditDebt] = useState<Debt | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Debt | null>(null);
   const [paidTotals, setPaidTotals] = useState<Record<string, number>>({});
-  const [paymentDates, setPaymentDates] = useState<Record<string, string[]>>({});
+  const [payments, setPayments] = useState<DebtPayment[]>([]);
+  const [creditCharges, setCreditCharges] = useState<Transaction[]>([]);
+  const [creditSheetVisible, setCreditSheetVisible] = useState(false);
   const [monthPayments, setMonthPayments] = useState<{ debtId: string; amount: number }[]>([]);
 
   const load = useCallback(async () => {
@@ -162,16 +185,16 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     const accs = await accountRepo.list();
     const allPayments = await debtPaymentRepo.list();
     const totals: Record<string, number> = {};
-    const dates: Record<string, string[]> = {};
-    for (const p of allPayments) {
-      totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
-      (dates[p.debtId] ??= []).push(p.date);
-    }
+    for (const p of allPayments) totals[p.debtId] = (totals[p.debtId] ?? 0) + p.amount;
+    // Purchases on credit lines feed their monthly statements.
+    const creditIds = new Set(accs.filter((a) => a.allowsOverdraft).map((a) => a.id));
+    const expenses = await transactionRepo.list({ type: 'Expense' });
     const { from, to } = monthRangeIso();
     setDebts(all);
     setAccounts(accs);
     setPaidTotals(totals);
-    setPaymentDates(dates);
+    setPayments(allPayments);
+    setCreditCharges(expenses.filter((t) => creditIds.has(t.accountId)));
     setMonthPayments(allPayments.filter((p) => p.date >= from && p.date <= to));
     setLoading(false);
   }, []);
@@ -181,7 +204,9 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
   // Ledger header's + bumps addSignal; the first value is just the initial mount.
   const firstSignal = useRef(addSignal);
   useEffect(() => {
-    if (addSignal !== firstSignal.current) setSheetVisible(true);
+    if (addSignal === firstSignal.current) return;
+    if (activeType === 'Credit') setCreditSheetVisible(true);
+    else setSheetVisible(true);
   }, [addSignal]);
 
   async function handleDelete() {
@@ -190,6 +215,28 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     setDeleteTarget(null);
     load();
   }
+
+  const today = nowIso();
+  const creditInfo: Record<string, CreditInfo> = {};
+  for (const d of debts) {
+    const account = d.linkedAccountId ? accounts.find((a) => a.id === d.linkedAccountId) : undefined;
+    if (!account) continue;
+    const built = statementsFor(
+      account,
+      creditCharges.filter((t) => t.accountId === account.id),
+      payments.filter((p) => p.debtId === d.id),
+      d.outstandingBalance,
+      today,
+    );
+    if (!built) continue;
+    const summary = summarize(built.statements, today);
+    creditInfo[d.id] = { ...summary, status: creditStatus(summary, d.outstandingBalance), statements: built.statements };
+  }
+  const tabStatus = (d: Debt): DebtStatus => {
+    const c = creditInfo[d.id];
+    if (!c) return d.status;
+    return c.overdue > 0 ? 'Overdue' : d.outstandingBalance <= 0 ? 'Paid' : 'Open';
+  };
 
   // Auto-managed credit cards stay hidden only while truly untouched — a fresh
   // card at ₱0 isn't a debt yet. One that was charged and paid off still has
@@ -202,8 +249,8 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
   const paidThisMonth = monthPayments
     .filter((p) => typeDebtIds.has(p.debtId))
     .reduce((sum, p) => sum + p.amount, 0);
-  const filtered = typeDebts.filter((d) => d.status === activeStatus);
-  const activeDebts = typeDebts.filter((d) => d.status !== 'Paid');
+  const filtered = typeDebts.filter((d) => tabStatus(d) === activeStatus);
+  const activeDebts = typeDebts.filter((d) => tabStatus(d) !== 'Paid');
   const totalDebt = activeDebts.reduce((sum, d) => sum + d.outstandingBalance, 0);
   const availableFunds = spendableAccounts(accounts)
     .reduce((sum, a) => sum + a.currentBalance, 0);
@@ -222,7 +269,11 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE + insets.bottom }}
         >
-          <MonthlyDebtView debts={debts} accounts={accounts} />
+          <MonthlyDebtView
+            debts={debts}
+            accounts={accounts}
+            credit={Object.fromEntries(Object.entries(creditInfo).map(([id, c]) => [id, c.statements]))}
+          />
         </ScrollView>
       ) : viewMode === 'Grid' ? (
         <ScrollView
@@ -304,7 +355,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
             <EmptyState
               icon="credit-card"
               title={`No ${activeStatus.toLowerCase()} ${activeType.toLowerCase()} debts`}
-              subtitle={activeStatus === 'Paid' ? 'Paid debts will appear here' : 'Tap + to add a debt'}
+              subtitle={activeStatus === 'Paid' ? 'Paid debts will appear here' : activeType === 'Credit' ? 'Tap + to add a credit line' : 'Tap + to add a debt'}
             />
           }
           renderItem={({ item }) => (
@@ -312,7 +363,7 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
               debt={item}
               paidTotal={paidTotals[item.id] ?? 0}
               creditLimit={item.linkedAccountId ? accounts.find((a) => a.id === item.linkedAccountId)?.creditLimit ?? null : null}
-              paidThisCycle={!!item.linkedAccountId && !!item.dueDate && paidForDue(item.dueDate, paymentDates[item.id] ?? [])}
+              credit={creditInfo[item.id] ?? null}
               onPress={(d) => router.push(`/debts/${d.id}`)}
               onEdit={setEditDebt}
               onDelete={setDeleteTarget}
@@ -327,6 +378,13 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
         visible={sheetVisible}
         debtType={activeType}
         onClose={() => setSheetVisible(false)}
+        onSuccess={load}
+      />
+
+      <AddAccountSheet
+        visible={creditSheetVisible}
+        creditOnly
+        onClose={() => setCreditSheetVisible(false)}
         onSuccess={load}
       />
 

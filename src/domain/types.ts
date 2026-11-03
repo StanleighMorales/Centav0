@@ -39,14 +39,21 @@ export interface Account extends AuditFields, LocalSyncFields {
   dueDay: number | null;
   /** Max amount that can be owed on this account. Overdraft-capable types only. */
   creditLimit: number | null;
+  /** Purchases on the bill day go on the next statement instead of that day's. Credit lines only. */
+  billDayNextStatement: boolean;
+  /** Months left on what's owed beyond recorded purchases. Null = all on one bill. Credit lines only. */
+  earlierBalanceMonths: number | null;
+  /** Bill date the earlier balance starts on. Null = the next bill. Credit lines only. */
+  earlierBalanceFirstBill: string | null;
 }
 
 export interface CreateAccountInput {
   name: string; accountTypeId: string; initialBalance: number;
-  billDay?: number; dueDay?: number; creditLimit?: number;
+  billDay?: number; dueDay?: number; creditLimit?: number; billDayNextStatement?: boolean;
 }
 export interface UpdateAccountInput {
   name?: string; accountTypeId?: string; billDay?: number; dueDay?: number; creditLimit?: number;
+  billDayNextStatement?: boolean; earlierBalanceMonths?: number | null; earlierBalanceFirstBill?: string | null;
 }
 
 export type CategoryType = 'Expense' | 'Income';
@@ -79,15 +86,17 @@ export interface Transaction extends AuditFields, LocalSyncFields {
   receiptUri: string | null;
   /** When this Credit Card charge was paid off. Null = still owed. Non-credit charges stay null. */
   settledAt: string | null;
+  /** Credit purchase split over this many monthly statements. Null = paid in one. */
+  installmentMonths: number | null;
 }
 
 export interface CreateTransactionInput {
   date: string; amount: number; type: TransactionType;
-  categoryId?: string; accountId: string; note?: string; receiptUri?: string;
+  categoryId?: string; accountId: string; note?: string; receiptUri?: string; installmentMonths?: number | null;
 }
 export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;
-  categoryId?: string; accountId?: string; note?: string; receiptUri?: string;
+  categoryId?: string; accountId?: string; note?: string; receiptUri?: string; installmentMonths?: number | null;
 }
 export interface TransactionItem extends AuditFields, LocalSyncFields {
   id: string; userId: string; transactionId: string;
@@ -155,7 +164,6 @@ export interface DebtPayment extends AuditFields, LocalSyncFields {
 export interface CreateDebtPaymentInput { date: string; amount: number; accountId: string; }
 
 /** Pay off specific Credit Card charges. Amount is derived from the charges, not passed. */
-export interface SettleChargesInput { transactionIds: string[]; accountId: string; date: string; }
 
 export type AllocationPeriod = 'Weekly' | 'Monthly';
 

@@ -3,6 +3,7 @@ import { View, Pressable, Image, ActivityIndicator } from 'react-native';
 import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { Feather } from '@expo/vector-icons';
 import { Segmented } from '../ui/Segmented';
+import { Chip } from '../ui/Chip';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -36,6 +37,8 @@ type Props = {
 };
 
 const TYPES = ['Expense', 'Income'] as const;
+// Quick picks for splitting a credit purchase; any other count can be typed.
+const MONTH_CHOICES = [1, 3, 6, 12];
 
 export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType, autoStart, onVoiceCommand }: Props) {
   const styles = useStyles();
@@ -57,6 +60,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [items, setItems] = useState<TransactionItemInput[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [monthsText, setMonthsText] = useState('1');
 
   async function handleScan(source: 'camera' | 'gallery') {
     setScanning(true);
@@ -91,6 +95,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         setDate(initial.date);
         setNote(initial.note ?? '');
         setReceiptUri(initial.receiptUri);
+        setMonthsText(String(initial.installmentMonths ?? 1));
         setItems((await transactionItemRepo.listByTransaction(initial.id)).map(({ name, qty, price }) => ({ name, qty, price })));
       } else if (accs.length > 0) {
         setAccountId(accs[0].id);
@@ -128,6 +133,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       setNote('');
       setReceiptUri(null);
       setItems([]);
+      setMonthsText('1');
       setErrors({});
     }
   }, [visible, initial]);
@@ -154,6 +160,10 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   }
 
   const filteredCategories = categories.filter((c) => c.type === type);
+  // A credit purchase can be split over monthly statements.
+  const onCredit = type === 'Expense' && !!accounts.find((a) => a.id === accountId)?.allowsOverdraft;
+  const parsedMonths = parseInt(monthsText, 10);
+  const months = onCredit && parsedMonths >= 1 && parsedMonths <= 60 ? parsedMonths : 1;
   const isAccumulated = accountId === ACCUMULATED_ID;
   // Accumulated Balance is a virtual source: new expenses only, split across real accounts.
   const allowAccumulated = type === 'Expense' && !initial;
@@ -175,6 +185,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         categoryId: categoryId!,
         note: note.trim() || undefined,
         receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
+        installmentMonths: months > 1 ? months : null,
       };
       if (isAccumulated) {
         const portions = splitAcrossAccounts(accounts, amount);
@@ -263,6 +274,28 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
             </Pressable>
           </View>
         )}
+        {onCredit ? (
+          <View style={styles.payOver}>
+            <AppText variant="labelLg" color="textSecondary">Pay over</AppText>
+            <View style={styles.chipRow}>
+              {MONTH_CHOICES.map((n) => (
+                <Chip
+                  key={n}
+                  label={n === 1 ? 'Next bill' : `${n} months`}
+                  selected={months === n}
+                  onPress={() => setMonthsText(String(n))}
+                  accessibilityLabel={n === 1 ? 'Pay on the next bill' : `Split over ${n} months`}
+                />
+              ))}
+            </View>
+            <AppTextInput label="Months" value={monthsText} onChangeText={setMonthsText} numeric />
+            {months > 1 && amount > 0 ? (
+              <AppText variant="bodySm" color="textMuted">
+                {formatPHP(Math.round((amount / months) * 100) / 100)}/month on your next {months} bills
+              </AppText>
+            ) : null}
+          </View>
+        ) : null}
         <DatePicker label="Date" value={date} onChange={setDate} />
         <AppTextInput
           label="Note (optional)"
@@ -337,6 +370,8 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
 }
 
 const useStyles = makeStyles((c) => ({
+  payOver: { gap: theme.spacing[3] },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] },
   form: { gap: theme.spacing[5] },
   pickerRow: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ function rowToTransaction(row: any): Transaction {
     note: row.note ?? null,
     receiptUri: row.receiptUri ?? null,
     settledAt: row.settledAt ?? null,
+    installmentMonths: row.installmentMonths ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -81,9 +82,12 @@ export class SqliteTransactionRepository {
     }
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, 1, NULL)`,
-        [id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId ?? null, input.accountId, input.note ?? null, input.receiptUri ?? null, now, now],
+        `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, installmentMonths, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        [
+          id, FIXED_USER_ID, input.date, amount, input.type, input.categoryId ?? null, input.accountId,
+          input.note ?? null, input.receiptUri ?? null, input.installmentMonths ?? null, now, now,
+        ],
       );
       await db.runAsync(
         `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
@@ -142,7 +146,6 @@ export class SqliteTransactionRepository {
   async update(id: string, input: UpdateTransactionInput): Promise<Transaction> {
     const existing = await this.getById(id);
     if (!existing) throw new Error(`Transaction ${id} not found`);
-    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     if (existing.type === 'Transfer' || input.type === 'Transfer') {
       throw new Error('Transfers cannot be edited — delete and recreate instead');
     }
@@ -174,13 +177,15 @@ export class SqliteTransactionRepository {
         [delta(newType, newAmount), now, newAccountId, FIXED_USER_ID],
       );
       await db.runAsync(
-        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, receiptUri = ?, updatedAt = ?, isDirty = 1
+        `UPDATE transactions SET date = ?, amount = ?, type = ?, categoryId = ?, accountId = ?, note = ?, receiptUri = ?,
+           installmentMonths = ?, updatedAt = ?, isDirty = 1
          WHERE id = ? AND userId = ?`,
         [
           input.date ?? existing.date, newAmount, newType,
           input.categoryId ?? existing.categoryId, newAccountId,
           'note' in input ? (input.note ?? null) : existing.note,
           'receiptUri' in input ? (input.receiptUri ?? null) : existing.receiptUri,
+          'installmentMonths' in input ? (input.installmentMonths ?? null) : existing.installmentMonths,
           now, id, FIXED_USER_ID,
         ],
       );
@@ -195,7 +200,6 @@ export class SqliteTransactionRepository {
   async softDelete(id: string): Promise<void> {
     const existing = await this.getById(id);
     if (!existing) return;
-    if (existing.settledAt) throw new Error('This charge is already paid — reverse the payment first.');
     const db = await getDatabase();
     const now = nowIso();
     await db.withTransactionAsync(async () => {

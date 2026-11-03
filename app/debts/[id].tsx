@@ -13,25 +13,26 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddDebtSheet } from '../../src/components/debts/AddDebtSheet';
 import { AddPaymentSheet } from '../../src/components/debts/AddPaymentSheet';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { CreditStatementsView } from '../../src/components/debts/CreditStatementsView';
+import { EarlierBalanceSheet } from '../../src/components/debts/EarlierBalanceSheet';
 import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo } from '../../src/repositories';
 import { theme, makeStyles, useTheme } from '../../src/theme';
-import { displayDate, paidForDue } from '../../src/utils/date';
-import { formatPHP, roundCentavos } from '../../src/utils/currency';
+import { displayDate, nowIso } from '../../src/utils/date';
+import { formatPHP } from '../../src/utils/currency';
+import { STATUS_COLOR, STATUS_LABEL, creditStatus, statementsFor, summarize } from '../../src/utils/creditStatements';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
 type Charge = Transaction & { label: string };
-type SettleTarget = { transactionIds: string[]; amount: number; label: string };
 
 const CHARGE_ACTION_WIDTH = 76;
 
 type ChargeRowProps = {
   charge: Charge;
-  onPay: (c: Charge) => void;
   onEdit: (c: Charge) => void;
   onDelete: (c: Charge) => void;
 };
 
-function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
+function ChargeRow({ charge, onEdit, onDelete }: ChargeRowProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
@@ -77,14 +78,19 @@ function ChargeRow({ charge, onPay, onEdit, onDelete }: ChargeRowProps) {
       )}
     >
       <Pressable
-        onPress={() => onPay(charge)}
+        onPress={() => onEdit(charge)}
         accessibilityRole="button"
-        accessibilityLabel={`Pay charge ${charge.label}, ${formatPHP(charge.amount)}`}
+        accessibilityLabel={`Edit charge ${charge.label}, ${formatPHP(charge.amount)}`}
         style={({ pressed }) => [styles.chargeRow, pressed && styles.rowPressed]}
       >
         <View style={styles.chargeInfo}>
           <AppText variant="body">{charge.label}</AppText>
-          <AppText variant="bodySm" color="textMuted">{displayDate(charge.date)}</AppText>
+          <AppText variant="bodySm" color="textMuted">
+            {displayDate(charge.date)}
+            {charge.installmentMonths && charge.installmentMonths > 1
+              ? ` · ${charge.installmentMonths} months · ${formatPHP(Math.round((charge.amount / charge.installmentMonths) * 100) / 100)}/mo`
+              : ''}
+          </AppText>
         </View>
         <Amount value={charge.amount} variant="amountSm" semanticColor={false} />
         <Feather name="chevron-right" size={16} color={colors.textMuted} />
@@ -109,12 +115,12 @@ export default function DebtDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [paymentVisible, setPaymentVisible] = useState(false);
-  const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [editCharge, setEditCharge] = useState<Charge | null>(null);
   const [deleteCharge, setDeleteCharge] = useState<Charge | null>(null);
   const [chargeDeletedNotice, setChargeDeletedNotice] = useState(false);
   const [voicePrefill, setVoicePrefill] = useState<{ accountId?: string; amount?: number } | null>(null);
+  const [earlierVisible, setEarlierVisible] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -125,44 +131,27 @@ export default function DebtDetailScreen() {
     setDebt(d);
     setPayments(p);
     setAccounts(a);
-    let owed: Charge[] = [];
+    let purchases: Charge[] = [];
     if (d?.linkedAccountId) {
+      // Every purchase on a credit line feeds its statements; payments decide what's still owed.
       const txns = await transactionRepo.list({ accountId: d.linkedAccountId, type: 'Expense' });
       const cats = await categoryRepo.list();
       const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
-      // Only unsettled charges are still owed; settled ones live in Payment History.
-      owed = txns
-        .filter((t) => t.settledAt == null)
-        .map((t) => ({
-          ...t,
-          label: t.note || catName[t.categoryId ?? ''] || 'Charge',
-        }));
+      purchases = txns.map((t) => ({ ...t, label: t.note || catName[t.categoryId ?? ''] || 'Charge' }));
     }
-    setCharges(owed);
+    setCharges(purchases);
     setLoading(false);
 
-    if (pay === '1' && d && !voicePayDone.current) {
+    if (pay === '1' && d && !voicePayDone.current && d.outstandingBalance > 0) {
       voicePayDone.current = true;
-      const prefill = { accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined };
-      // A card pays whole charges, so a spoken amount is ignored and it settles every recorded charge.
-      if (d.linkedAccountId && owed.length > 0) {
-        setVoicePrefill(prefill);
-        setSettleTarget({
-          transactionIds: owed.map((c) => c.id),
-          amount: roundCentavos(owed.reduce((sum, c) => sum + c.amount, 0)),
-          label: 'all charges',
-        });
-      } else if (!d.linkedAccountId && d.status !== 'Paid') {
-        setVoicePrefill(prefill);
-        setPaymentVisible(true);
-      }
+      setVoicePrefill({ accountId: voiceAccountId, amount: voiceAmount ? Number(voiceAmount) : undefined });
+      setPaymentVisible(true);
     }
   }, [id, pay, voiceAccountId, voiceAmount]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a.name]));
-  const chargesTotal = roundCentavos(charges.reduce((sum, c) => sum + c.amount, 0));
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   async function handleDelete() {
@@ -195,10 +184,17 @@ export default function DebtDetailScreen() {
     );
   }
 
-  const statusColor = debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
-  const linkedCreditLimit = debt.linkedAccountId
-    ? accounts.find((a) => a.id === debt.linkedAccountId)?.creditLimit ?? null
-    : null;
+  const creditAccount = debt.linkedAccountId ? accounts.find((a) => a.id === debt.linkedAccountId) : undefined;
+  const linkedCreditLimit = creditAccount?.creditLimit ?? null;
+  const today = nowIso();
+  const credit = creditAccount ? statementsFor(creditAccount, charges, payments, debt.outstandingBalance, today) : null;
+  const creditSummary = credit ? summarize(credit.statements, today) : null;
+  // A credit line's status comes from its bills, not from owing something: future installments aren't overdue.
+  const badge = creditSummary ? creditStatus(creditSummary, debt.outstandingBalance) : null;
+  const statusColor = badge
+    ? STATUS_COLOR[badge]
+    : debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
+  const statusLabel = badge ? STATUS_LABEL[badge] : debt.status;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -233,23 +229,23 @@ export default function DebtDetailScreen() {
         <Card style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <AppText variant="h3" style={styles.flex}>{debt.creditor}</AppText>
-            <AppText variant="labelLg" color={statusColor}>{debt.status}</AppText>
+            <AppText variant="labelLg" color={statusColor}>{statusLabel}</AppText>
           </View>
-          {debt.status === 'Paid' ? (
+          {linkedCreditLimit != null ? (
+            <>
+              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
+              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+                owed of {formatPHP(linkedCreditLimit)} limit
+              </AppText>
+              <AppText variant="bodySm" color="textSecondary">
+                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
+              </AppText>
+            </>
+          ) : debt.status === 'Paid' ? (
             <>
               <Amount value={totalPaid} variant="amountLg" semanticColor={false} color="positive" />
               <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
                 Fully paid • {formatPHP(debt.originalAmount)} borrowed
-              </AppText>
-            </>
-          ) : linkedCreditLimit != null ? (
-            <>
-              <Amount value={debt.outstandingBalance} variant="amountLg" semanticColor={false} />
-              <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
-                of {formatPHP(linkedCreditLimit)} limit
-              </AppText>
-              <AppText variant="bodySm" color="positive">
-                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
               </AppText>
             </>
           ) : (
@@ -260,12 +256,12 @@ export default function DebtDetailScreen() {
               </AppText>
             </>
           )}
-          {debt.dueDate && debt.linkedAccountId && paidForDue(debt.dueDate, payments.map((p) => p.date)) ? (
-            <View style={styles.metaRow}>
-              <Feather name="check" size={14} color={colors.positive} />
-              <AppText variant="bodySm" color="positive">Paid for {displayDate(debt.dueDate)}</AppText>
-            </View>
-          ) : debt.dueDate ? (
+          {creditAccount && !credit ? (
+            <AppText variant="bodySm" color="textMuted" style={styles.originalLabel}>
+              Set a bill date and due date on this account to see monthly bills.
+            </AppText>
+          ) : null}
+          {debt.dueDate && !credit ? (
             <View style={styles.metaRow}>
               <Feather name="calendar" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color={debt.status === 'Overdue' ? 'negative' : 'textMuted'}>
@@ -293,38 +289,32 @@ export default function DebtDetailScreen() {
           ) : null}
         </Card>
 
-        {debt.status !== 'Paid' && !debt.linkedAccountId && (
+        {(creditAccount ? debt.outstandingBalance > 0 : debt.status !== 'Paid') && (
           <View style={styles.actions}>
             <Button
-              label="Add Payment"
+              label={creditAccount ? 'Pay' : 'Add Payment'}
               onPress={() => setPaymentVisible(true)}
               style={styles.flex}
             />
           </View>
         )}
 
+        {credit && creditSummary && creditAccount ? (
+          <CreditStatementsView
+            statements={credit.statements}
+            summary={creditSummary}
+            earlierAmount={credit.earlierAmount}
+            earlierMonths={creditAccount.earlierBalanceMonths}
+            earlierFirstBill={creditAccount.earlierBalanceFirstBill}
+            onChangeEarlier={() => setEarlierVisible(true)}
+          />
+        ) : null}
+
         {debt.linkedAccountId && charges.length > 0 && (
           <>
-            {/* Settling pays the charges only, so show their total; the card can owe more than its recorded charges. */}
-            <Button
-              label={`Pay All Charges · ${formatPHP(chargesTotal)}`}
-              onPress={() =>
-                setSettleTarget({
-                  transactionIds: charges.map((c) => c.id),
-                  amount: chargesTotal,
-                  label: 'all charges',
-                })
-              }
-            />
-            <AppText variant="h3" style={styles.sectionTitle}>Charges</AppText>
+            <AppText variant="h3" style={styles.sectionTitle}>Purchases</AppText>
             {charges.map((c) => (
-              <ChargeRow
-                key={c.id}
-                charge={c}
-                onPay={(charge) => setSettleTarget({ transactionIds: [charge.id], amount: charge.amount, label: charge.label })}
-                onEdit={setEditCharge}
-                onDelete={setDeleteCharge}
-              />
+              <ChargeRow key={c.id} charge={c} onEdit={setEditCharge} onDelete={setDeleteCharge} />
             ))}
           </>
         )}
@@ -378,21 +368,26 @@ export default function DebtDetailScreen() {
         debtId={debt.id}
         creditor={debt.creditor}
         outstandingBalance={debt.outstandingBalance}
-        monthlyPayment={debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined}
+        monthlyPayment={
+          creditSummary
+            ? creditSummary.dueNow || undefined
+            : debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined
+        }
+        monthlyLabel={creditSummary ? 'Due now' : undefined}
+        cashOnly={!!creditAccount}
         initialAccountId={voicePrefill?.accountId}
         initialAmount={voicePrefill?.amount}
       />
 
-      <AddPaymentSheet
-        visible={settleTarget !== null}
-        onClose={() => { setSettleTarget(null); setVoicePrefill(null); }}
-        onSuccess={load}
-        debtId={debt.id}
-        creditor={debt.creditor}
-        outstandingBalance={debt.outstandingBalance}
-        settle={settleTarget ?? undefined}
-        initialAccountId={voicePrefill?.accountId}
-      />
+      {creditAccount && credit ? (
+        <EarlierBalanceSheet
+          visible={earlierVisible}
+          onClose={() => setEarlierVisible(false)}
+          onSaved={load}
+          account={creditAccount}
+          amount={credit.earlierAmount}
+        />
+      ) : null}
 
       <ConfirmDialog
         visible={deleteVisible}

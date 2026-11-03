@@ -34,7 +34,7 @@ export function TransactionRow({ transaction, categoryName, subtitle, toAccountN
     <Swipeable
       ref={swipeRef}
       overshootRight={false}
-      renderRightActions={transaction.settledAt ? undefined : (progress) => (
+      renderRightActions={(progress) => (
         <Animated.View
           style={[
             styles.actions,

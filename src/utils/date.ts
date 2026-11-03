@@ -93,15 +93,3 @@ export function periodRangeIso(period: Period, date: Date = new Date()): { from:
       return { from: dayStart(y, m, 1), to: dayEnd(y, m + 1, 0) };
   }
 }
-
-/**
- * A card bill due on `dueIso` counts as paid once any payment lands after the previous bill's due day
- * (a payment on that day paid the previous bill). Both are ISO strings, so they compare as text.
- */
-export function paidForDue(dueIso: string, paymentIsos: string[]): boolean {
-  const after = new Date(dueIso);
-  after.setUTCMonth(after.getUTCMonth() - 1);
-  after.setUTCDate(after.getUTCDate() + 1);
-  const from = after.toISOString();
-  return paymentIsos.some((p) => p >= from);
-}

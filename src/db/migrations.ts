@@ -407,6 +407,19 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '019_credit_statements',
+    up: async (db) => {
+      // Credit lines bill monthly: a purchase can be split over months, and whatever is owed beyond
+      // recorded purchases (the "earlier balance") gets its own months-left and first bill.
+      await db.execAsync(`
+        ALTER TABLE transactions ADD COLUMN installmentMonths INTEGER;
+        ALTER TABLE accounts ADD COLUMN billDayNextStatement INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE accounts ADD COLUMN earlierBalanceMonths INTEGER;
+        ALTER TABLE accounts ADD COLUMN earlierBalanceFirstBill TEXT;
+      `);
+    },
+  },
 ];
 
 /** Highest migration this app build knows how to run — stamped into backup filenames. */

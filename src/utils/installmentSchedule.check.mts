@@ -118,4 +118,19 @@ function makeDebt(overrides: Partial<Debt>): Debt {
   assert.strictEqual(duesInMonth([undated], new Date(2026, 0, 1)).length, 0);
 }
 
+// duesInMonth: a credit line owes each statement's remaining amount in its due month, not its whole balance.
+{
+  const card = makeDebt({ id: 'card', linkedAccountId: 'acc', isInstallment: false, outstandingBalance: 900 });
+  const credit = {
+    card: [
+      { dueDate: new Date(2026, 0, 15).toISOString(), remaining: 300 },
+      { dueDate: new Date(2026, 1, 15).toISOString(), remaining: 0 },
+      { dueDate: new Date(2026, 2, 15).toISOString(), remaining: 600 },
+    ],
+  };
+  assert.deepStrictEqual(duesInMonth([card], new Date(2026, 0, 1), credit).map((r) => r.amount), [300]);
+  assert.strictEqual(duesInMonth([card], new Date(2026, 1, 1), credit).length, 0, 'paid statement drops out');
+  assert.deepStrictEqual(duesInMonth([card], new Date(2026, 2, 1), credit).map((r) => r.amount), [600]);
+}
+
 console.log('installmentSchedule.ts: all checks passed');

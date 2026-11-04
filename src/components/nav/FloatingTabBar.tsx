@@ -1,6 +1,7 @@
 import React, { createContext, useRef, useState } from 'react';
-import { View, Pressable, GestureResponderEvent } from 'react-native';
+import { View, Pressable, StyleSheet, GestureResponderEvent } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import Reanimated, { ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../ui/AppText';
@@ -18,6 +19,8 @@ type Props = {
   navigation: any;
   /** No mode = plain form; 'voice'/'camera' come from the hold-to-open fast dial. */
   onAdd: (mode?: 'voice' | 'camera') => void;
+  /** The active screen; Android can only blur what's inside a BlurTargetView. */
+  blurTarget: React.RefObject<View | null>;
 };
 
 type Slot = { route: string; label: string; icon: React.ComponentProps<typeof Feather>['name'] };
@@ -42,9 +45,9 @@ const RIGHT: Slot[] = [
   { route: 'more', label: 'More', icon: 'grid' },
 ];
 
-export function FloatingTabBar({ state, navigation, onAdd }: Props) {
+export function FloatingTabBar({ state, navigation, onAdd, blurTarget }: Props) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const styles = useStyles();
   const activeName = state.routes[state.index]?.name;
   const onLedger = activeName === 'ledger';
@@ -125,6 +128,8 @@ export function FloatingTabBar({ state, navigation, onAdd }: Props) {
         </View>
       ) : null}
       <View style={styles.bar}>
+        {/* ponytail: Android 11 and below blur through RenderScript, which is slow; dimezisBlurViewSdk31Plus turns it off there if scrolling lags. */}
+        <BlurView key={activeName} blurTarget={blurTarget} blurMethod="dimezisBlurView" intensity={80} tint={scheme} style={StyleSheet.absoluteFill} />
         {LEFT.map(renderSlot)}
         <Pressable
           onPress={onAddPress}
@@ -154,14 +159,13 @@ const useStyles = makeStyles((c) => ({
   bar: {
     height: 70,
     borderRadius: 35,
-    backgroundColor: c.bgSurface,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: c.borderDefault,
+    borderColor: c.accentBorder,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: theme.spacing[2],
-    ...theme.shadows.lg,
   },
   tab: { width: 62, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 3 },
   dot: { position: 'absolute', bottom: -2, width: 4, height: 4, borderRadius: 2, backgroundColor: c.accentPrimary },

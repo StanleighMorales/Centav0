@@ -27,8 +27,10 @@ The monthly payment is editable. Typing the lender's exact figure replaces the c
 - monthly payment = principal + interest + fee
 - total repayable = monthly payment × term + one-time fee
 
-### Storage (no schema change)
+### Storage (migration `020_loan_total_repayable`)
 
+- `debts.totalRepayable` holds the total for loans added this way. It stays null on older loans, so they keep counting
+  paid months from the principal.
 - `monthlyPayment` = principal per month; `monthlyInterest` = interest + fee per month; `installmentFee` = one-time fee.
   When the user overrides the payment, `monthlyPayment` = override − `monthlyInterest`.
 - `originalAmount` stays the amount borrowed. `outstandingBalance` starts at total repayable minus the paid months.
@@ -38,8 +40,9 @@ The monthly payment is editable. Typing the lender's exact figure replaces the c
 
 ### Schedule
 
-`buildSchedule` derives paid months from `(wholeLoanTotal − outstandingBalance) ÷ (monthlyPayment + monthlyInterest)`
-instead of `originalAmount − outstandingBalance`, so the grid and monthly views show the right paid/due/upcoming rows.
+When `totalRepayable` is set, `buildSchedule` derives paid months from `totalRepayable − outstandingBalance`, month by
+month (the first month carries the one-time fee), instead of `originalAmount − outstandingBalance`, so the grid and
+monthly views show the right paid/due/upcoming rows.
 
 ### Out of scope
 

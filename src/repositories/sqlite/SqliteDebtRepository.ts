@@ -4,6 +4,7 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
+import { addMonthsClamped } from '../../utils/installmentSchedule';
 import type { Debt, CreateDebtInput, UpdateDebtInput, DebtStatus } from '../../domain/types';
 
 function rowToDebt(row: any): Debt {
@@ -20,6 +21,7 @@ function rowToDebt(row: any): Debt {
     installmentFee: row.installmentFee ?? null,
     termMonths: row.termMonths ?? null,
     monthlyInterest: row.monthlyInterest ?? null,
+    totalRepayable: row.totalRepayable ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -75,7 +77,15 @@ export class SqliteDebtRepository {
     const now = nowIso();
     const amount = roundCentavos(input.originalAmount);
     const dueDate = input.dueDate ?? null;
-    const status = computeStatus(amount, dueDate);
+    const past = input.pastPayments ?? [];
+    const owed = input.totalRepayable != null
+      ? Math.max(0, roundCentavos(input.totalRepayable - past.reduce((sum, p) => sum + p.amount, 0)))
+      : amount;
+    // Months already paid move the next due date on; the first due date alone would read as overdue.
+    const nextDue = dueDate && past.length > 0 && input.termMonths && past.length < input.termMonths
+      ? addMonthsClamped(dueDate, past.length)
+      : dueDate;
+    const status = computeStatus(owed, nextDue);
     const isLoan = input.debtType === 'Loan';
     // A loan already sitting in an account is tracked without paying it out again.
     const disburse = isLoan && !input.alreadyReceived;
@@ -84,17 +94,25 @@ export class SqliteDebtRepository {
     const disbursementTransactionId = disburse ? newId() : null;
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, termMonths, monthlyInterest, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, termMonths, monthlyInterest, totalRepayable, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
         [
-          id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
+          id, FIXED_USER_ID, input.creditor, amount, owed, dueDate, status,
           input.debtType, disbursementAccountId, disbursementTransactionId,
           input.interestRate ?? null, input.note ?? null,
           input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
-          input.termMonths ?? null, input.monthlyInterest ?? null,
+          input.termMonths ?? null, input.monthlyInterest ?? null, input.totalRepayable ?? null,
           now, now,
         ],
       );
+      // accountId '' = paid before tracking: history only, no account is touched.
+      for (const p of past) {
+        await db.runAsync(
+          `INSERT INTO debt_payments (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+           VALUES (?, ?, ?, ?, ?, '', ?, ?, NULL, 1, NULL)`,
+          [newId(), FIXED_USER_ID, id, p.date, roundCentavos(p.amount), now, now],
+        );
+      }
       if (disburse) {
         const categoryId = await getOrCreateLoanCategory(db);
         await db.runAsync(

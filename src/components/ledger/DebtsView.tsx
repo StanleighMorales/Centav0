@@ -19,6 +19,7 @@ import { theme, makeStyles, useTheme } from '../../theme';
 import { displayDate, monthRangeIso, nowIso } from '../../utils/date';
 import { STATUS_COLOR, creditInfoFor, type CreditInfo } from '../../utils/creditStatements';
 import { formatPHP } from '../../utils/currency';
+import { monthlyAmount } from '../../utils/installmentSchedule';
 import { spendableAccounts } from '../../utils/accumulated';
 import type { Account, Debt, DebtPayment, DebtStatus, DebtType, Transaction } from '../../domain/types';
 
@@ -122,7 +123,7 @@ function DebtRow({ debt, paidTotal, available, credit, onPress, onEdit, onDelete
           ) : null}
           {debt.isInstallment && debt.monthlyPayment != null ? (
             <AppText variant="bodySm" color="textMuted">
-              {formatPHP(debt.monthlyPayment)}/mo installment
+              {formatPHP(monthlyAmount(debt) ?? debt.monthlyPayment)}/mo installment
             </AppText>
           ) : null}
         </View>

@@ -12,7 +12,7 @@ function makeDebt(overrides: Partial<Debt>): Debt {
     disbursementAccountId: null, linkedAccountId: null, disbursementTransactionId: null,
     interestRate: null, note: null,
     isInstallment: true, monthlyPayment: 2000, installmentFee: 100,
-    termMonths: 5, monthlyInterest: 50,
+    termMonths: 5, monthlyInterest: 50, totalRepayable: null,
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     deletedAt: null, isDirty: false, syncedAt: null,
     ...overrides,
@@ -50,6 +50,20 @@ function makeDebt(overrides: Partial<Debt>): Debt {
 {
   const schedule = buildSchedule(makeDebt({ outstandingBalance: 0 }));
   assert.ok(schedule.every((m) => m.status === 'paid'), 'fully paid loan marks every month paid');
+}
+
+// A loan added with its total repayable: paid months come from what's left of that total.
+{
+  // 12 x 2,184.58 (1,458.33 principal + 726.25 interest and fees); 2 payments made.
+  const loan = makeDebt({
+    originalAmount: 17500, totalRepayable: 26215, outstandingBalance: 21845.84,
+    monthlyPayment: 1458.33, monthlyInterest: 726.25, installmentFee: null, termMonths: 12,
+  });
+  const statuses = buildSchedule(loan).map((m) => m.status);
+  assert.deepStrictEqual(statuses.slice(0, 4), ['paid', 'paid', 'due', 'upcoming']);
+  assert.strictEqual(statuses.filter((s) => s === 'paid').length, 2);
+  assert.strictEqual(wholeLoanTotal(loan), 26215);
+  assert.ok(buildSchedule({ ...loan, outstandingBalance: 0 }).every((m) => m.status === 'paid'), 'fully paid');
 }
 
 // Non-installment or missing term/payment yields an empty schedule.

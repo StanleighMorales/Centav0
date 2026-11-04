@@ -141,6 +141,8 @@ export interface Debt extends AuditFields, LocalSyncFields {
   termMonths: number | null;
   /** Flat interest amount added on top of monthlyPayment each scheduled month. Installment loans only. */
   monthlyInterest: number | null;
+  /** Everything to repay (principal, interest, fees) when the loan was added with its terms; the balance starts here. */
+  totalRepayable: number | null;
 }
 
 export interface CreateDebtInput {
@@ -152,6 +154,10 @@ export interface CreateDebtInput {
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
   termMonths?: number; monthlyInterest?: number;
+  /** Installment loan with flat rates: the balance starts at this instead of originalAmount. */
+  totalRepayable?: number;
+  /** Months already paid before adding the loan: logged as payments with no account, so no balance moves. */
+  pastPayments?: { date: string; amount: number }[];
 }
 export interface UpdateDebtInput {
   creditor?: string; dueDate?: string; interestRate?: number; note?: string;

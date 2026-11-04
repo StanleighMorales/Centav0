@@ -229,13 +229,12 @@ export function DebtsView({ addSignal }: { addSignal: number }) {
     return info;
   }, [debts, accounts, creditCharges, payments]);
 
-  // A credit line nothing was ever owed or paid on was just added: it's open, not paid off.
-  // One charged and paid off has payment history, so it moves to the Paid tab.
+  // A credit line with nothing owed isn't open, even one never used.
   const tabStatus = (d: Debt): DebtStatus => {
-    if (d.linkedAccountId && d.outstandingBalance <= 0 && !(paidTotals[d.id] > 0)) return 'Open';
+    if (d.linkedAccountId && d.outstandingBalance <= 0) return 'Paid';
     const c = creditInfo[d.id];
     if (!c) return d.status;
-    return c.summary.overdue > 0 ? 'Overdue' : d.outstandingBalance <= 0 ? 'Paid' : 'Open';
+    return c.summary.overdue > 0 ? 'Overdue' : 'Open';
   };
 
   const typeDebts = debts.filter((d) => d.debtType === activeType);

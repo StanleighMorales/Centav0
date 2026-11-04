@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { createRef, useRef, useState } from 'react';
+import type { View } from 'react-native';
+import { BlurTargetView } from 'expo-blur';
 import { Tabs, useRouter } from 'expo-router';
 import { FloatingTabBar, LedgerAddContext } from '../../src/components/nav/FloatingTabBar';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
@@ -23,6 +25,9 @@ export default function TabLayout() {
   const [unpicked, setUnpicked] = useState<PayCmd | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [ledgerAdd, setLedgerAdd] = useState(0);
+  // A blur can't sit inside its own target, so each screen is one and the bar follows the active screen.
+  const blurTargets = useRef<Record<string, React.RefObject<View | null>>>({}).current;
+  const blurTarget = (route: string) => (blurTargets[route] ??= createRef<View>());
 
   // The debt screen opens its payment sheet from these params, so card charges load in one place.
   function pay(debtId: string, cmd: PayCmd) {
@@ -45,6 +50,7 @@ export default function TabLayout() {
           <FloatingTabBar
             state={props.state}
             navigation={props.navigation}
+            blurTarget={blurTarget(props.state.routes[props.state.index].name)}
             // On Ledger, + adds to the open section and the dial's Voice speaks a payment or transfer instead of an expense.
             onAdd={(mode) => {
               if (props.state.routes[props.state.index]?.name !== 'ledger' || mode === 'camera') openAdd(mode);
@@ -52,6 +58,9 @@ export default function TabLayout() {
               else setLedgerAdd((n) => n + 1);
             }}
           />
+        )}
+        screenLayout={({ children, route }) => (
+          <BlurTargetView ref={blurTarget(route.name)} style={{ flex: 1, backgroundColor: colors.bgPrimary }}>{children}</BlurTargetView>
         )}
         screenOptions={{
           headerShown: false,

@@ -4,11 +4,13 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { AppText } from '../../src/components/ui/AppText';
 import { Amount } from '../../src/components/ui/Amount';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
+import { useCalculator } from '../../src/components/calculator/CalculatorOverlay';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
@@ -78,6 +80,9 @@ export default function DashboardScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const showCalculator = useCalculator();
+  // Off the top, the calculator moves from the header onto the pinned balance card.
+  const [scrolled, setScrolled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [totalBalance, setTotalBalance] = useState(0);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -182,32 +187,55 @@ export default function DashboardScreen() {
         </View>
       ) : (
         <ScrollView
+          stickyHeaderIndices={[1]}
+          scrollEventThrottle={16}
+          onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 0)}
           contentContainerStyle={[styles.scroll, { paddingBottom: TAB_BAR_SPACE + insets.bottom }]}
           showsVerticalScrollIndicator={false}
         >
-          <ScreenHeader title="Home" />
+          <ScreenHeader title="Home" calculatorHidden={scrolled} />
 
           {/* Hero Balance Card */}
-          <LinearGradient colors={[colors.heroFrom, colors.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
-            <View style={styles.labelRow}>
-              <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
-                TOTAL BALANCE
-              </AppText>
-              <EyeToggle
-                hidden={hideTotal}
-                label="total balance"
-                onPress={() => toggleHidden(HIDE_TOTAL_KEY, !hideTotal, setHideTotal)}
-              />
-            </View>
-            <View style={styles.heroAmount}>
-              <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
-                {'₱'}
-              </AppText>
-              <AppText variant="displayLg" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {hideTotal ? HIDDEN_AMOUNT : formatAmount(totalBalance)}
-              </AppText>
-            </View>
-          </LinearGradient>
+          {/* The sticky wrapper takes its child's style, so this View gives it none of the card's. */}
+          <View>
+            <LinearGradient colors={[colors.heroFrom, colors.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+              <View style={styles.labelRow}>
+                <AppText variant="labelSm" color="textSecondary" style={styles.heroLabel}>
+                  TOTAL BALANCE
+                </AppText>
+                <View style={styles.heroActions}>
+                  {scrolled ? (
+                    <Reanimated.View
+                      entering={FadeIn.duration(theme.motion.standard.duration)}
+                      exiting={FadeOut.duration(theme.motion.exit.duration)}
+                    >
+                      <Pressable
+                        onPress={() => showCalculator(true)}
+                        hitSlop={theme.spacing[3]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Calculator"
+                      >
+                        <MaterialCommunityIcons name="calculator" size={18} color={colors.textSecondary} />
+                      </Pressable>
+                    </Reanimated.View>
+                  ) : null}
+                  <EyeToggle
+                    hidden={hideTotal}
+                    label="total balance"
+                    onPress={() => toggleHidden(HIDE_TOTAL_KEY, !hideTotal, setHideTotal)}
+                  />
+                </View>
+              </View>
+              <View style={styles.heroAmount}>
+                <AppText variant="amountMd" color="textSecondary" style={styles.currencySymbol}>
+                  {'₱'}
+                </AppText>
+                <AppText variant="displayLg" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {hideTotal ? HIDDEN_AMOUNT : formatAmount(totalBalance)}
+                </AppText>
+              </View>
+            </LinearGradient>
+          </View>
 
           {savingsAccounts.length > 0 && (
             <View style={styles.savingsCard}>
@@ -461,6 +489,7 @@ const useStyles = makeStyles((c) => ({
     padding: theme.spacing[6],
     ...theme.shadows.md,
   },
+  heroActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[5] },
   heroLabel: {
     letterSpacing: 1.2,
   },

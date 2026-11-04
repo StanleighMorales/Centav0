@@ -10,6 +10,7 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "@types/react": "~19.2.4",
     "expo": "~57.0.31",
+    "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.6",
     "expo-crypto": "~57.0.4",
     "expo-dev-client": "~57.0.20",

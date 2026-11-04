@@ -420,6 +420,13 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '020_loan_total_repayable',
+    up: async (db) => {
+      // Set only for loans added with flat-rate terms; older loans keep counting paid months from the principal.
+      await db.execAsync(`ALTER TABLE debts ADD COLUMN totalRepayable REAL;`);
+    },
+  },
 ];
 
 /** Highest migration this app build knows how to run — stamped into backup filenames. */

@@ -28,7 +28,6 @@ export function groupAccounts(accounts: Account[]): AccountGroup[] {
   ].filter((g) => g.accounts.length > 0);
 }
 
-/** Income/Expense pair that moves an account from `from` to `to`. Null when equal. */
 type TxLike = { accountId: string; type: string; amount: number };
 const signed = (t: TxLike) => (t.type === 'Income' ? t.amount : -t.amount);
 
@@ -44,6 +43,7 @@ export function overdraws(balance: number, change: number): boolean {
   return change < 0 && Math.round((balance + change) * 100) / 100 < 0;
 }
 
+/** Income/Expense pair that moves an account from `from` to `to`. Null when equal. */
 export function balanceAdjustment(from: number, to: number):
   { type: 'Income' | 'Expense'; amount: number } | null {
   const diff = Math.round((to - from) * 100) / 100; // roundCentavos, inlined so the self-check runs standalone

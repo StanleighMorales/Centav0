@@ -30,9 +30,12 @@ function delta(type: string, amount: number): number {
   return type === 'Income' ? amount : -amount;
 }
 
+/** Refused for lack of money, not because something broke. */
+export class NotEnoughError extends Error {}
+
 // Cash and e-wallets can't be overspent, and a credit line can't go past its limit (its balance is available credit).
 function notEnough(account: { name: string; currentBalance: number; allowsOverdraft: number }): Error {
-  return new Error(
+  return new NotEnoughError(
     account.allowsOverdraft === 1
       ? 'Expense exceeds available credit'
       : `Only ${formatPHP(Math.max(0, account.currentBalance))} left in ${account.name}`,

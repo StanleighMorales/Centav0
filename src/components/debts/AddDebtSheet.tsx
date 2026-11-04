@@ -12,6 +12,9 @@ import { AppText } from '../ui/AppText';
 import { debtRepo, accountRepo } from '../../repositories';
 import { theme, makeStyles, useTheme } from '../../theme';
 import { nowIso } from '../../utils/date';
+import { formatPHP } from '../../utils/currency';
+import { flatLoanTerms, pastPayments } from '../../utils/loanTerms';
+import { addMonthsClamped } from '../../utils/installmentSchedule';
 import type { Account, Debt, DebtType } from '../../domain/types';
 
 type Props = {
@@ -37,6 +40,10 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   const [installmentFee, setInstallmentFee] = useState(0);
   const [termMonths, setTermMonths] = useState('');
   const [monthlyInterest, setMonthlyInterest] = useState(0);
+  // New loans take the lender's monthly rates; the paid months are logged as history.
+  const [interestPct, setInterestPct] = useState('');
+  const [feePct, setFeePct] = useState('');
+  const [paidMonthsText, setPaidMonthsText] = useState('0');
   const [accountId, setAccountId] = useState('');
   const [alreadyReceived, setAlreadyReceived] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -44,6 +51,15 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const isLoan = (initial?.debtType ?? debtType) === 'Loan';
+  const flatMode = !isEdit && isLoan && isInstallment;
+  const termsMonths = parseInt(termMonths, 10);
+  const paidMonths = parseInt(paidMonthsText, 10) || 0;
+  const terms = flatMode && originalAmount > 0 && termsMonths > 0
+    ? flatLoanTerms({
+      amount: originalAmount, months: termsMonths, interestPct: parseFloat(interestPct) || 0, feePct: parseFloat(feePct) || 0,
+      oneTimeFee: installmentFee, paidMonths: Math.min(Math.max(paidMonths, 0), termsMonths), paymentOverride: monthlyPayment,
+    })
+    : null;
   const disbursementAccount = accounts.find((a) => a.id === initial?.disbursementAccountId);
 
   useEffect(() => {
@@ -60,6 +76,9 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
       setInstallmentFee(initial?.installmentFee ?? 0);
       setTermMonths(initial?.termMonths != null ? String(initial.termMonths) : '');
       setMonthlyInterest(initial?.monthlyInterest ?? 0);
+      setInterestPct('');
+      setFeePct('');
+      setPaidMonthsText('0');
       setAccountId('');
       setErrors({});
       setAlreadyReceived(false);
@@ -71,7 +90,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
     const errs: Record<string, string> = {};
     if (!creditor.trim()) errs.creditor = 'Enter a creditor name';
     if (!isEdit && originalAmount <= 0) errs.originalAmount = 'Enter an amount greater than 0';
-    if (isInstallment && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
+    if (isInstallment && !flatMode && monthlyPayment <= 0) errs.monthlyPayment = 'Enter the monthly payment';
     let parsedTermMonths: number | undefined;
     if (isInstallment) {
       parsedTermMonths = parseInt(termMonths, 10);
@@ -79,17 +98,30 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         errs.termMonths = 'Enter the number of months';
       }
     }
+    if (flatMode) {
+      if (paidMonths < 0 || paidMonths > (parsedTermMonths ?? 0)) errs.paidMonths = `Enter 0 to ${parsedTermMonths || 0} months`;
+      else if (terms && terms.principalPart <= 0) errs.monthlyPayment = 'Payment must be more than the interest and fees';
+    }
     if (!isEdit && isLoan && !alreadyReceived && !accountId) errs.accountId = 'Select an account to receive the loan';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     try {
       const rate = interestRate.trim() ? parseFloat(interestRate) : undefined;
+      const extra = terms ? terms.extra : monthlyInterest;
       const installmentFields = {
         isInstallment,
-        monthlyPayment: isInstallment ? monthlyPayment : undefined,
+        monthlyPayment: isInstallment ? (terms ? terms.principalPart : monthlyPayment) : undefined,
         installmentFee: isInstallment && installmentFee > 0 ? installmentFee : undefined,
         termMonths: isInstallment ? parsedTermMonths : undefined,
-        monthlyInterest: isInstallment && monthlyInterest > 0 ? monthlyInterest : undefined,
+        monthlyInterest: isInstallment && extra > 0 ? extra : undefined,
+        ...(terms ? {
+          totalRepayable: terms.total,
+          pastPayments: pastPayments(
+            Array.from({ length: paidMonths }, (_, k) => addMonthsClamped(dueDate, k)),
+            terms.monthlyPayment,
+            installmentFee,
+          ),
+        } : {}),
       };
       if (isEdit && initial) {
         await debtRepo.update(initial.id, {
@@ -177,7 +209,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         <View style={styles.dateWrapper}>
           {dueDateEnabled ? (
             <View>
-              <DatePicker label="Due Date" value={dueDate || nowIso()} onChange={setDueDate} />
+              <DatePicker label={flatMode ? 'First Due Date' : 'Due Date'} value={dueDate || nowIso()} onChange={setDueDate} />
               {!isInstallment && (
                 <Pressable
                   onPress={() => { setDueDateEnabled(false); setDueDate(''); }}
@@ -225,30 +257,57 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
         </View>
         {isInstallment && (
           <>
-            <AmountInput
-              label="Monthly Payment"
-              value={monthlyPayment}
-              onChange={setMonthlyPayment}
-              error={errors.monthlyPayment}
-            />
-            <AppTextInput
-              label="Term (months)"
-              value={termMonths}
-              onChangeText={setTermMonths}
-              placeholder="e.g. 12"
-              error={errors.termMonths}
-              numeric
-            />
-            <AmountInput
-              label="Monthly Interest (optional)"
-              value={monthlyInterest}
-              onChange={setMonthlyInterest}
-            />
-            <AmountInput
-              label="Other Fees (optional)"
-              value={installmentFee}
-              onChange={setInstallmentFee}
-            />
+            {flatMode ? (
+              <>
+                <AppTextInput label="Term (months)" value={termMonths} onChangeText={setTermMonths} placeholder="e.g. 12" error={errors.termMonths} numeric />
+                <AppTextInput label="Interest per month %" value={interestPct} onChangeText={setInterestPct} placeholder="e.g. 3.95" numeric />
+                <AppTextInput label="Fee per month % (e.g. loan protection)" value={feePct} onChangeText={setFeePct} placeholder="e.g. 0.20" numeric />
+                <AmountInput label="One-time fee (optional)" value={installmentFee} onChange={setInstallmentFee} />
+                <AppTextInput label="Months already paid" value={paidMonthsText} onChangeText={setPaidMonthsText} error={errors.paidMonths} numeric />
+                <AmountInput
+                  label="Monthly payment (optional, the lender's exact figure)"
+                  value={monthlyPayment}
+                  onChange={setMonthlyPayment}
+                  error={errors.monthlyPayment}
+                />
+                {terms ? (
+                  <View style={styles.preview}>
+                    <AppText variant="bodySm" color="textSecondary">
+                      {formatPHP(terms.monthlyPayment)}/month · {formatPHP(terms.total)} to repay
+                      {' '}({formatPHP(terms.interestAndFees)} interest and fees)
+                    </AppText>
+                    <AppText variant="labelLg" color="textPrimary">{formatPHP(terms.remaining)} remaining</AppText>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <AmountInput
+                  label="Monthly Payment"
+                  value={monthlyPayment}
+                  onChange={setMonthlyPayment}
+                  error={errors.monthlyPayment}
+                />
+                <AppTextInput
+                  label="Term (months)"
+                  value={termMonths}
+                  onChangeText={setTermMonths}
+                  placeholder="e.g. 12"
+                  error={errors.termMonths}
+                  numeric
+                />
+                <AmountInput
+                  label="Monthly Interest (optional)"
+                  value={monthlyInterest}
+                  onChange={setMonthlyInterest}
+                />
+                <AmountInput
+                  label="Other Fees (optional)"
+                  value={installmentFee}
+                  onChange={setInstallmentFee}
+                />
+              </>
+            )}
           </>
         )}
         <AppTextInput
@@ -272,6 +331,7 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
 }
 
 const useStyles = makeStyles((c) => ({
+  preview: { gap: theme.spacing[1], padding: theme.spacing[4], borderRadius: theme.radius.md, backgroundColor: c.bgElevated },
   form: { gap: theme.spacing[5] },
   dateWrapper: {},
   clearDate: { paddingTop: theme.spacing[2] },

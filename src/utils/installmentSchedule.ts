@@ -16,7 +16,7 @@ export interface ScheduleMonth {
 // of the target month (e.g. Jan 31 + 1 month -> Feb 28). Plain Date construction
 // rolls over out-of-range days, so we explicitly compute and cap to the last
 // valid day of the target month instead.
-function addMonthsClamped(iso: string, months: number): string {
+export function addMonthsClamped(iso: string, months: number): string {
   const d = new Date(iso);
   const year = d.getFullYear();
   const month = d.getMonth() + months;
@@ -43,10 +43,20 @@ export function buildSchedule(debt: Debt): ScheduleMonth[] {
   const monthlyInterest = debt.monthlyInterest ?? 0;
   const fee = debt.installmentFee ?? 0;
 
-  const monthsPaid = Math.min(
-    debt.termMonths,
-    Math.max(0, Math.floor((debt.originalAmount - debt.outstandingBalance) / monthlyPayment)),
-  );
+  // A loan added with its total repayable counts paid months from what's left of that total.
+  // Older loans count them from the principal alone.
+  const monthAmount = (i: number) => monthlyPayment + monthlyInterest + (i === 0 ? fee : 0);
+  let monthsPaid: number;
+  if (debt.totalRepayable != null) {
+    let paid = debt.totalRepayable - debt.outstandingBalance;
+    monthsPaid = 0;
+    while (monthsPaid < debt.termMonths && paid + 0.005 >= monthAmount(monthsPaid)) paid -= monthAmount(monthsPaid++);
+  } else {
+    monthsPaid = Math.min(
+      debt.termMonths,
+      Math.max(0, Math.floor((debt.originalAmount - debt.outstandingBalance) / monthlyPayment)),
+    );
+  }
 
   const months: ScheduleMonth[] = [];
   for (let i = 0; i < debt.termMonths; i++) {
@@ -114,8 +124,15 @@ export function duesInMonth(
 /** Total amount paid over the loan's full term: (payment + interest) * term + one-time fee. */
 export function wholeLoanTotal(debt: Debt): number {
   if (!debt.termMonths) return 0;
+  if (debt.totalRepayable != null) return debt.totalRepayable;
   const monthlyPayment = debt.monthlyPayment ?? 0;
   const monthlyInterest = debt.monthlyInterest ?? 0;
   const fee = debt.installmentFee ?? 0;
   return (monthlyPayment + monthlyInterest) * debt.termMonths + fee;
+}
+
+/** What one scheduled payment costs: a loan added with its total repayable already folds interest into the payment. */
+export function monthlyAmount(debt: Debt): number | null {
+  if (debt.monthlyPayment == null) return null;
+  return debt.totalRepayable != null ? debt.monthlyPayment + (debt.monthlyInterest ?? 0) : debt.monthlyPayment;
 }

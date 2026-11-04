@@ -18,7 +18,8 @@ import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo }
 import { theme, makeStyles, useTheme } from '../../src/theme';
 import { displayDate, groupByMonth, nowIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import { STATUS_COLOR, STATUS_LABEL, creditStatus, statementsFor, summarize } from '../../src/utils/creditStatements';
+import { monthlyAmount } from '../../src/utils/installmentSchedule';
+import { STATUS_COLOR, STATUS_LABEL, creditInfoFor } from '../../src/utils/creditStatements';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
 type Charge = Transaction & { label: string };
@@ -150,15 +151,13 @@ export default function DebtDetailScreen() {
 
   const creditAccount = debt.linkedAccountId ? accounts.find((a) => a.id === debt.linkedAccountId) : undefined;
   const linkedCreditLimit = creditAccount?.creditLimit ?? null;
-  const today = nowIso();
-  const credit = creditAccount ? statementsFor(creditAccount, charges, payments, debt.outstandingBalance, today) : null;
-  const creditSummary = credit ? summarize(credit.statements, today) : null;
+  const credit = creditAccount ? creditInfoFor(creditAccount, charges, payments, nowIso()) : null;
+  const creditSummary = credit?.summary ?? null;
   // A credit line's status comes from its bills, not from owing something: future installments aren't overdue.
-  const badge = creditSummary ? creditStatus(creditSummary) : null;
-  const statusColor = badge
-    ? STATUS_COLOR[badge]
+  const statusColor = credit
+    ? STATUS_COLOR[credit.status]
     : debt.status === 'Overdue' ? 'negative' : debt.status === 'Paid' ? 'positive' : 'accentPrimary';
-  const statusLabel = badge ? STATUS_LABEL[badge] : debt.status;
+  const statusLabel = credit ? STATUS_LABEL[credit.status] : debt.status;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -207,7 +206,7 @@ export default function DebtDetailScreen() {
                 owed of {formatPHP(linkedCreditLimit)} limit
               </AppText>
               <AppText variant="bodySm" color="positive">
-                {formatPHP(Math.max(0, linkedCreditLimit - debt.outstandingBalance))} available
+                {formatPHP(creditAccount?.currentBalance ?? 0)} available
               </AppText>
             </>
           ) : debt.status === 'Paid' ? (
@@ -242,7 +241,7 @@ export default function DebtDetailScreen() {
             <View style={styles.metaRow}>
               <Feather name="repeat" size={14} color={colors.textMuted} />
               <AppText variant="bodySm" color="textMuted">
-                {formatPHP(debt.monthlyPayment)}/month installment
+                {formatPHP(monthlyAmount(debt) ?? debt.monthlyPayment)}/month installment
                 {debt.installmentFee != null ? ` + ${formatPHP(debt.installmentFee)} fees` : ''}
               </AppText>
             </View>
@@ -325,7 +324,7 @@ export default function DebtDetailScreen() {
                       <View style={styles.paymentInfo}>
                         <AppText variant="body">{displayDate(p.date)}</AppText>
                         <AppText variant="bodySm" color="textMuted">
-                          via {accountMap[p.accountId] ?? 'Unknown account'}
+                          {p.accountId === '' ? 'Paid before tracking' : `via ${accountMap[p.accountId] ?? 'Unknown account'}`}
                         </AppText>
                       </View>
                       <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
@@ -369,7 +368,7 @@ export default function DebtDetailScreen() {
         monthlyPayment={
           creditSummary
             ? creditSummary.dueNow || creditSummary.nextUnpaid?.remaining || undefined
-            : debt.isInstallment ? debt.monthlyPayment ?? undefined : undefined
+            : debt.isInstallment ? monthlyAmount(debt) ?? undefined : undefined
         }
         monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}
         cashOnly={!!creditAccount}

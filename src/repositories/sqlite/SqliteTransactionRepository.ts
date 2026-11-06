@@ -77,7 +77,7 @@ export class SqliteTransactionRepository {
     return row ? rowToTransaction(row) : null;
   }
 
-  async create(input: CreateTransactionInput): Promise<Transaction> {
+  async create(input: CreateTransactionInput, recurringRuleId?: string): Promise<Transaction> {
     const db = await getDatabase();
     const id = newId();
     const now = nowIso();
@@ -104,6 +104,13 @@ export class SqliteTransactionRepository {
         [delta(input.type, amount), now, input.accountId, FIXED_USER_ID],
       );
       await syncLinkedCreditDebt(db, input.accountId);
+      // In this same transaction: a bill posted but not marked would post again on the next pass.
+      if (recurringRuleId) {
+        await db.runAsync(
+          `UPDATE recurring_transactions SET lastMaterializedDate = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [input.date, recurringRuleId, FIXED_USER_ID],
+        );
+      }
     });
     const created = await this.getById(id);
     if (!created) throw new Error('Transaction creation failed silently');

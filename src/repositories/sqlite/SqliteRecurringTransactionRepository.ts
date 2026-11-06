@@ -95,12 +95,4 @@ export class SqliteRecurringTransactionRepository {
       [now, now, id, FIXED_USER_ID],
     );
   }
-
-  async markMaterialized(id: string, lastMaterializedDate: string): Promise<void> {
-    const db = await getDatabase();
-    await db.runAsync(
-      `UPDATE recurring_transactions SET lastMaterializedDate = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-      [lastMaterializedDate, id, FIXED_USER_ID],
-    );
-  }
 }

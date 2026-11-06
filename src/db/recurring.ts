@@ -28,15 +28,13 @@ async function postDueOccurrences(): Promise<StuckRecurring[]> {
   for (const rule of rules) {
     const occurrences = nextOccurrences(rule, rule.lastMaterializedDate, today);
     if (occurrences.length === 0) continue;
-    let posted: string | null = null;
     for (const date of occurrences) {
       try {
         await transactionRepo.create({
           date, amount: rule.amount, type: rule.type,
           categoryId: rule.categoryId ?? undefined, accountId: rule.accountId,
           note: rule.note ?? undefined,
-        });
-        posted = date;
+        }, rule.id);
       } catch (e) {
         // Not enough in the account: leave this and later occurrences unposted; they post on a later pass.
         // Anything else stops the rule the same way, but shouldn't pass silently.
@@ -46,7 +44,6 @@ async function postDueOccurrences(): Promise<StuckRecurring[]> {
         break;
       }
     }
-    if (posted) await recurringTransactionRepo.markMaterialized(rule.id, posted);
   }
   return stuck;
 }

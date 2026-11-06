@@ -104,7 +104,8 @@ export default function ReportsScreen() {
         catTotals.set(catId, (catTotals.get(catId) ?? 0) + tx.amount);
       }
     }
-    const debtPaymentTotal = debtPayments.reduce((sum, p) => sum + p.amount, 0);
+    // Payments from before tracking are history, not spending in this period.
+    const debtPaymentTotal = debtPayments.filter((p) => p.accountId !== null).reduce((sum, p) => sum + p.amount, 0);
     exp += debtPaymentTotal;
     setIncome(inc);
     setExpense(exp);

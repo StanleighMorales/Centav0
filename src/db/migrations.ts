@@ -427,6 +427,35 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`ALTER TABLE debts ADD COLUMN totalRepayable REAL;`);
     },
   },
+  {
+    name: '021_payment_without_account',
+    up: async (db) => {
+      // A payment made before the debt was tracked came from no account here, so accountId can be NULL.
+      await db.execAsync(`
+        CREATE TABLE debt_payments_new (
+          id           TEXT PRIMARY KEY NOT NULL,
+          userId       TEXT NOT NULL,
+          debtId       TEXT NOT NULL,
+          date         TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          accountId    TEXT,
+          createdAt    TEXT NOT NULL,
+          updatedAt    TEXT NOT NULL,
+          deletedAt    TEXT,
+          isDirty      INTEGER NOT NULL DEFAULT 1,
+          syncedAt     TEXT,
+          FOREIGN KEY (debtId)    REFERENCES debts(id),
+          FOREIGN KEY (accountId) REFERENCES accounts(id)
+        );
+        INSERT INTO debt_payments_new (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+          SELECT id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt FROM debt_payments;
+        DROP TABLE debt_payments;
+        ALTER TABLE debt_payments_new RENAME TO debt_payments;
+        CREATE INDEX idx_dp_debt ON debt_payments(debtId);
+        CREATE INDEX idx_dp_date ON debt_payments(date);
+      `);
+    },
+  },
 ];
 
 /** Highest migration this app build knows how to run — stamped into backup filenames. */

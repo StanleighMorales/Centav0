@@ -126,7 +126,13 @@ export async function restoreBackup(): Promise<'restored' | 'cancelled'> {
       destDatabase: db,
       destDatabaseName: 'main',
     });
-    await runMigrations(db);
+    // Same as at startup: a migration's table rebuild mustn't trip FK checks.
+    await db.execAsync(`PRAGMA foreign_keys = OFF;`);
+    try {
+      await runMigrations(db);
+    } finally {
+      await db.execAsync(`PRAGMA foreign_keys = ON;`);
+    }
     await setSetting(LAST_BACKUP_KEY, nowIso());
     return 'restored';
   } finally {

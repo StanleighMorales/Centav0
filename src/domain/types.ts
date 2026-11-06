@@ -167,7 +167,9 @@ export interface UpdateDebtInput {
 
 export interface DebtPayment extends AuditFields, LocalSyncFields {
   id: string; userId: string; debtId: string;
-  date: string; amount: number; accountId: string;
+  date: string; amount: number;
+  /** null = paid before the debt was tracked: history only, no account was touched. */
+  accountId: string | null;
 }
 export interface CreateDebtPaymentInput { date: string; amount: number; accountId: string; }
 

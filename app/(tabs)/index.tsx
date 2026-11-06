@@ -22,7 +22,7 @@ import { TransactionRow } from '../../src/components/transactions/TransactionRow
 import { AccountCarousel } from '../../src/components/dashboard/AccountCarousel';
 import { NoticeCard } from '../../src/components/dashboard/NoticeCard';
 import { accountRepo, categoryRepo, transactionRepo, debtPaymentRepo, getSetting, setSetting } from '../../src/repositories';
-import { periodRangeIso, type Period } from '../../src/utils/date';
+import { inRange, periodRangeIso, type Period } from '../../src/utils/date';
 import { formatPHP, formatAmount, HIDDEN_AMOUNT } from '../../src/utils/currency';
 import { groupAccounts, isCredit, isSavings, isSpending, sumBalance } from '../../src/utils/accounts';
 import { theme, makeStyles, useTheme } from '../../src/theme';
@@ -140,9 +140,10 @@ export default function DashboardScreen() {
       return notEnough ? `${name}: not enough in ${account}` : `${name}: couldn't post`;
     }));
     setAllTxns(txns);
-    const { from, to } = periodRangeIso(period);
-    const periodTxns = txns.filter((t) => t.date >= from.slice(0, 10) && t.date <= to.slice(0, 10));
-    const periodDebtPayments = debtPayments.filter((p) => p.date >= from.slice(0, 10) && p.date <= to.slice(0, 10));
+    const range = periodRangeIso(period);
+    const periodTxns = txns.filter((t) => inRange(t.date, range));
+    // Payments from before tracking are history, not this period's spending.
+    const periodDebtPayments = debtPayments.filter((p) => p.accountId !== null && inRange(p.date, range));
     setMonthIncome(periodTxns.filter((t) => t.type === 'Income').reduce((s, t) => s + t.amount, 0));
     setMonthExpense(
       periodTxns.filter((t) => t.type === 'Expense').reduce((s, t) => s + t.amount, 0)
@@ -161,10 +162,7 @@ export default function DashboardScreen() {
   useEffect(() => onDataChanged(load), [load]);
 
   const recentTxns = (
-    recentFilter === 'all' ? allTxns : allTxns.filter((t) => {
-      const { from, to } = periodRangeIso(recentFilter);
-      return t.date >= from && t.date <= to;
-    })
+    recentFilter === 'all' ? allTxns : allTxns.filter((t) => inRange(t.date, periodRangeIso(recentFilter)))
   ).slice(0, 5);
 
   async function changePeriod(p: Period) {

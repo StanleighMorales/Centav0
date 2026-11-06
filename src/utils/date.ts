@@ -94,6 +94,10 @@ export function periodRangeIso(period: Period, date: Date = new Date()): { from:
   }
 }
 
+export function inRange(iso: string, { from, to }: { from: string; to: string }): boolean {
+  return iso >= from && iso <= to;
+}
+
 export type MonthGroup<T> = { key: string; label: string; total: number; items: T[] };
 
 /** Items grouped by calendar month in the order given (newest first in, newest first out), with each month's total. */

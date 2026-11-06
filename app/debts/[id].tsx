@@ -18,7 +18,7 @@ import { debtRepo, debtPaymentRepo, accountRepo, transactionRepo, categoryRepo }
 import { theme, makeStyles, useTheme } from '../../src/theme';
 import { displayDate, groupByMonth, nowIso } from '../../src/utils/date';
 import { formatPHP } from '../../src/utils/currency';
-import { monthlyAmount } from '../../src/utils/installmentSchedule';
+import { monthlyAmount, nextPaymentAmount } from '../../src/utils/installmentSchedule';
 import { STATUS_COLOR, STATUS_LABEL, creditInfoFor } from '../../src/utils/creditStatements';
 import type { Debt, DebtPayment, Account, Transaction } from '../../src/domain/types';
 
@@ -324,7 +324,7 @@ export default function DebtDetailScreen() {
                       <View style={styles.paymentInfo}>
                         <AppText variant="body">{displayDate(p.date)}</AppText>
                         <AppText variant="bodySm" color="textMuted">
-                          {p.accountId === '' ? 'Paid before tracking' : `via ${accountMap[p.accountId] ?? 'Unknown account'}`}
+                          {p.accountId === null ? 'Paid before tracking' : `via ${accountMap[p.accountId] ?? 'Unknown account'}`}
                         </AppText>
                       </View>
                       <Amount value={p.amount} variant="amountSm" color="positive" semanticColor={false} />
@@ -368,7 +368,7 @@ export default function DebtDetailScreen() {
         monthlyPayment={
           creditSummary
             ? creditSummary.dueNow || creditSummary.nextUnpaid?.remaining || undefined
-            : debt.isInstallment ? monthlyAmount(debt) ?? undefined : undefined
+            : debt.isInstallment ? nextPaymentAmount(debt) ?? undefined : undefined
         }
         monthlyLabel={creditSummary ? (creditSummary.dueNow > 0 ? 'Due now' : 'Next bill') : undefined}
         cashOnly={!!creditAccount}

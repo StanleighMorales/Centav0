@@ -188,18 +188,20 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
         installmentMonths: months > 1 ? months : null,
       };
+      // Items only belong to a receipt-bearing expense; blank rows are dropped.
+      const kept = type === 'Expense' ? items.filter((i) => i.name.trim()) : [];
       if (isAccumulated) {
         const portions = splitAcrossAccounts(accounts, amount);
         if (!portions) { setErrors({ accountId: 'Not enough accumulated balance' }); return; }
-        for (const p of portions) {
-          await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
+        for (const [i, p] of portions.entries()) {
+          const saved = await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
+          // It's one purchase split across accounts, so its items stay together on the first part.
+          if (i === 0 && kept.length > 0) await transactionItemRepo.replaceForTransaction(saved.id, kept);
         }
       } else {
         const saved = initial
           ? await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! })
           : await transactionRepo.create({ ...base, amount, accountId: accountId! });
-        // Items only belong to a receipt-bearing expense; blank rows are dropped.
-        const kept = type === 'Expense' ? items.filter((i) => i.name.trim()) : [];
         if (initial || kept.length > 0) await transactionItemRepo.replaceForTransaction(saved.id, kept);
       }
       onSuccess();

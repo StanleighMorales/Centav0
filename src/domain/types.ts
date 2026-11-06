@@ -14,9 +14,11 @@ export interface AccountType extends AuditFields, LocalSyncFields {
   userId: string;
   name: string;
   allowsOverdraft: boolean;
+  /** Held separately from Total Balance, like overdraft types. Never both. */
+  isSavings: boolean;
 }
-export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; }
-export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; }
+export interface CreateAccountTypeInput { name: string; allowsOverdraft?: boolean; isSavings?: boolean; }
+export interface UpdateAccountTypeInput { name?: string; allowsOverdraft?: boolean; isSavings?: boolean; }
 
 export interface Account extends AuditFields, LocalSyncFields {
   id: string;
@@ -27,6 +29,8 @@ export interface Account extends AuditFields, LocalSyncFields {
   allowsOverdraft: boolean;
   /** Joined from account_types for display. */
   typeName: string;
+  /** Joined from account_types. Excluded from Total Balance. */
+  isSavings: boolean;
   initialBalance: number;
   currentBalance: number;
   /** Day of month (1–31) the statement is generated. Overdraft-capable types only. */
@@ -35,14 +39,21 @@ export interface Account extends AuditFields, LocalSyncFields {
   dueDay: number | null;
   /** Max amount that can be owed on this account. Overdraft-capable types only. */
   creditLimit: number | null;
+  /** Purchases on the bill day go on the next statement instead of that day's. Credit lines only. */
+  billDayNextStatement: boolean;
+  /** Months left on what's owed beyond recorded purchases. Null = all on one bill. Credit lines only. */
+  earlierBalanceMonths: number | null;
+  /** Bill date the earlier balance starts on. Null = the next bill. Credit lines only. */
+  earlierBalanceFirstBill: string | null;
 }
 
 export interface CreateAccountInput {
   name: string; accountTypeId: string; initialBalance: number;
-  billDay?: number; dueDay?: number; creditLimit?: number;
+  billDay?: number; dueDay?: number; creditLimit?: number; billDayNextStatement?: boolean;
 }
 export interface UpdateAccountInput {
   name?: string; accountTypeId?: string; billDay?: number; dueDay?: number; creditLimit?: number;
+  billDayNextStatement?: boolean; earlierBalanceMonths?: number | null; earlierBalanceFirstBill?: string | null;
 }
 
 export type CategoryType = 'Expense' | 'Income';
@@ -75,16 +86,24 @@ export interface Transaction extends AuditFields, LocalSyncFields {
   receiptUri: string | null;
   /** When this Credit Card charge was paid off. Null = still owed. Non-credit charges stay null. */
   settledAt: string | null;
+  /** Credit purchase split over this many monthly statements. Null = paid in one. */
+  installmentMonths: number | null;
 }
 
 export interface CreateTransactionInput {
   date: string; amount: number; type: TransactionType;
-  categoryId?: string; accountId: string; note?: string; receiptUri?: string;
+  categoryId?: string; accountId: string; note?: string; receiptUri?: string; installmentMonths?: number | null;
 }
 export interface UpdateTransactionInput {
   date?: string; amount?: number; type?: TransactionType;
-  categoryId?: string; accountId?: string; note?: string; receiptUri?: string;
+  categoryId?: string; accountId?: string; note?: string; receiptUri?: string; installmentMonths?: number | null;
 }
+export interface TransactionItem extends AuditFields, LocalSyncFields {
+  id: string; userId: string; transactionId: string;
+  name: string; qty: number; price: number;
+}
+export interface TransactionItemInput { name: string; qty: number; price: number; }
+
 export interface TransactionFilter {
   from?: string; to?: string; type?: TransactionType;
   categoryId?: string; accountId?: string;
@@ -118,28 +137,41 @@ export interface Debt extends AuditFields, LocalSyncFields {
   isInstallment: boolean;
   monthlyPayment: number | null;
   installmentFee: number | null;
+  /** Total number of scheduled months for the installment plan. Installment loans only. */
+  termMonths: number | null;
+  /** Flat interest amount added on top of monthlyPayment each scheduled month. Installment loans only. */
+  monthlyInterest: number | null;
+  /** Everything to repay (principal, interest, fees) when the loan was added with its terms; the balance starts here. */
+  totalRepayable: number | null;
 }
 
 export interface CreateDebtInput {
   creditor: string; originalAmount: number; debtType: DebtType;
-  /** Required when debtType === 'Loan'. Account to credit with originalAmount. */
+  /** Required when debtType === 'Loan', unless alreadyReceived. Account to credit with originalAmount. */
   accountId?: string;
+  /** Loan money already recorded in an account: track the debt without crediting anything. */
+  alreadyReceived?: boolean;
   dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
+  /** Installment loan with flat rates: the balance starts at this instead of originalAmount. */
+  totalRepayable?: number;
+  /** Months already paid before adding the loan: logged as payments with no account, so no balance moves. */
+  pastPayments?: { date: string; amount: number }[];
 }
 export interface UpdateDebtInput {
   creditor?: string; dueDate?: string; interestRate?: number; note?: string;
   isInstallment?: boolean; monthlyPayment?: number; installmentFee?: number;
+  termMonths?: number; monthlyInterest?: number;
 }
 
 export interface DebtPayment extends AuditFields, LocalSyncFields {
   id: string; userId: string; debtId: string;
-  date: string; amount: number; accountId: string;
+  date: string; amount: number;
+  /** null = paid before the debt was tracked: history only, no account was touched. */
+  accountId: string | null;
 }
 export interface CreateDebtPaymentInput { date: string; amount: number; accountId: string; }
-
-/** Pay off specific Credit Card charges. Amount is derived from the charges, not passed. */
-export interface SettleChargesInput { transactionIds: string[]; accountId: string; date: string; }
 
 export type AllocationPeriod = 'Weekly' | 'Monthly';
 
@@ -188,3 +220,69 @@ export interface LendingPayment extends AuditFields, LocalSyncFields {
   date: string; amount: number; accountId: string;
 }
 export interface CreateLendingPaymentInput { date: string; amount: number; accountId: string; }
+
+export type InvestmentStatus = 'Active' | 'Exited';
+
+export interface Investment extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  name: string;
+  /** 0 = a stake that cost nothing. */
+  amountPaid: number;
+  stakePct: number | null;
+  expectedReturnPct: number | null;
+  startDate: string;
+  status: InvestmentStatus;
+  note: string | null;
+}
+export interface CreateInvestmentInput {
+  name: string; amountPaid: number; stakePct?: number | null; expectedReturnPct?: number | null;
+  startDate: string; note?: string;
+}
+export interface UpdateInvestmentInput {
+  name?: string; stakePct?: number | null; expectedReturnPct?: number | null; note?: string | null; status?: InvestmentStatus;
+}
+
+export interface InvestmentUpdate extends AuditFields, LocalSyncFields {
+  id: string; userId: string; investmentId: string;
+  date: string;
+  /** Cash received. 0 for a stake-only update. */
+  amount: number;
+  stakePct: number | null;
+  note: string | null;
+}
+export interface CreateInvestmentUpdateInput {
+  date: string; amount: number; stakePct?: number | null; note?: string;
+}
+
+export interface InvestmentDocument extends AuditFields, LocalSyncFields {
+  id: string; userId: string; investmentId: string;
+  name: string; uri: string; size: number | null;
+}
+export interface CreateInvestmentDocumentInput { name: string; uri: string; size?: number | null; }
+
+export type RecurringFrequency = 'weekly' | 'monthly' | 'semi-monthly';
+
+export interface RecurringTransaction extends AuditFields, LocalSyncFields {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'Expense' | 'Income';
+  categoryId: string | null;
+  accountId: string;
+  note: string | null;
+  frequency: RecurringFrequency;
+  dayOfMonth: number | null;
+  semiMonthDays: number[] | null;
+  dayOfWeek: number | null;
+  startDate: string;
+  endDate: string | null;
+  lastMaterializedDate: string | null;
+}
+export interface CreateRecurringTransactionInput {
+  amount: number; type: 'Expense' | 'Income'; categoryId?: string; accountId: string; note?: string;
+  frequency: RecurringFrequency;
+  dayOfMonth?: number | null; semiMonthDays?: number[] | null; dayOfWeek?: number | null;
+  startDate: string; endDate?: string | null;
+}
+export interface UpdateRecurringTransactionInput extends Partial<CreateRecurringTransactionInput> {}

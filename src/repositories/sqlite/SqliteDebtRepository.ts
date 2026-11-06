@@ -4,7 +4,7 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import type { IDebtRepository } from '../IDebtRepository';
+import { addMonthsClamped, nextDueDate } from '../../utils/installmentSchedule';
 import type { Debt, CreateDebtInput, UpdateDebtInput, DebtStatus } from '../../domain/types';
 
 function rowToDebt(row: any): Debt {
@@ -19,6 +19,9 @@ function rowToDebt(row: any): Debt {
     isInstallment: row.isInstallment === 1,
     monthlyPayment: row.monthlyPayment ?? null,
     installmentFee: row.installmentFee ?? null,
+    termMonths: row.termMonths ?? null,
+    monthlyInterest: row.monthlyInterest ?? null,
+    totalRepayable: row.totalRepayable ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -49,7 +52,7 @@ async function getOrCreateLoanCategory(db: Awaited<ReturnType<typeof getDatabase
   return id;
 }
 
-export class SqliteDebtRepository implements IDebtRepository {
+export class SqliteDebtRepository {
   async list(): Promise<Debt[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<any>(
@@ -74,24 +77,43 @@ export class SqliteDebtRepository implements IDebtRepository {
     const now = nowIso();
     const amount = roundCentavos(input.originalAmount);
     const dueDate = input.dueDate ?? null;
-    const status = computeStatus(amount, dueDate);
+    const past = input.pastPayments ?? [];
+    const owed = input.totalRepayable != null
+      ? Math.max(0, roundCentavos(input.totalRepayable - past.reduce((sum, p) => sum + p.amount, 0)))
+      : amount;
+    // Months already paid move the next due date on; the first due date alone would read as overdue.
+    const nextDue = dueDate && past.length > 0 && input.termMonths && past.length < input.termMonths
+      ? addMonthsClamped(dueDate, past.length)
+      : dueDate;
+    const status = computeStatus(owed, nextDue);
     const isLoan = input.debtType === 'Loan';
-    if (isLoan && !input.accountId) throw new Error('Select an account to receive the loan');
-    const disbursementAccountId = isLoan ? input.accountId! : null;
-    const disbursementTransactionId = isLoan ? newId() : null;
+    // A loan already sitting in an account is tracked without paying it out again.
+    const disburse = isLoan && !input.alreadyReceived;
+    if (disburse && !input.accountId) throw new Error('Select an account to receive the loan');
+    const disbursementAccountId = disburse ? input.accountId! : null;
+    const disbursementTransactionId = disburse ? newId() : null;
     await db.withTransactionAsync(async () => {
       await db.runAsync(
-        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
+        `INSERT INTO debts (id, userId, creditor, originalAmount, outstandingBalance, dueDate, status, debtType, disbursementAccountId, disbursementTransactionId, interestRate, note, isInstallment, monthlyPayment, installmentFee, termMonths, monthlyInterest, totalRepayable, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, NULL)`,
         [
-          id, FIXED_USER_ID, input.creditor, amount, amount, dueDate, status,
+          id, FIXED_USER_ID, input.creditor, amount, owed, dueDate, status,
           input.debtType, disbursementAccountId, disbursementTransactionId,
           input.interestRate ?? null, input.note ?? null,
           input.isInstallment ? 1 : 0, input.monthlyPayment ?? null, input.installmentFee ?? null,
+          input.termMonths ?? null, input.monthlyInterest ?? null, input.totalRepayable ?? null,
           now, now,
         ],
       );
-      if (isLoan) {
+      // No account: paid before tracking, so it's history only.
+      for (const p of past) {
+        await db.runAsync(
+          `INSERT INTO debt_payments (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, 1, NULL)`,
+          [newId(), FIXED_USER_ID, id, p.date, roundCentavos(p.amount), now, now],
+        );
+      }
+      if (disburse) {
         const categoryId = await getOrCreateLoanCategory(db);
         await db.runAsync(
           `INSERT INTO transactions (id, userId, date, amount, type, categoryId, accountId, toAccountId, note, receiptUri, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
@@ -115,18 +137,24 @@ export class SqliteDebtRepository implements IDebtRepository {
     if (!existing) throw new Error(`Debt ${id} not found`);
     const db = await getDatabase();
     const now = nowIso();
-    const dueDate = 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate;
-    const status = computeStatus(existing.outstandingBalance, dueDate);
+    const next: Debt = {
+      ...existing,
+      dueDate: 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate,
+      isInstallment: 'isInstallment' in input ? !!input.isInstallment : existing.isInstallment,
+      monthlyPayment: 'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
+      installmentFee: 'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
+      termMonths: 'termMonths' in input ? (input.termMonths ?? null) : existing.termMonths,
+      monthlyInterest: 'monthlyInterest' in input ? (input.monthlyInterest ?? null) : existing.monthlyInterest,
+    };
+    const status = computeStatus(existing.outstandingBalance, nextDueDate(next));
     await db.runAsync(
-      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, updatedAt = ?, isDirty = 1
+      `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, termMonths = ?, monthlyInterest = ?, updatedAt = ?, isDirty = 1
        WHERE id = ? AND userId = ?`,
       [
-        input.creditor ?? existing.creditor, dueDate, status,
+        input.creditor ?? existing.creditor, next.dueDate, status,
         'interestRate' in input ? (input.interestRate ?? null) : existing.interestRate,
         'note' in input ? (input.note ?? null) : existing.note,
-        ('isInstallment' in input ? !!input.isInstallment : existing.isInstallment) ? 1 : 0,
-        'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
-        'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
+        next.isInstallment ? 1 : 0, next.monthlyPayment, next.installmentFee, next.termMonths, next.monthlyInterest,
         now, id, FIXED_USER_ID,
       ],
     );

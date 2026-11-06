@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { AppText } from '../../src/components/ui/AppText';
 import { Card } from '../../src/components/ui/Card';
+import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { FAB } from '../../src/components/ui/FAB';
 import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
@@ -14,12 +15,9 @@ import { AddMoneySheet } from '../../src/components/accounts/AddMoneySheet';
 import { TransferSheet } from '../../src/components/transactions/TransferSheet';
 import { accountRepo, debtRepo, transactionRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
-import { theme } from '../../src/theme';
+import { accountIcon, groupAccounts } from '../../src/utils/accounts';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Account } from '../../src/domain/types';
-
-function accountIcon(account: Account): React.ComponentProps<typeof Feather>['name'] {
-  return account.allowsOverdraft ? 'credit-card' : 'briefcase';
-}
 
 type RowProps = {
   account: Account;
@@ -29,6 +27,8 @@ type RowProps = {
 };
 
 function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const swipeRef = useRef<Swipeable>(null);
   const close = () => swipeRef.current?.close();
 
@@ -44,7 +44,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             accessibilityLabel={`Edit ${account.name}`}
             style={[styles.action, styles.editAction]}
           >
-            <Feather name="edit-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="edit-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Edit</AppText>
           </Pressable>
           <Pressable
@@ -53,7 +53,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             accessibilityLabel={`Delete ${account.name}`}
             style={[styles.action, styles.deleteAction]}
           >
-            <Feather name="trash-2" size={18} color={theme.colors.textPrimary} />
+            <Feather name="trash-2" size={18} color={colors.textPrimary} />
             <AppText variant="labelSm" color="textPrimary">Delete</AppText>
           </Pressable>
         </View>
@@ -62,7 +62,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
       <Card accent style={styles.accountCard}>
         <View style={styles.cardRow}>
           <View style={styles.iconCircle}>
-            <Feather name={accountIcon(account)} size={18} color={theme.colors.accentPrimary} />
+            <Feather name={accountIcon(account)} size={18} color={colors.accentPrimary} />
           </View>
           <View style={styles.cardInfo}>
             <AppText variant="h3">{account.name}</AppText>
@@ -85,7 +85,7 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
             hitSlop={8}
             style={styles.addMoneyBtn}
           >
-            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+            <Feather name="plus" size={20} color={colors.accentPrimary} />
           </Pressable>
         </View>
         <AppText
@@ -101,6 +101,8 @@ function AccountRow({ account, onEdit, onAddMoney, onDelete }: RowProps) {
 }
 
 export default function AccountsScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -125,9 +127,9 @@ export default function AccountsScreen() {
   async function handleDeletePress(account: Account) {
     const debts = await debtRepo.list();
     const linkedDebt = debts.find((d) => d.linkedAccountId === account.id);
-    const owed = linkedDebt ? linkedDebt.outstandingBalance : account.currentBalance;
     const txns = await transactionRepo.list({ accountId: account.id });
-    setDeleteBlocked(owed !== 0);
+    // Only a credit line that still owes is kept; any other account can go, its balance just stops counting.
+    setDeleteBlocked(account.allowsOverdraft && (linkedDebt ? linkedDebt.outstandingBalance : 0) !== 0);
     setDeleteHasHistory(txns.length > 0 || linkedDebt !== undefined);
     setPendingDelete(account);
   }
@@ -159,7 +161,7 @@ export default function AccountsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={22} color={theme.colors.textPrimary} />
+          <Feather name="chevron-left" size={22} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="h2" style={styles.flex}>Accounts</AppText>
         <Pressable
@@ -168,13 +170,13 @@ export default function AccountsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Transfer between accounts"
         >
-          <Feather name="repeat" size={20} color={theme.colors.accentPrimary} />
+          <Feather name="repeat" size={20} color={colors.accentPrimary} />
         </Pressable>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={colors.accentPrimary} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -188,14 +190,19 @@ export default function AccountsScreen() {
               subtitle="Tap + to add your first account"
             />
           ) : (
-            accounts.map((account) => (
-              <AccountRow
-                key={account.id}
-                account={account}
-                onEdit={setEditAccount}
-                onAddMoney={setAddMoneyAccount}
-                onDelete={handleDeletePress}
-              />
+            groupAccounts(accounts).map((group) => (
+              <View key={group.label} style={styles.group}>
+                <SectionHeader title={group.label} />
+                {group.accounts.map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    account={account}
+                    onEdit={setEditAccount}
+                    onAddMoney={setAddMoneyAccount}
+                    onDelete={handleDeletePress}
+                  />
+                ))}
+              </View>
             ))
           )}
         </ScrollView>
@@ -235,7 +242,9 @@ export default function AccountsScreen() {
         message={
           deleteBlocked
             ? `"${pendingDelete?.name}" still has an outstanding balance. Pay it off before deleting.`
-            : deleteHasHistory
+            : pendingDelete && !pendingDelete.allowsOverdraft && pendingDelete.currentBalance !== 0
+              ? `"${pendingDelete.name}" has a balance of ${formatPHP(pendingDelete.currentBalance)}. Deleting it removes that from your Total Balance. Its transactions stay in your history, marked as a deleted account.`
+              : deleteHasHistory
               ? `"${pendingDelete?.name}" has debts or transactions linked to it. Deleting it won't delete them — they'll stay visible, marked as a deleted account. You can manually delete individual transactions later from Settings > Transaction Archive.`
               : `Delete "${pendingDelete?.name}"? This cannot be undone.`
         }
@@ -248,8 +257,8 @@ export default function AccountsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgPrimary },
+const useStyles = makeStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -277,13 +286,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
     gap: theme.spacing[4],
   },
+  group: { gap: theme.spacing[4] },
   accountCard: { gap: theme.spacing[4] },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] },
   iconCircle: {
     width: 40,
     height: 40,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -292,9 +302,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: c.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -306,6 +316,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing[2],
   },
-  editAction: { backgroundColor: theme.colors.bgElevated },
-  deleteAction: { backgroundColor: theme.colors.negative },
-});
+  editAction: { backgroundColor: c.bgElevated },
+  deleteAction: { backgroundColor: c.negative },
+}));

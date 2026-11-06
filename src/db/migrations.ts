@@ -321,7 +321,145 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '014_savings_account_types',
+    up: async (db) => {
+      await db.execAsync(`ALTER TABLE account_types ADD COLUMN isSavings INTEGER NOT NULL DEFAULT 0;`);
+      const now = nowIso();
+      await db.runAsync(
+        `INSERT INTO account_types (id, userId, name, allowsOverdraft, isSavings, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+         VALUES (?, ?, 'Savings', 0, 1, ?, ?, NULL, 1, NULL)`,
+        [newId(), FIXED_USER_ID, now, now],
+      );
+    },
+  },
+  {
+    name: '015_installment_schedule',
+    up: async (db) => {
+      await db.execAsync(`
+        ALTER TABLE debts ADD COLUMN termMonths INTEGER;
+        ALTER TABLE debts ADD COLUMN monthlyInterest REAL;
+      `);
+    },
+  },
+  {
+    name: '016_recurring_transactions',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE recurring_transactions (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL,
+          amount REAL NOT NULL, type TEXT NOT NULL,
+          categoryId TEXT, accountId TEXT NOT NULL, note TEXT,
+          frequency TEXT NOT NULL,
+          dayOfMonth INTEGER, semiMonthDays TEXT, dayOfWeek INTEGER,
+          startDate TEXT NOT NULL, endDate TEXT, lastMaterializedDate TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT
+        );
+      `);
+    },
+  },
+  {
+    name: '017_investments',
+    up: async (db) => {
+      // amountPaid 0 = a stake that cost nothing. ROI % is never stored; it is derived from updates.
+      await db.execAsync(`
+        CREATE TABLE investments (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL,
+          name TEXT NOT NULL, amountPaid REAL NOT NULL DEFAULT 0,
+          stakePct REAL, expectedReturnPct REAL,
+          startDate TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Active', note TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT
+        );
+        CREATE TABLE investment_updates (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, investmentId TEXT NOT NULL,
+          date TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, stakePct REAL, note TEXT,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (investmentId) REFERENCES investments(id)
+        );
+        CREATE INDEX idx_inv_upd_inv ON investment_updates(investmentId);
+        CREATE TABLE investment_documents (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, investmentId TEXT NOT NULL,
+          name TEXT NOT NULL, uri TEXT NOT NULL, size INTEGER,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (investmentId) REFERENCES investments(id)
+        );
+        CREATE INDEX idx_inv_doc_inv ON investment_documents(investmentId);
+      `);
+    },
+  },
+  {
+    name: '018_transaction_items',
+    up: async (db) => {
+      // Receipt line items. Their sum is not forced to equal the transaction total (tax, discounts).
+      await db.execAsync(`
+        CREATE TABLE transaction_items (
+          id TEXT PRIMARY KEY, userId TEXT NOT NULL, transactionId TEXT NOT NULL,
+          name TEXT NOT NULL, qty REAL NOT NULL DEFAULT 1, price REAL NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT,
+          isDirty INTEGER NOT NULL DEFAULT 1, syncedAt TEXT,
+          FOREIGN KEY (transactionId) REFERENCES transactions(id)
+        );
+        CREATE INDEX idx_tx_items_tx ON transaction_items(transactionId);
+      `);
+    },
+  },
+  {
+    name: '019_credit_statements',
+    up: async (db) => {
+      // Credit lines bill monthly: a purchase can be split over months, and whatever is owed beyond
+      // recorded purchases (the "earlier balance") gets its own months-left and first bill.
+      await db.execAsync(`
+        ALTER TABLE transactions ADD COLUMN installmentMonths INTEGER;
+        ALTER TABLE accounts ADD COLUMN billDayNextStatement INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE accounts ADD COLUMN earlierBalanceMonths INTEGER;
+        ALTER TABLE accounts ADD COLUMN earlierBalanceFirstBill TEXT;
+      `);
+    },
+  },
+  {
+    name: '020_loan_total_repayable',
+    up: async (db) => {
+      // Set only for loans added with flat-rate terms; older loans keep counting paid months from the principal.
+      await db.execAsync(`ALTER TABLE debts ADD COLUMN totalRepayable REAL;`);
+    },
+  },
+  {
+    name: '021_payment_without_account',
+    up: async (db) => {
+      // A payment made before the debt was tracked came from no account here, so accountId can be NULL.
+      await db.execAsync(`
+        CREATE TABLE debt_payments_new (
+          id           TEXT PRIMARY KEY NOT NULL,
+          userId       TEXT NOT NULL,
+          debtId       TEXT NOT NULL,
+          date         TEXT NOT NULL,
+          amount       REAL NOT NULL,
+          accountId    TEXT,
+          createdAt    TEXT NOT NULL,
+          updatedAt    TEXT NOT NULL,
+          deletedAt    TEXT,
+          isDirty      INTEGER NOT NULL DEFAULT 1,
+          syncedAt     TEXT,
+          FOREIGN KEY (debtId)    REFERENCES debts(id),
+          FOREIGN KEY (accountId) REFERENCES accounts(id)
+        );
+        INSERT INTO debt_payments_new (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
+          SELECT id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt FROM debt_payments;
+        DROP TABLE debt_payments;
+        ALTER TABLE debt_payments_new RENAME TO debt_payments;
+        CREATE INDEX idx_dp_debt ON debt_payments(debtId);
+        CREATE INDEX idx_dp_date ON debt_payments(date);
+      `);
+    },
+  },
 ];
+
+/** Highest migration this app build knows how to run — stamped into backup filenames. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
 
 export async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`

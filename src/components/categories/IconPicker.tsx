@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { CategoryIcon } from '../ui/CategoryIcon';
 import { AppText } from '../ui/AppText';
 import { CATEGORY_ICONS } from '../../constants/categoryColors';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Props = {
   value: string | null;
@@ -11,6 +11,8 @@ type Props = {
 };
 
 export function IconPicker({ value, onChange }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View>
       <AppText variant="labelLg" color="textSecondary" style={styles.label}>Icon</AppText>
@@ -27,7 +29,7 @@ export function IconPicker({ value, onChange }: Props) {
             <CategoryIcon
               name={icon}
               size={20}
-              color={value === icon ? theme.colors.accentPrimary : theme.colors.textSecondary}
+              color={value === icon ? colors.accentPrimary : colors.textSecondary}
             />
           </Pressable>
         ))}
@@ -36,21 +38,21 @@ export function IconPicker({ value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   label: { marginBottom: theme.spacing[3] },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] },
   cell: {
     width: 44,
     height: 44,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   cellSelected: {
-    backgroundColor: theme.colors.accentSubtle,
-    borderColor: theme.colors.accentBorder,
+    backgroundColor: c.accentSubtle,
+    borderColor: c.accentBorder,
   },
-});
+}));

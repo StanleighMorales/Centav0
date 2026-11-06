@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { View } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -7,7 +8,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { categoryRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Account, Category } from '../../domain/types';
 
 type Props = {
@@ -20,6 +21,7 @@ type Props = {
 // Adds money to an account by recording it as a normal Income transaction,
 // so the top-up shows up in history and reports (per product decision).
 export function AddMoneySheet({ visible, onClose, onSuccess, account }: Props) {
+  const styles = useStyles();
   const [amount, setAmount] = useState(0);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -94,7 +96,7 @@ export function AddMoneySheet({ visible, onClose, onSuccess, account }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

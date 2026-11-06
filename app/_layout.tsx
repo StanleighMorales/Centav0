@@ -1,9 +1,9 @@
 import 'react-native-gesture-handler';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
-import { ThemeProvider, DarkTheme } from 'expo-router/react-navigation';
+import { ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router/react-navigation';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -21,20 +21,10 @@ import { DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { getDatabase } from '../src/db/database';
 import { accountRepo } from '../src/repositories';
-import { theme } from '../src/theme';
+import { CalculatorProvider } from '../src/components/calculator/CalculatorOverlay';
+import { theme, AppThemeProvider, useTheme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
-
-// Dark nav theme so no white frame shows behind screen transitions
-const navTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: theme.colors.bgPrimary,
-    card: theme.colors.bgSurface,
-    primary: theme.colors.accentPrimary,
-  },
-};
 
 export default function RootLayout() {
   const router = useRouter();
@@ -97,18 +87,37 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
-        <ThemeProvider value={navTheme}>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: theme.colors.bgPrimary },
-              animation: 'slide_from_right',
-            }}
-          />
-        </ThemeProvider>
+        <AppThemeProvider>
+          <ThemedStack />
+        </AppThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function ThemedStack() {
+  const { colors, scheme } = useTheme();
+  const navTheme = useMemo(() => {
+    const base = scheme === 'light' ? DefaultTheme : DarkTheme;
+    return {
+      ...base,
+      colors: { ...base.colors, background: colors.bgPrimary, card: colors.bgSurface, primary: colors.accentPrimary },
+    };
+  }, [scheme, colors]);
+
+  return (
+    <ThemeProvider value={navTheme}>
+      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <CalculatorProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bgPrimary },
+            animation: 'slide_from_right',
+          }}
+        />
+      </CalculatorProvider>
+    </ThemeProvider>
   );
 }
 

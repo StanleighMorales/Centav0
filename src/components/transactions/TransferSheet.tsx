@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -10,16 +11,19 @@ import { AppText } from '../ui/AppText';
 import { accountRepo, transactionRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import type { Account } from '../../domain/types';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  /** From a voice command. A null field stays blank for the user to pick. */
+  prefill?: { fromId: string | null; toId: string | null; amount: number | null } | null;
 };
 
-export function TransferSheet({ visible, onClose, onSuccess }: Props) {
+export function TransferSheet({ visible, onClose, onSuccess, prefill }: Props) {
+  const styles = useStyles();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [amount, setAmount] = useState(0);
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -41,6 +45,12 @@ export function TransferSheet({ visible, onClose, onSuccess }: Props) {
     }
     accountRepo.list().then((accs) => {
       setAccounts(accs);
+      if (prefill) {
+        setAccountId(prefill.fromId);
+        setToAccountId(prefill.toId);
+        setAmount(prefill.amount ?? 0);
+        return;
+      }
       if (accs.length > 0) setAccountId(accs[0].id);
       if (accs.length > 1) setToAccountId(accs[1].id);
     });
@@ -127,13 +137,13 @@ export function TransferSheet({ visible, onClose, onSuccess }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   preview: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.md,
     padding: theme.spacing[4],
     gap: theme.spacing[2],
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

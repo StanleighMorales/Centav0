@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePicker } from '../ui/DatePicker';
@@ -7,7 +8,7 @@ import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
 import { debtPaymentRepo, accountRepo } from '../../repositories';
-import { theme } from '../../theme';
+import { theme, makeStyles } from '../../theme';
 import { nowIso } from '../../utils/date';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
@@ -20,15 +21,22 @@ type Props = {
   debtId: string;
   creditor: string;
   outstandingBalance: number;
-  /** Monthly installment amount — pass only for installment debts. */
+  /** Monthly installment amount — pass only for installment debts. A credit line passes what's due now. */
   monthlyPayment?: number;
-  /** Credit Card settle mode: pay these exact charges. Locks amount and hides the mode picker. */
-  settle?: { transactionIds: string[]; amount: number; label: string };
+  /** Label for the monthly option; a credit line calls it "Due now". */
+  monthlyLabel?: string;
+  /** Credit line: pay from cash and e-wallets only, not from another credit line. */
+  cashOnly?: boolean;
+  /** From a voice command: pre-pick the source account, and a spoken amount selects Custom. */
+  initialAccountId?: string;
+  initialAmount?: number;
 };
 
 type PayMode = 'full' | 'monthly' | 'custom';
 
-export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor, outstandingBalance, monthlyPayment, settle }: Props) {
+export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor, outstandingBalance, monthlyPayment, monthlyLabel = 'Monthly', cashOnly, initialAccountId, initialAmount,
+}: Props) {
+  const styles = useStyles();
   const hasMonthly = monthlyPayment != null && monthlyPayment > 0;
   const [mode, setMode] = useState<PayMode>(hasMonthly ? 'monthly' : 'full');
   const [customAmount, setCustomAmount] = useState(0);
@@ -40,25 +48,27 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
 
   useEffect(() => {
     if (visible) {
-      setMode(hasMonthly ? 'monthly' : 'full');
-      setCustomAmount(0);
+      setMode(initialAmount ? 'custom' : hasMonthly ? 'monthly' : 'full');
+      setCustomAmount(initialAmount ?? 0);
       setDate(nowIso());
       setAccountId('');
       setErrors({});
-      accountRepo.list().then(setAccounts);
+      accountRepo.list().then((accs) => {
+        setAccounts(accs);
+        // A credit line can't be paid with another credit line, so drop a spoken card source.
+        const pick = accs.find((a) => a.id === initialAccountId && !(cashOnly && a.allowsOverdraft));
+        if (pick) setAccountId(pick.id);
+      });
     }
   }, [visible]);
 
   // Last installment can be smaller than the monthly amount.
   const monthlyDue = hasMonthly ? Math.min(monthlyPayment, outstandingBalance) : 0;
-  const isSettle = settle != null;
-  const amount = isSettle
-    ? settle.amount
-    : mode === 'full' ? outstandingBalance : mode === 'monthly' ? monthlyDue : customAmount;
+  const amount = mode === 'full' ? outstandingBalance : mode === 'monthly' ? monthlyDue : customAmount;
 
   const modeOptions: { mode: PayMode; label: string; sub: string }[] = [
     { mode: 'full', label: 'Full', sub: formatPHP(outstandingBalance) },
-    ...(hasMonthly ? [{ mode: 'monthly' as PayMode, label: 'Monthly', sub: formatPHP(monthlyDue) }] : []),
+    ...(hasMonthly ? [{ mode: 'monthly' as PayMode, label: monthlyLabel, sub: formatPHP(monthlyDue) }] : []),
     { mode: 'custom', label: 'Custom', sub: 'Enter amount' },
   ];
 
@@ -68,20 +78,6 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   const portions = isAccumulated && amount > 0 ? splitAcrossAccounts(accounts, amount) : null;
 
   async function handleSave() {
-    if (isSettle) {
-      if (!accountId) { setErrors({ accountId: 'Select an account' }); return; }
-      setSaving(true);
-      try {
-        await debtPaymentRepo.settle(debtId, { transactionIds: settle.transactionIds, accountId, date });
-        onSuccess();
-        onClose();
-      } catch (e) {
-        setErrors({ accountId: e instanceof Error ? e.message : 'Could not record payment' });
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
     const errs: Record<string, string> = {};
     if (amount <= 0) errs.amount = 'Enter a payment amount';
     if (!accountId) errs.accountId = 'Select an account';
@@ -114,10 +110,9 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   const remainingDebt = Math.max(0, outstandingBalance - amount);
   const remainingSource = selectedAccount ? selectedAccount.currentBalance - amount : 0;
   const accountOptions = [
-    // Settle mode pays real cash: no accumulated split, and you can't pay a card with a card.
-    ...(isSettle ? [] : [{ label: `Accumulated Balance (${formatPHP(totalAvailable)})`, value: ACCUMULATED_ID }]),
+    { label: `Accumulated Balance (${formatPHP(totalAvailable)})`, value: ACCUMULATED_ID },
     ...accounts
-      .filter((a) => !isSettle || !a.allowsOverdraft)
+      .filter((a) => !cashOnly || !a.allowsOverdraft)
       .map((a) => ({
         label: `${a.name} (${formatPHP(a.currentBalance)})`,
         value: a.id,
@@ -125,64 +120,51 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   ];
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={isSettle ? 'Pay Charge' : 'Add Payment'}>
+    <BottomSheet visible={visible} onClose={onClose} title={`Pay ${creditor}`}>
       <ScrollView
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {isSettle ? (
           <View style={styles.modeBlock}>
-            <AppText variant="labelLg" color="textSecondary">Paying</AppText>
-            <AppText variant="body">{settle.label}</AppText>
-            <AppText variant="amountMd">{formatPHP(settle.amount)}</AppText>
-            {errors.accountId ? (
-              <AppText variant="bodySm" color="negative">{errors.accountId}</AppText>
+            <AppText variant="labelLg" color="textSecondary">Payment</AppText>
+            <View style={styles.modeRow}>
+              {modeOptions.map((opt) => {
+                const active = mode === opt.mode;
+                return (
+                  <Pressable
+                    key={opt.mode}
+                    onPress={() => { setMode(opt.mode); setErrors({}); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pay ${opt.label.toLowerCase()}, ${opt.sub}`}
+                    accessibilityState={{ selected: active }}
+                    style={[styles.modeChip, active && styles.modeChipActive]}
+                  >
+                    <AppText variant="labelLg" color={active ? 'accentPrimary' : 'textSecondary'}>
+                      {opt.label}
+                    </AppText>
+                    {opt.mode === 'custom' ? (
+                      <AppText variant="labelSm" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
+                    ) : (
+                      <AppText variant="amountXs" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+            {mode !== 'custom' && errors.amount ? (
+              <AppText variant="bodySm" color="negative">{errors.amount}</AppText>
             ) : null}
           </View>
-        ) : (
-          <>
-            <View style={styles.modeBlock}>
-              <AppText variant="labelLg" color="textSecondary">Payment</AppText>
-              <View style={styles.modeRow}>
-                {modeOptions.map((opt) => {
-                  const active = mode === opt.mode;
-                  return (
-                    <Pressable
-                      key={opt.mode}
-                      onPress={() => { setMode(opt.mode); setErrors({}); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Pay ${opt.label.toLowerCase()}, ${opt.sub}`}
-                      accessibilityState={{ selected: active }}
-                      style={[styles.modeChip, active && styles.modeChipActive]}
-                    >
-                      <AppText variant="labelLg" color={active ? 'accentPrimary' : 'textSecondary'}>
-                        {opt.label}
-                      </AppText>
-                      {opt.mode === 'custom' ? (
-                        <AppText variant="labelSm" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
-                      ) : (
-                        <AppText variant="amountXs" color={active ? 'textPrimary' : 'textMuted'}>{opt.sub}</AppText>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {mode !== 'custom' && errors.amount ? (
-                <AppText variant="bodySm" color="negative">{errors.amount}</AppText>
-              ) : null}
-            </View>
-            {mode === 'custom' && (
-              <AmountInput
-                label="Payment Amount"
-                value={customAmount}
-                onChange={setCustomAmount}
-                error={errors.amount}
-                autoFocus
-              />
-            )}
-          </>
-        )}
+          {mode === 'custom' && (
+            <AmountInput
+              label="Payment Amount"
+              value={customAmount}
+              onChange={setCustomAmount}
+              error={errors.amount}
+              autoFocus
+            />
+          )}
         <DatePicker label="Payment Date" value={date} onChange={setDate} />
         <Select
           label="From Account"
@@ -239,7 +221,7 @@ export function AddPaymentSheet({ visible, onClose, onSuccess, debtId, creditor,
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   form: { gap: theme.spacing[5] },
   modeBlock: { gap: theme.spacing[3] },
   modeRow: { flexDirection: 'row', gap: theme.spacing[3] },
@@ -250,18 +232,18 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing[4],
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-    backgroundColor: theme.colors.bgInput,
+    borderColor: c.borderDefault,
+    backgroundColor: c.bgInput,
   },
   modeChipActive: {
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
   },
   preview: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.md,
     padding: theme.spacing[4],
     gap: theme.spacing[2],
   },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

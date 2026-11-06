@@ -1,7 +1,8 @@
-import React from 'react';
-import { Pressable, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, ViewStyle } from 'react-native';
+import { AnimatedPressable, usePressScale } from './usePressScale';
 import { AppText } from './AppText';
-import { theme } from '../../theme';
+import { theme, makeStyles, useTheme } from '../../theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -16,37 +17,45 @@ type Props = {
 };
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled, accessibilityLabel, style }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
 
+  const [pressed, setPressed] = useState(false);
+  const press = usePressScale();
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={() => { setPressed(true); press.onPressIn(); }}
+      onPressOut={() => { setPressed(false); press.onPressOut(); }}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         styles[variant],
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles[`${variant}Pressed` as keyof typeof styles],
         style,
+        press.style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={variant === 'primary' ? theme.colors.bgPrimary : theme.colors.accentPrimary} />
+        <ActivityIndicator size="small" color={variant === 'primary' ? colors.onAccent : colors.accentPrimary} />
       ) : (
         <AppText
           variant="labelLg"
-          color={variant === 'primary' ? 'bgPrimary' : isDisabled ? 'textDisabled' : 'accentPrimary'}
+          color={variant === 'primary' ? 'onAccent' : isDisabled ? 'textDisabled' : 'accentPrimary'}
         >
           {label}
         </AppText>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   base: {
     height: 52,
     borderRadius: theme.radius.md,
@@ -55,26 +64,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
   },
   primary: {
-    backgroundColor: theme.colors.accentPrimary,
+    backgroundColor: c.accentPrimary,
   },
   primaryPressed: {
-    backgroundColor: theme.colors.accentDim,
+    backgroundColor: c.accentDim,
   },
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: theme.colors.accentPrimary,
+    borderColor: c.accentPrimary,
   },
   secondaryPressed: {
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   ghostPressed: {
-    backgroundColor: theme.colors.accentSubtle,
+    backgroundColor: c.accentSubtle,
   },
   disabled: {
     opacity: 0.4,
   },
-});
+}));

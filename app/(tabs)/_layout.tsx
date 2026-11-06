@@ -1,73 +1,98 @@
-import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { Receipt } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../../src/theme';
+import React, { createRef, useRef, useState } from 'react';
+import type { View } from 'react-native';
+import { BlurTargetView } from 'expo-blur';
+import { Tabs, useRouter } from 'expo-router';
+import { FloatingTabBar, LedgerAddContext } from '../../src/components/nav/FloatingTabBar';
+import { AddTransactionSheet } from '../../src/components/dashboard/AddTransactionSheet';
+import { TransferSheet } from '../../src/components/transactions/TransferSheet';
+import { DebtPickerSheet } from '../../src/components/debts/DebtPickerSheet';
+import { VoiceCommandSheet } from '../../src/components/dashboard/VoiceCommandSheet';
+import { emitDataChanged } from '../../src/utils/dataEvents';
+import type { VoiceCommand } from '../../src/utils/voiceTransaction';
+import { useTheme } from '../../src/theme';
+
+type TransferCmd = Extract<VoiceCommand, { kind: 'transfer' }>;
+type PayCmd = Extract<VoiceCommand, { kind: 'pay' }>;
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const router = useRouter();
+  const [addOpen, setAddOpen] = useState(false);
+  const [autoStart, setAutoStart] = useState<'voice' | 'camera' | null>(null);
+  const openAdd = (mode: 'voice' | 'camera' | null = null) => { setAutoStart(mode); setAddOpen(true); };
+  const [transfer, setTransfer] = useState<TransferCmd | null>(null);
+  // A spoken payment that didn't name the debt waits here while the user picks one.
+  const [unpicked, setUnpicked] = useState<PayCmd | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [ledgerAdd, setLedgerAdd] = useState(0);
+  // A blur can't sit inside its own target, so each screen is one and the bar follows the active screen.
+  const blurTargets = useRef<Record<string, React.RefObject<View | null>>>({}).current;
+  const blurTarget = (route: string) => (blurTargets[route] ??= createRef<View>());
+
+  // The debt screen opens its payment sheet from these params, so card charges load in one place.
+  function pay(debtId: string, cmd: PayCmd) {
+    const params: Record<string, string> = { id: debtId, pay: '1' };
+    if (cmd.accountId) params.accountId = cmd.accountId;
+    if (cmd.amount) params.amount = String(cmd.amount);
+    router.push({ pathname: '/debts/[id]', params });
+  }
+
+  function onVoiceCommand(cmd: TransferCmd | PayCmd) {
+    if (cmd.kind === 'transfer') setTransfer(cmd);
+    else if (cmd.debtId) pay(cmd.debtId, cmd);
+    else setUnpicked(cmd);
+  }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        animation: 'fade',
-        sceneStyle: { backgroundColor: theme.colors.bgPrimary },
-        tabBarStyle: {
-          backgroundColor: theme.colors.bgSurface,
-          borderTopColor: theme.colors.borderDefault,
-          borderTopWidth: 1,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
-        },
-        tabBarActiveTintColor: theme.colors.accentPrimary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarLabelStyle: {
-          ...theme.typography.labelSm,
-          marginBottom: 4,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarAccessibilityLabel: 'Home tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size ?? 20} color={color} />
-          ),
+    <LedgerAddContext.Provider value={ledgerAdd}>
+      <Tabs
+        tabBar={(props) => (
+          <FloatingTabBar
+            state={props.state}
+            navigation={props.navigation}
+            blurTarget={blurTarget(props.state.routes[props.state.index].name)}
+            // On Ledger, + adds to the open section and the dial's Voice speaks a payment or transfer instead of an expense.
+            onAdd={(mode) => {
+              if (props.state.routes[props.state.index]?.name !== 'ledger' || mode === 'camera') openAdd(mode);
+              else if (mode === 'voice') setVoiceOpen(true);
+              else setLedgerAdd((n) => n + 1);
+            }}
+          />
+        )}
+        screenLayout={({ children, route }) => (
+          <BlurTargetView ref={blurTarget(route.name)} style={{ flex: 1, backgroundColor: colors.bgPrimary }}>{children}</BlurTargetView>
+        )}
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          sceneStyle: { backgroundColor: colors.bgPrimary },
         }}
+      >
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="transactions" options={{ title: 'Activity' }} />
+        <Tabs.Screen name="ledger" options={{ title: 'Ledger' }} />
+        <Tabs.Screen name="more" options={{ title: 'More' }} />
+      </Tabs>
+
+      <AddTransactionSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={emitDataChanged}
+        autoStart={autoStart}
+        onVoiceCommand={onVoiceCommand}
       />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: 'Transactions',
-          tabBarAccessibilityLabel: 'Transactions tab',
-          tabBarIcon: ({ color, size }) => (
-            <Receipt size={size ?? 20} color={color} />
-          ),
-        }}
+      <TransferSheet
+        visible={transfer !== null}
+        onClose={() => setTransfer(null)}
+        onSuccess={emitDataChanged}
+        prefill={transfer}
       />
-      <Tabs.Screen
-        name="debts"
-        options={{
-          title: 'Debts',
-          tabBarAccessibilityLabel: 'Debts tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="credit-card" size={size ?? 20} color={color} />
-          ),
-        }}
+      <DebtPickerSheet
+        visible={unpicked !== null}
+        onClose={() => setUnpicked(null)}
+        onPick={(debt) => { if (unpicked) pay(debt.id, unpicked); setUnpicked(null); }}
       />
-      <Tabs.Screen
-        name="lent"
-        options={{
-          title: 'Lent',
-          tabBarAccessibilityLabel: 'Lent tab',
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="users" size={size ?? 20} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+      <VoiceCommandSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} onCommand={onVoiceCommand} />
+    </LedgerAddContext.Provider>
   );
 }

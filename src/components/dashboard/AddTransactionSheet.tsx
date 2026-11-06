@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Image } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { View, Pressable, Image, ActivityIndicator } from 'react-native';
+import { SheetScrollView as ScrollView } from '../ui/BottomSheet';
 import { Feather } from '@expo/vector-icons';
+import { Segmented } from '../ui/Segmented';
+import { Chip } from '../ui/Chip';
 import { BottomSheet } from '../ui/BottomSheet';
 import { AmountInput } from '../ui/AmountInput';
 import { AppTextInput } from '../ui/AppTextInput';
@@ -9,14 +11,18 @@ import { Select } from '../ui/Select';
 import { DatePicker } from '../ui/DatePicker';
 import { Button } from '../ui/Button';
 import { AppText } from '../ui/AppText';
+import { ReceiptItemsEditor } from '../transactions/ReceiptItemsEditor';
 import { CategorySheet } from '../categories/CategorySheet';
 import { AddAccountSheet } from '../accounts/AddAccountSheet';
-import { accountRepo, categoryRepo, transactionRepo } from '../../repositories';
+import { VoiceInputButton } from './VoiceInputButton';
+import { parseVoiceCommand, parseVoiceTransaction, type VoiceCommand } from '../../utils/voiceTransaction';
+import { accountRepo, categoryRepo, debtRepo, transactionRepo, transactionItemRepo } from '../../repositories';
 import { nowIso } from '../../utils/date';
+import { scanReceipt } from '../../utils/receiptScan';
 import { formatPHP } from '../../utils/currency';
 import { ACCUMULATED_ID, accumulatedTotal, splitAcrossAccounts } from '../../utils/accumulated';
-import { theme } from '../../theme';
-import type { Account, Category, Transaction, TransactionType } from '../../domain/types';
+import { theme, makeStyles, useTheme } from '../../theme';
+import type { Account, Category, Debt, Transaction, TransactionItemInput } from '../../domain/types';
 
 type Props = {
   visible: boolean;
@@ -24,9 +30,19 @@ type Props = {
   onSuccess: () => void;
   initial?: Transaction | null;
   lockAccountAndType?: boolean;
+  /** Fast dial: start listening or open the camera as soon as the sheet opens. */
+  autoStart?: 'voice' | 'camera' | null;
+  /** Spoken transfers and debt payments go here instead of prefilling this form. The sheet closes itself. */
+  onVoiceCommand?: (cmd: Exclude<VoiceCommand, { kind: 'transaction' }>) => void;
 };
 
-export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType }: Props) {
+const TYPES = ['Expense', 'Income'] as const;
+// Quick picks for splitting a credit purchase; any other count can be typed.
+const MONTH_CHOICES = [1, 3, 6, 12];
+
+export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lockAccountAndType, autoStart, onVoiceCommand }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [amount, setAmount] = useState(0);
   // AddTransactionSheet only ever toggles Expense/Income — Transfer has its own TransferSheet.
   const [type, setType] = useState<'Expense' | 'Income'>('Expense');
@@ -36,20 +52,31 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   const [note, setNote] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [debts, setDebts] = useState<Debt[]>([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [accountSheetVisible, setAccountSheetVisible] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [items, setItems] = useState<TransactionItemInput[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [monthsText, setMonthsText] = useState('1');
 
-  async function pickReceipt() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (!result.canceled) setReceiptUri(result.assets[0].uri);
+  async function handleScan(source: 'camera' | 'gallery') {
+    setScanning(true);
+    try {
+      const res = await scanReceipt(source);
+      if (!res) return;
+      const { uri, parsed } = res;
+      setReceiptUri(uri);
+      // Nothing parsed leaves the fields as they were: the photo is attached and saving is never blocked.
+      if (parsed.total != null) setAmount(parsed.total);
+      if (parsed.date) setDate(parsed.date);
+      if (parsed.merchant) setNote(parsed.merchant);
+      setItems(parsed.items);
+    } finally {
+      setScanning(false);
+    }
   }
 
   useEffect(() => {
@@ -59,6 +86,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       const accs = await accountRepo.list();
       setCategories(cats);
       setAccounts(accs);
+      if (onVoiceCommand) setDebts(await debtRepo.list());
       if (initial) {
         setAmount(initial.amount);
         setType(initial.type as 'Expense' | 'Income');
@@ -67,11 +95,17 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         setDate(initial.date);
         setNote(initial.note ?? '');
         setReceiptUri(initial.receiptUri);
+        setMonthsText(String(initial.installmentMonths ?? 1));
+        setItems((await transactionItemRepo.listByTransaction(initial.id)).map(({ name, qty, price }) => ({ name, qty, price })));
       } else if (accs.length > 0) {
         setAccountId(accs[0].id);
       }
     })();
   }, [visible, initial]);
+
+  useEffect(() => {
+    if (visible && autoStart === 'camera') handleScan('camera');
+  }, [visible, autoStart]);
 
   // After inline-creating a category/account, reload and auto-select the new one.
   async function reloadCategoriesSelectNew() {
@@ -98,11 +132,38 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
       setDate(nowIso());
       setNote('');
       setReceiptUri(null);
+      setItems([]);
+      setMonthsText('1');
       setErrors({});
     }
   }, [visible, initial]);
 
+  function changeType(t: 'Expense' | 'Income') {
+    setType(t);
+    setCategoryId(null);
+    if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
+  }
+
+  // Voice only prefills the form; the user still reviews and taps Save.
+  function applyVoice(text: string) {
+    if (onVoiceCommand) {
+      const cmd = parseVoiceCommand(text, accounts, debts);
+      if (cmd.kind !== 'transaction') { onClose(); onVoiceCommand(cmd); return; }
+    }
+    const parsed = parseVoiceTransaction(text, categories, lockAccountAndType ? type : undefined, accounts);
+    changeType(parsed.type);
+    if (parsed.accountId && !lockAccountAndType) setAccountId(parsed.accountId);
+    if (parsed.amount) setAmount(parsed.amount);
+    setCategoryId(parsed.categoryId);
+    if (parsed.note) setNote(parsed.note);
+    setErrors({});
+  }
+
   const filteredCategories = categories.filter((c) => c.type === type);
+  // A credit purchase can be split over monthly statements.
+  const onCredit = type === 'Expense' && !!accounts.find((a) => a.id === accountId)?.allowsOverdraft;
+  const parsedMonths = parseInt(monthsText, 10);
+  const months = onCredit && parsedMonths >= 1 && parsedMonths <= 60 ? parsedMonths : 1;
   const isAccumulated = accountId === ACCUMULATED_ID;
   // Accumulated Balance is a virtual source: new expenses only, split across real accounts.
   const allowAccumulated = type === 'Expense' && !initial;
@@ -112,6 +173,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
     if (amount <= 0) errs.amount = 'Enter an amount';
     if (!categoryId) errs.categoryId = 'Select a category';
     if (!accountId) errs.accountId = 'Select an account';
+    if (onCredit && !(parsedMonths >= 1 && parsedMonths <= 60)) errs.months = 'Enter 1 to 60 months';
     if (isAccumulated && amount > accumulatedTotal(accounts)) {
       errs.accountId = `Only ${formatPHP(accumulatedTotal(accounts))} available across accounts`;
     }
@@ -124,20 +186,28 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         categoryId: categoryId!,
         note: note.trim() || undefined,
         receiptUri: type === 'Expense' ? receiptUri ?? undefined : undefined,
+        installmentMonths: months > 1 ? months : null,
       };
+      // Items only belong to a receipt-bearing expense; blank rows are dropped.
+      const kept = type === 'Expense' ? items.filter((i) => i.name.trim()) : [];
       if (isAccumulated) {
         const portions = splitAcrossAccounts(accounts, amount);
         if (!portions) { setErrors({ accountId: 'Not enough accumulated balance' }); return; }
-        for (const p of portions) {
-          await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
+        for (const [i, p] of portions.entries()) {
+          const saved = await transactionRepo.create({ ...base, amount: p.amount, accountId: p.account.id });
+          // It's one purchase split across accounts, so its items stay together on the first part.
+          if (i === 0 && kept.length > 0) await transactionItemRepo.replaceForTransaction(saved.id, kept);
         }
-      } else if (initial) {
-        await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! });
       } else {
-        await transactionRepo.create({ ...base, amount, accountId: accountId! });
+        const saved = initial
+          ? await transactionRepo.update(initial.id, { ...base, amount, accountId: accountId! })
+          : await transactionRepo.create({ ...base, amount, accountId: accountId! });
+        if (initial || kept.length > 0) await transactionItemRepo.replaceForTransaction(saved.id, kept);
       }
       onSuccess();
       onClose();
+    } catch (e) {
+      setErrors({ amount: e instanceof Error ? e.message : 'Could not save' });
     } finally {
       setSaving(false);
     }
@@ -150,26 +220,16 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {initial ? null : (
+          <VoiceInputButton
+            onResult={applyVoice}
+            autoStart={autoStart === 'voice'}
+            names={[...accounts.map((a) => a.name), ...debts.map((d) => d.creditor), ...categories.map((c) => c.name)]}
+          />
+        )}
+
         {lockAccountAndType ? null : (
-          <View style={styles.typeRow}>
-            {(['Expense', 'Income'] as const).map((t) => (
-              <Pressable
-                key={t}
-                onPress={() => {
-                  setType(t);
-                  setCategoryId(null);
-                  if (t === 'Income' && accountId === ACCUMULATED_ID) setAccountId(accounts[0]?.id ?? null);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t}
-                style={[styles.typeBtn, type === t && styles.typeBtnActive]}
-              >
-                <AppText variant="labelLg" color={type === t ? 'bgPrimary' : 'textSecondary'}>
-                  {t}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
+          <Segmented options={TYPES} value={type} onChange={changeType} />
         )}
 
         <AmountInput label="Amount" value={amount} onChange={setAmount} error={errors.amount} />
@@ -190,7 +250,7 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
             accessibilityLabel="Add new category"
             style={styles.plusBtn}
           >
-            <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+            <Feather name="plus" size={20} color={colors.accentPrimary} />
           </Pressable>
         </View>
         {lockAccountAndType ? null : (
@@ -215,10 +275,32 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
               accessibilityLabel="Add new account"
               style={styles.plusBtn}
             >
-              <Feather name="plus" size={20} color={theme.colors.accentPrimary} />
+              <Feather name="plus" size={20} color={colors.accentPrimary} />
             </Pressable>
           </View>
         )}
+        {onCredit ? (
+          <View style={styles.payOver}>
+            <AppText variant="labelLg" color="textSecondary">Pay over</AppText>
+            <View style={styles.chipRow}>
+              {MONTH_CHOICES.map((n) => (
+                <Chip
+                  key={n}
+                  label={n === 1 ? 'Next bill' : `${n} months`}
+                  selected={months === n}
+                  onPress={() => setMonthsText(String(n))}
+                  accessibilityLabel={n === 1 ? 'Pay on the next bill' : `Split over ${n} months`}
+                />
+              ))}
+            </View>
+            <AppTextInput label="Months" value={monthsText} onChangeText={setMonthsText} numeric error={errors.months} />
+            {months > 1 && amount > 0 ? (
+              <AppText variant="bodySm" color="textMuted">
+                {formatPHP(Math.round((amount / months) * 100) / 100)}/month on your next {months} bills
+              </AppText>
+            ) : null}
+          </View>
+        ) : null}
         <DatePicker label="Date" value={date} onChange={setDate} />
         <AppTextInput
           label="Note (optional)"
@@ -233,26 +315,45 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
               <View style={styles.receiptPreview}>
                 <Image source={{ uri: receiptUri }} style={styles.receiptImage} resizeMode="cover" />
                 <Pressable
-                  onPress={() => setReceiptUri(null)}
+                  onPress={() => { setReceiptUri(null); setItems([]); }}
                   accessibilityRole="button"
                   accessibilityLabel="Remove receipt"
                   style={styles.receiptRemove}
                 >
-                  <Feather name="x" size={16} color={theme.colors.textPrimary} />
+                  <Feather name="x" size={16} color={colors.textPrimary} />
                 </Pressable>
               </View>
+            ) : scanning ? (
+              <View style={styles.receiptAttach}>
+                <ActivityIndicator color={colors.accentPrimary} />
+                <AppText variant="body" color="textSecondary">Reading receipt...</AppText>
+              </View>
             ) : (
-              <Pressable
-                onPress={pickReceipt}
-                accessibilityRole="button"
-                accessibilityLabel="Attach receipt image"
-                style={styles.receiptAttach}
-              >
-                <Feather name="paperclip" size={18} color={theme.colors.accentPrimary} />
-                <AppText variant="body" color="accentPrimary">Attach image</AppText>
-              </Pressable>
+              <View style={styles.scanRow}>
+                <Pressable
+                  onPress={() => handleScan('camera')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Scan receipt with camera"
+                  style={[styles.receiptAttach, styles.scanBtn]}
+                >
+                  <Feather name="camera" size={18} color={colors.accentPrimary} />
+                  <AppText variant="body" color="accentPrimary">Scan receipt</AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleScan('gallery')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pick receipt from gallery"
+                  style={[styles.receiptAttach, styles.scanBtn]}
+                >
+                  <Feather name="image" size={18} color={colors.accentPrimary} />
+                  <AppText variant="body" color="accentPrimary">Gallery</AppText>
+                </Pressable>
+              </View>
             )}
           </View>
+        ) : null}
+        {type === 'Expense' && (receiptUri || items.length > 0) ? (
+          <ReceiptItemsEditor items={items} onChange={setItems} total={amount} />
         ) : null}
         <Button label={initial ? 'Save Changes' : 'Save Transaction'} onPress={handleSave} loading={saving} />
         <View style={styles.bottomPad} />
@@ -273,7 +374,9 @@ export function AddTransactionSheet({ visible, onClose, onSuccess, initial, lock
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
+  payOver: { gap: theme.spacing[3] },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] },
   form: { gap: theme.spacing[5] },
   pickerRow: {
     flexDirection: 'row',
@@ -282,6 +385,8 @@ const styles = StyleSheet.create({
   },
   pickerFlex: { flex: 1 },
   receiptSection: { gap: theme.spacing[2] },
+  scanRow: { flexDirection: 'row', gap: theme.spacing[3] },
+  scanBtn: { flex: 1, justifyContent: 'center' },
   receiptAttach: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -290,15 +395,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[5],
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
   },
   receiptPreview: { position: 'relative' },
   receiptImage: {
     width: '100%',
     height: 160,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
   },
   receiptRemove: {
     position: 'absolute',
@@ -307,7 +412,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.scrim,
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -316,27 +421,10 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSubtle,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typeRow: {
-    flexDirection: 'row',
-    gap: theme.spacing[3],
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: theme.spacing[3],
-    alignItems: 'center',
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.bgElevated,
-    borderWidth: 1,
-    borderColor: theme.colors.borderDefault,
-  },
-  typeBtnActive: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderColor: theme.colors.accentPrimary,
-  },
   bottomPad: { height: theme.spacing[5] },
-});
+}));

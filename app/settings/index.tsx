@@ -1,0 +1,199 @@
+import React, { useEffect, useState } from 'react';
+import { View, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
+import { Feather } from '@expo/vector-icons';
+import { AppText } from '../../src/components/ui/AppText';
+import { AppTextInput } from '../../src/components/ui/AppTextInput';
+import { BottomSheet } from '../../src/components/ui/BottomSheet';
+import { Button } from '../../src/components/ui/Button';
+import { LoadingOverlay } from '../../src/components/ui/LoadingOverlay';
+import { Segmented } from '../../src/components/ui/Segmented';
+import { exportBackup, restoreBackup, InvalidBackupError } from '../../src/db/backup';
+import { resetAppData } from '../../src/db/database';
+import { getSetting } from '../../src/repositories';
+import { backupAgeLabel, LAST_BACKUP_KEY } from '../../src/utils/backupRules';
+import { theme, makeStyles, useTheme, type ThemeMode } from '../../src/theme';
+
+type RowProps = {
+  icon: React.ComponentProps<typeof Feather>['name'];
+  label: string;
+  hint?: string;
+  onPress: () => void;
+  destructive?: boolean;
+};
+
+function Row({ icon, label, hint, onPress, destructive }: RowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const color = destructive ? colors.negative : colors.textSecondary;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
+      <Feather name={icon} size={20} color={color} />
+      <View style={styles.rowLabel}>
+        <AppText variant="body" color={destructive ? 'negative' : 'textPrimary'}>{label}</AppText>
+        {hint ? <AppText variant="bodySm" color="textMuted">{hint}</AppText> : null}
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+const MODE_LABELS = ['System', 'Light', 'Dark'] as const;
+type ModeLabel = (typeof MODE_LABELS)[number];
+
+export default function SettingsScreen() {
+  const styles = useStyles();
+  const { mode, setMode } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [resetVisible, setResetVisible] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+
+  useEffect(() => { getSetting(LAST_BACKUP_KEY).then(setLastBackupAt); }, []);
+
+  async function handleBackup() {
+    setError(null);
+    setBusy('Preparing backup…');
+    try {
+      await exportBackup();
+      setLastBackupAt(await getSetting(LAST_BACKUP_KEY));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRestore() {
+    setError(null);
+    setBusy('Restoring…');
+    try {
+      const result = await restoreBackup();
+      if (result === 'restored') router.replace('/(tabs)');
+    } catch (e) {
+      setError(e instanceof InvalidBackupError ? e.message : `Restore failed: ${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function closeReset() {
+    setResetVisible(false);
+    setConfirmText('');
+  }
+
+  async function handleReset() {
+    if (confirmText !== 'CONFIRM') return;
+    setBusy('Removing all data…');
+    try {
+      await resetAppData();
+      closeReset();
+      router.replace('/onboarding');
+    } catch (e) {
+      closeReset();
+      setError(`Reset failed: ${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top + theme.spacing[5] }]}>
+      <AppText variant="h2" style={styles.title}>Settings</AppText>
+
+      <AppText variant="labelSm" color="textMuted" style={styles.sectionLabel}>APPEARANCE</AppText>
+      <View style={styles.appearance}>
+        <Segmented
+          options={MODE_LABELS}
+          value={(mode[0].toUpperCase() + mode.slice(1)) as ModeLabel}
+          onChange={(label) => setMode(label.toLowerCase() as ThemeMode)}
+        />
+      </View>
+
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>DATA</AppText>
+      <Row icon="upload" label="Back up now" hint={backupAgeLabel(lastBackupAt)} onPress={handleBackup} />
+      <Row icon="download" label="Restore from file" onPress={handleRestore} />
+      <Row icon="trash-2" label="Remove all data" onPress={() => setResetVisible(true)} destructive />
+
+      {error ? (
+        <AppText variant="bodySm" color="negative" style={styles.error}>{error}</AppText>
+      ) : null}
+
+      <AppText variant="labelSm" color="textMuted" style={[styles.sectionLabel, styles.sectionGap]}>ABOUT</AppText>
+      <View style={styles.aboutRow}>
+        <AppText variant="body" color="textSecondary">Version</AppText>
+        <AppText variant="body" color="textPrimary">{Constants.expoConfig?.version ?? '—'}</AppText>
+      </View>
+
+      <BottomSheet visible={resetVisible} onClose={closeReset} title="Remove All Data">
+        <View style={styles.resetSheet}>
+          <AppText variant="body" color="textSecondary">
+            This deletes every account, category, transaction, budget, debt, payment, and lending
+            record, plus receipt photos and contract PDFs. Back up first if you want to keep it.
+            Type CONFIRM to continue.
+          </AppText>
+          <AppTextInput
+            label="Confirmation"
+            value={confirmText}
+            onChangeText={setConfirmText}
+            placeholder="CONFIRM"
+            autoFocus
+          />
+          <View style={styles.actions}>
+            <Button label="Cancel" onPress={closeReset} variant="ghost" style={styles.action} />
+            <Button
+              label="Remove"
+              onPress={handleReset}
+              disabled={confirmText !== 'CONFIRM'}
+              variant="secondary"
+              style={{ ...styles.action, ...styles.dangerButton }}
+              accessibilityLabel="Remove all data"
+            />
+          </View>
+        </View>
+      </BottomSheet>
+
+      <LoadingOverlay visible={busy !== null} />
+    </View>
+  );
+}
+
+const useStyles = makeStyles((c) => ({
+  appearance: { marginBottom: theme.spacing[2] },
+  container: { flex: 1, backgroundColor: c.bgPrimary, paddingHorizontal: theme.spacing[5] },
+  title: { marginBottom: theme.spacing[6] },
+  sectionLabel: { letterSpacing: 0.8, marginBottom: theme.spacing[2] },
+  sectionGap: { marginTop: theme.spacing[6] },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderDefault,
+  },
+  rowPressed: { opacity: 0.6 },
+  rowLabel: { flex: 1 },
+  error: { marginTop: theme.spacing[3] },
+  aboutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderDefault,
+  },
+  resetSheet: { gap: theme.spacing[5] },
+  actions: { flexDirection: 'row', gap: theme.spacing[4] },
+  action: { flex: 1 },
+  dangerButton: { borderColor: c.negative },
+}));

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, FlatList, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../../src/components/ui/ConfirmDialog';
 import { AddBudgetSheet } from '../../src/components/budgets/AddBudgetSheet';
 import { allocationRepo, categoryRepo } from '../../src/repositories';
 import { formatPHP } from '../../src/utils/currency';
-import { theme } from '../../src/theme';
+import { theme, makeStyles, useTheme } from '../../src/theme';
 import type { Allocation, Category, AllocationProgress } from '../../src/domain/types';
 
 type BudgetRow = {
@@ -20,11 +20,13 @@ type BudgetRow = {
 };
 
 function ProgressBar({ percent }: { percent: number }) {
+  const barStyles = useBarStyles();
+  const { colors } = useTheme();
   const fill = percent >= 100
-    ? theme.colors.negative
+    ? colors.negative
     : percent >= 80
-    ? theme.colors.warning
-    : theme.colors.accentPrimary;
+    ? colors.warning
+    : colors.accentPrimary;
   return (
     <View style={barStyles.track}>
       <View style={[barStyles.fill, { width: `${Math.min(percent, 100)}%` as any, backgroundColor: fill }]} />
@@ -32,17 +34,19 @@ function ProgressBar({ percent }: { percent: number }) {
   );
 }
 
-const barStyles = StyleSheet.create({
+const useBarStyles = makeStyles((c) => ({
   track: {
     height: 4,
-    backgroundColor: theme.colors.bgElevated,
+    backgroundColor: c.bgElevated,
     borderRadius: theme.radius.full,
     overflow: 'hidden',
   },
   fill: { height: 4, borderRadius: theme.radius.full },
-});
+}));
 
 export default function BudgetsScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [rows, setRows] = useState<BudgetRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +116,7 @@ export default function BudgetsScreen() {
                   <AppText variant="h4">{category?.name ?? '—'}</AppText>
                   <AppText variant="bodySm" color="textSecondary">{allocation.period}</AppText>
                 </View>
-                <Feather name="edit-2" size={16} color={theme.colors.textMuted} />
+                <Feather name="edit-2" size={16} color={colors.textMuted} />
               </View>
               <View style={styles.amountRow}>
                 <AppText variant="amountSm" color={overBudget ? 'negative' : 'textPrimary'}>
@@ -157,17 +161,17 @@ export default function BudgetsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
+    backgroundColor: c.bgPrimary,
     paddingHorizontal: theme.spacing[5],
   },
   title: { marginTop: theme.spacing[7], marginBottom: theme.spacing[5] },
   list: { gap: theme.spacing[4] },
   listEmpty: { flex: 1, justifyContent: 'center' },
   card: {
-    backgroundColor: theme.colors.bgSurface,
+    backgroundColor: c.bgSurface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[5],
     gap: theme.spacing[3],
@@ -178,4 +182,4 @@ const styles = StyleSheet.create({
   cardLeft: { gap: theme.spacing[1] },
   amountRow: { flexDirection: 'row', alignItems: 'baseline' },
   remainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-});
+}));

@@ -4,7 +4,7 @@ import { nowIso } from '../../utils/date';
 import { roundCentavos } from '../../utils/currency';
 import { FIXED_USER_ID } from '../../constants/user';
 import { syncLinkedCreditDebt } from './creditSync';
-import { addMonthsClamped } from '../../utils/installmentSchedule';
+import { addMonthsClamped, nextDueDate } from '../../utils/installmentSchedule';
 import type { Debt, CreateDebtInput, UpdateDebtInput, DebtStatus } from '../../domain/types';
 
 function rowToDebt(row: any): Debt {
@@ -105,11 +105,11 @@ export class SqliteDebtRepository {
           now, now,
         ],
       );
-      // accountId '' = paid before tracking: history only, no account is touched.
+      // No account: paid before tracking, so it's history only.
       for (const p of past) {
         await db.runAsync(
           `INSERT INTO debt_payments (id, userId, debtId, date, amount, accountId, createdAt, updatedAt, deletedAt, isDirty, syncedAt)
-           VALUES (?, ?, ?, ?, ?, '', ?, ?, NULL, 1, NULL)`,
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, 1, NULL)`,
           [newId(), FIXED_USER_ID, id, p.date, roundCentavos(p.amount), now, now],
         );
       }
@@ -137,20 +137,24 @@ export class SqliteDebtRepository {
     if (!existing) throw new Error(`Debt ${id} not found`);
     const db = await getDatabase();
     const now = nowIso();
-    const dueDate = 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate;
-    const status = computeStatus(existing.outstandingBalance, dueDate);
+    const next: Debt = {
+      ...existing,
+      dueDate: 'dueDate' in input ? (input.dueDate ?? null) : existing.dueDate,
+      isInstallment: 'isInstallment' in input ? !!input.isInstallment : existing.isInstallment,
+      monthlyPayment: 'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
+      installmentFee: 'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
+      termMonths: 'termMonths' in input ? (input.termMonths ?? null) : existing.termMonths,
+      monthlyInterest: 'monthlyInterest' in input ? (input.monthlyInterest ?? null) : existing.monthlyInterest,
+    };
+    const status = computeStatus(existing.outstandingBalance, nextDueDate(next));
     await db.runAsync(
       `UPDATE debts SET creditor = ?, dueDate = ?, status = ?, interestRate = ?, note = ?, isInstallment = ?, monthlyPayment = ?, installmentFee = ?, termMonths = ?, monthlyInterest = ?, updatedAt = ?, isDirty = 1
        WHERE id = ? AND userId = ?`,
       [
-        input.creditor ?? existing.creditor, dueDate, status,
+        input.creditor ?? existing.creditor, next.dueDate, status,
         'interestRate' in input ? (input.interestRate ?? null) : existing.interestRate,
         'note' in input ? (input.note ?? null) : existing.note,
-        ('isInstallment' in input ? !!input.isInstallment : existing.isInstallment) ? 1 : 0,
-        'monthlyPayment' in input ? (input.monthlyPayment ?? null) : existing.monthlyPayment,
-        'installmentFee' in input ? (input.installmentFee ?? null) : existing.installmentFee,
-        'termMonths' in input ? (input.termMonths ?? null) : existing.termMonths,
-        'monthlyInterest' in input ? (input.monthlyInterest ?? null) : existing.monthlyInterest,
+        next.isInstallment ? 1 : 0, next.monthlyPayment, next.installmentFee, next.termMonths, next.monthlyInterest,
         now, id, FIXED_USER_ID,
       ],
     );

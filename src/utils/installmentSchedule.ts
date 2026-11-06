@@ -2,6 +2,8 @@ import type { Debt } from '../domain/types';
 
 export type ScheduleStatus = 'paid' | 'due' | 'upcoming';
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export interface ScheduleMonth {
   index: number;
   dueDate: string;
@@ -42,37 +44,52 @@ export function buildSchedule(debt: Debt): ScheduleMonth[] {
   if (monthlyPayment <= 0) return [];
   const monthlyInterest = debt.monthlyInterest ?? 0;
   const fee = debt.installmentFee ?? 0;
+  const term = debt.termMonths;
+
+  const amounts = Array.from({ length: term }, (_, i) => monthlyPayment + monthlyInterest + (i === 0 ? fee : 0));
+  // A loan added with its total repayable ends on that total, so the last month takes the centavos lost to rounding.
+  // A bigger gap means the terms were edited afterwards, which isn't rounding.
+  if (debt.totalRepayable != null) {
+    const drift = debt.totalRepayable - amounts.reduce((sum, a) => sum + a, 0);
+    if (Math.abs(drift) < 0.01 * term) amounts[term - 1] = round2(amounts[term - 1] + drift);
+  }
 
   // A loan added with its total repayable counts paid months from what's left of that total.
   // Older loans count them from the principal alone.
-  const monthAmount = (i: number) => monthlyPayment + monthlyInterest + (i === 0 ? fee : 0);
   let monthsPaid: number;
-  if (debt.totalRepayable != null) {
+  if (debt.outstandingBalance <= 0) {
+    monthsPaid = term;
+  } else if (debt.totalRepayable != null) {
     let paid = debt.totalRepayable - debt.outstandingBalance;
     monthsPaid = 0;
-    while (monthsPaid < debt.termMonths && paid + 0.005 >= monthAmount(monthsPaid)) paid -= monthAmount(monthsPaid++);
+    while (monthsPaid < term && paid + 0.005 >= amounts[monthsPaid]) paid -= amounts[monthsPaid++];
   } else {
     monthsPaid = Math.min(
-      debt.termMonths,
-      Math.max(0, Math.floor((debt.originalAmount - debt.outstandingBalance) / monthlyPayment)),
+      term,
+      Math.max(0, Math.floor((debt.originalAmount - debt.outstandingBalance + 0.005) / monthlyPayment)),
     );
   }
 
   const months: ScheduleMonth[] = [];
-  for (let i = 0; i < debt.termMonths; i++) {
+  for (let i = 0; i < term; i++) {
     const isFirst = i === 0;
     const monthFee = isFirst ? fee : 0;
     months.push({
       index: i,
       dueDate: addMonthsClamped(debt.dueDate, i),
-      principal: monthlyPayment,
+      principal: round2(amounts[i] - monthlyInterest - monthFee),
       interest: monthlyInterest,
       fee: monthFee,
-      amount: monthlyPayment + monthlyInterest + monthFee,
+      amount: amounts[i],
       status: i < monthsPaid ? 'paid' : i === monthsPaid ? 'due' : 'upcoming',
     });
   }
   return months;
+}
+
+/** When the next payment falls: an installment loan moves on as months are paid, anything else keeps its due date. */
+export function nextDueDate(debt: Debt): string | null {
+  return buildSchedule(debt).find((m) => m.status !== 'paid')?.dueDate ?? debt.dueDate;
 }
 
 /** One payment owed in a given month: a single installment, or a lump-sum debt's balance. */
@@ -135,4 +152,13 @@ export function wholeLoanTotal(debt: Debt): number {
 export function monthlyAmount(debt: Debt): number | null {
   if (debt.monthlyPayment == null) return null;
   return debt.totalRepayable != null ? debt.monthlyPayment + (debt.monthlyInterest ?? 0) : debt.monthlyPayment;
+}
+
+/** What to pay next: the rest of the month that's due, one-time fee included. Older loans stay on the plain monthly amount. */
+export function nextPaymentAmount(debt: Debt): number | null {
+  const schedule = buildSchedule(debt);
+  const due = schedule.find((m) => m.status === 'due');
+  if (debt.totalRepayable == null || !due) return monthlyAmount(debt);
+  const paidMonths = schedule.slice(0, due.index).reduce((sum, m) => sum + m.amount, 0);
+  return round2(due.amount - (debt.totalRepayable - debt.outstandingBalance - paidMonths));
 }

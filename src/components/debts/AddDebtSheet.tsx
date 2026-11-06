@@ -146,6 +146,8 @@ export function AddDebtSheet({ visible, onClose, onSuccess, debtType, initial }:
       }
       onSuccess();
       onClose();
+    } catch (e) {
+      setErrors({ creditor: e instanceof Error ? e.message : 'Could not save' });
     } finally {
       setSaving(false);
     }

@@ -20,10 +20,16 @@ assert.strictEqual(grocery.merchant, 'MERCURY DRUG');
 assert.strictEqual(grocery.total, 1250.75);
 assert.deepStrictEqual(grocery.items, [
   { name: 'Paracetamol 500mg', qty: 1, price: 45 },
-  { name: 'Vitamin C', qty: 2, price: 120.5 },
+  { name: 'Vitamin C', qty: 2, price: 60.25 },
   { name: 'Alcohol 70%', qty: 1, price: 1085.25 },
 ]);
 assert.ok(grocery.date?.startsWith('2026-11-03'), grocery.date ?? 'no date'); // day-first
+// A line's amount is its total, so qty x price adds back up to the receipt.
+assert.strictEqual(grocery.items.reduce((sum, i) => sum + i.qty * i.price, 0), 1250.75);
+
+// A line that doesn't divide evenly rounds to centavos; a qty of 0 can't divide at all.
+assert.strictEqual(parseReceipt(['Shop', '3 x Soap 100.00']).items[0].price, 33.33);
+assert.strictEqual(parseReceipt(['Shop', '0 x Soap 100.00']).items[0].price, 100);
 
 // No TOTAL line: falls back to the largest amount.
 assert.strictEqual(parseReceipt(['Cafe', 'Latte 150.00', 'Cake 95.00']).total, 150);

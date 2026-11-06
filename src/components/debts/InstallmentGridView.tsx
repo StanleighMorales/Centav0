@@ -61,14 +61,15 @@ export function InstallmentGridView({ debts, accounts }: Props) {
     await setSetting(`expectedIncome:${currentMonthKey}`, String(value));
   }
 
-  const rows: LoanRow[] = debts
+  const allRows: LoanRow[] = debts
     .filter((d) => d.debtType === 'Loan' && d.isInstallment && d.termMonths)
-    .map((debt) => ({ debt, schedule: buildSchedule(debt) }))
-    .filter((row) => row.schedule.some((m) => new Date(m.dueDate).getFullYear() === selectedYear));
+    .map((debt) => ({ debt, schedule: buildSchedule(debt) }));
+  const rows = allRows.filter((row) => row.schedule.some((m) => new Date(m.dueDate).getFullYear() === selectedYear));
 
   // Only what's still unpaid counts toward what the user still owes this month —
   // a cell already marked 'paid' shouldn't keep inflating "Due This Month".
-  const currentMonthTotal = rows.reduce((sum, row) => {
+  // It reads every loan, not just the year on screen: this month is this month whichever year you're viewing.
+  const currentMonthTotal = allRows.reduce((sum, row) => {
     const monthCell = row.schedule.find((m) => {
       const d = new Date(m.dueDate);
       return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();

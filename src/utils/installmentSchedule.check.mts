@@ -1,7 +1,7 @@
 // Self-check for installmentSchedule.ts. No test framework in this repo — run it directly:
 //   node --experimental-strip-types src/utils/installmentSchedule.check.mts
 import assert from 'node:assert';
-import { buildSchedule, wholeLoanTotal, duesInMonth, type ScheduleMonth } from './installmentSchedule.ts';
+import { buildSchedule, wholeLoanTotal, duesInMonth, nextDueDate, nextPaymentAmount, type ScheduleMonth } from './installmentSchedule.ts';
 import type { Debt } from '../domain/types.ts';
 
 function makeDebt(overrides: Partial<Debt>): Debt {
@@ -145,6 +145,58 @@ function makeDebt(overrides: Partial<Debt>): Debt {
   assert.deepStrictEqual(duesInMonth([card], new Date(2026, 0, 1), credit).map((r) => r.amount), [300]);
   assert.strictEqual(duesInMonth([card], new Date(2026, 1, 1), credit).length, 0, 'paid statement drops out');
   assert.deepStrictEqual(duesInMonth([card], new Date(2026, 2, 1), credit).map((r) => r.amount), [600]);
+}
+
+// The last month takes the centavos lost to rounding, so a loan ends on exactly zero.
+{
+  const flat = { monthlyInterest: null, installmentFee: null };
+  const over = makeDebt({ ...flat, originalAmount: 1000, totalRepayable: 1000, outstandingBalance: 1000, monthlyPayment: 166.67, termMonths: 6 });
+  assert.strictEqual(buildSchedule(over)[5].amount, 166.65, 'last month is smaller');
+  assert.strictEqual(buildSchedule(over)[5].principal, 166.65, 'and its parts still add up');
+  assert.ok(buildSchedule({ ...over, outstandingBalance: 0 }).every((m) => m.status === 'paid'), 'zero balance is fully paid');
+
+  const under = makeDebt({ ...flat, originalAmount: 10000, totalRepayable: 10000, outstandingBalance: 3333.34, monthlyPayment: 3333.33, termMonths: 3 });
+  assert.deepStrictEqual(buildSchedule(under).map((m) => m.status), ['paid', 'paid', 'due']);
+  assert.strictEqual(nextPaymentAmount(under), 3333.34, 'the last payment clears the centavo');
+
+  // Terms edited after the fact aren't rounding, so the last month stays as it was.
+  const edited = makeDebt({ ...flat, originalAmount: 12000, totalRepayable: 12000, outstandingBalance: 12000, monthlyPayment: 1000, termMonths: 24 });
+  assert.strictEqual(buildSchedule(edited)[23].amount, 1000);
+
+  // Older loans count from the principal, and a zero balance is paid there too.
+  const older = makeDebt({ ...flat, originalAmount: 1000, outstandingBalance: 0, monthlyPayment: 166.67, termMonths: 6 });
+  assert.ok(buildSchedule(older).every((m) => m.status === 'paid'), 'older loan fully paid');
+}
+
+// The next payment covers what the due month still needs, including the one-time fee.
+{
+  const loan = makeDebt({
+    originalAmount: 12000, totalRepayable: 12500, outstandingBalance: 12500,
+    monthlyPayment: 1000, monthlyInterest: null, installmentFee: 500, termMonths: 12,
+  });
+  assert.strictEqual(nextPaymentAmount(loan), 1500, 'first payment carries the fee');
+  assert.strictEqual(nextPaymentAmount({ ...loan, outstandingBalance: 11000 }), 1000, 'later payments do not');
+  assert.strictEqual(nextPaymentAmount({ ...loan, outstandingBalance: 11500 }), 500, 'a short first payment leaves the rest');
+
+  let balance = loan.outstandingBalance;
+  for (let i = 0; i < 12; i++) balance -= nextPaymentAmount({ ...loan, outstandingBalance: balance })!;
+  assert.strictEqual(balance, 0, 'twelve payments clear the loan');
+  assert.deepStrictEqual(
+    buildSchedule({ ...loan, outstandingBalance: 11000 }).slice(0, 2).map((m) => m.status),
+    ['paid', 'due'],
+    'the current month reads as paid once paid',
+  );
+
+  const older = makeDebt({ outstandingBalance: 6000 });
+  assert.strictEqual(nextPaymentAmount(older), 2000, 'older loans stay on the plain monthly amount');
+}
+
+// The next due date moves on as months are paid.
+{
+  const loan = makeDebt({ outstandingBalance: 6000 });
+  assert.strictEqual(nextDueDate(loan), buildSchedule(loan)[2].dueDate);
+  assert.strictEqual(nextDueDate(makeDebt({ outstandingBalance: 0 })), '2026-01-15T00:00:00.000Z', 'nothing left to pay');
+  assert.strictEqual(nextDueDate(makeDebt({ isInstallment: false })), '2026-01-15T00:00:00.000Z', 'not an installment loan');
 }
 
 console.log('installmentSchedule.ts: all checks passed');

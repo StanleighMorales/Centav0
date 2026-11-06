@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { Directory, Paths } from 'expo-file-system';
 import { runMigrations } from './migrations';
+import { seedDefaults } from './seeds';
 import { ATTACHMENT_FOLDERS } from '../utils/backupRules';
 
 const DB_NAME = 'centav0.db';
@@ -36,6 +37,7 @@ export async function resetAppData(): Promise<void> {
     for (const table of RESETTABLE_TABLES) {
       await db.execAsync(`DELETE FROM ${table};`);
     }
+    await seedDefaults(db);
   });
   // After the rows: a failed reset must not leave links to files that are gone.
   for (const folder of ATTACHMENT_FOLDERS) {

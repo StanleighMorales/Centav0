@@ -55,7 +55,8 @@ export function parseReceipt(lines: string[]): ParsedReceipt {
     if (q) { qty = +q[1]; name = name.slice(q[0].length).trim(); }
     // A name made only of digits/punctuation is a stray number (phone, date), not an item.
     if (!/[A-Za-z]{2}/.test(name) || i === 0) return;
-    items.push({ name, qty, price: amt });
+    // The line's amount is its total; items store a unit price.
+    items.push({ name, qty, price: Math.round((amt / (qty || 1)) * 100) / 100 });
   });
 
   if (total == null && amounts.length > 0) total = Math.max(...amounts);

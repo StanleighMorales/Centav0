@@ -11,7 +11,7 @@ type DebtPaymentFilter = { from?: string; to?: string };
 function rowToPayment(row: any): DebtPayment {
   return {
     id: row.id, userId: row.userId, debtId: row.debtId,
-    date: row.date, amount: row.amount, accountId: row.accountId,
+    date: row.date, amount: row.amount, accountId: row.accountId ?? null,
     createdAt: row.createdAt, updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? null,
     isDirty: row.isDirty === 1, syncedAt: row.syncedAt ?? null,
@@ -133,10 +133,12 @@ export class SqliteDebtPaymentRepository {
         [payment.amount, now, payment.debtId, FIXED_USER_ID],
       );
       // Restore account balance
-      await db.runAsync(
-        `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
-        [payment.amount, now, payment.accountId, FIXED_USER_ID],
-      );
+      if (payment.accountId) {
+        await db.runAsync(
+          `UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ?, isDirty = 1 WHERE id = ? AND userId = ?`,
+          [payment.amount, now, payment.accountId, FIXED_USER_ID],
+        );
+      }
       if (debt?.linkedAccountId) {
         // Undo the credit this payment freed up on the card.
         await db.runAsync(
@@ -145,7 +147,7 @@ export class SqliteDebtPaymentRepository {
         );
         await syncLinkedCreditDebt(db, debt.linkedAccountId);
       }
-      await syncLinkedCreditDebt(db, payment.accountId);
+      if (payment.accountId) await syncLinkedCreditDebt(db, payment.accountId);
     });
   }
 }
